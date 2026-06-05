@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Enhanced Periodic Table</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+        <style>
+            body {
+                background-color: #000;
+                color: #fff;
+                font-family: Helvetica, Arial, sans-serif;
+                margin: 0;
+                overflow: hidden;
+                touch-action: none; /* Prevents pull-to-refresh and swipe navigation on mobile */
+                -webkit-user-select: none; /* Safari */
+                user-select: none;
+            }
+
+            a {
+                color: #8af;
+            }
+
+            #menu {
+                position: absolute;
+                bottom: 0;
+                width: 100%;
+                text-align: center;
+                z-index: 10;
+                padding: 30px 10px calc(20px + env(safe-area-inset-bottom)) 10px;
+                background: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0) 100%);
+                pointer-events: none; /* Let clicks pass through empty space */
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 12px;
+                box-sizing: border-box;
+            }
+
+            .element {
+                width: 140px;
+                height: 180px;
+                text-align: center;
+                cursor: default;
+                background-color: transparent;
+            }
+
+            .element .card {
+                width: 100%;
+                height: 100%;
+                position: relative;
+                transform-style: preserve-3d;
+                transition: transform 0.6s;
+            }
+
+            /* Flipped state is deprecated in favor of double-tap to zoom, but kept for structural integrity */
+            .element.flipped .card {
+                transform: rotateY(180deg);
+            }
+
+            .element .face {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                backface-visibility: hidden;
+                font-family: Helvetica, sans-serif;
+                border-radius: 12px; /* Increased rounded corners */
+                line-height: normal;
+                box-sizing: border-box;
+                transition: border-color 0.2s, box-shadow 0.2s;
+            }
+
+            .element .front {
+                /* Base styles are applied by JS */
+            }
+
+            .element .back {
+                transform: rotateY(180deg);
+                padding: 10px;
+                text-align: left;
+            }
+
+            .element .number {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                font-size: 12px;
+            }
+
+            .element .symbol {
+                position: absolute;
+                top: 40px;
+                left: 0px;
+                right: 0px;
+                font-size: 60px;
+                font-weight: bold;
+            }
+
+            .element .details {
+                position: absolute;
+                bottom: 15px;
+                left: 0px;
+                right: 0px;
+                font-size: 12px;
+            }
+
+            .element .back .info-item {
+                margin-bottom: 8px;
+                font-size: 12px;
+            }
+
+            .element .back .info-item strong {
+                font-weight: bold;
+            }
+
+            .element .back .emoji {
+                font-size: 32px;
+                text-align: center;
+                margin-top: 10px;
+            }
+
+            button {
+                pointer-events: auto; /* Re-enable pointer events for buttons */
+                color: rgba(136, 170, 255, 0.9);
+                background: rgba(20, 20, 40, 0.68); /* 68% transparency */
+                outline: 1px solid rgba(136, 170, 255, 0.5);
+                border: 0px;
+                padding: 12px 20px;
+                margin: 0;
+                border-radius: 24px; /* Distinct rounded corners */
+                cursor: pointer;
+                font-family: Helvetica, Arial, sans-serif;
+                font-weight: bold;
+                letter-spacing: 0.5px;
+                backdrop-filter: blur(8px);
+                transition: background-color 0.2s, transform 0.1s;
+            }
+
+            button:hover {
+                background-color: rgba(136, 170, 255, 0.4);
+            }
+
+            button:active {
+                color: #000000;
+                background-color: rgba(136, 170, 255, 0.9);
+                transform: scale(0.95);
+            }
+            
+            /* UI Visibility Toggle (Hides Menus) */
+            body.ui-hidden #menu,
+            body.ui-hidden #side-panel,
+            body.ui-hidden #outliner-panel,
+            body.ui-hidden .panel-toggle {
+                display: none !important;
+            }
+
+            #toggle-ui {
+                position: absolute;
+                top: env(safe-area-inset-top, 15px);
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 3000;
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+
+            /* Side Panel for Controls */
+            #side-panel {
+                position: absolute;
+                top: 20px;
+                left: 20px;
+                background-color: rgba(20, 20, 40, 0.85); /* Slightly transparent background */
+                border: 1px solid #555;
+                padding: 15px;
+                border-radius: 16px; /* Rounded corners */
+                color: #fff;
+                z-index: 2000;
+                width: 220px;
+                max-height: calc(100vh - 40px);
+                overflow-y: auto;
+                backdrop-filter: blur(8px);
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #side-panel h3 {
+                margin-top: 0;
+                font-size: 16px;
+                border-bottom: 1px solid #555;
+                padding-bottom: 5px;
+            }
+            #side-panel label {
+                display: block;
+                margin-top: 10px;
+            }
+            
+            #table-controls, #helix-controls, #grid-controls {
+                display: none; /* Hide by default */
+                margin-top: 15px;
+                border-top: 1px solid #555;
+                padding-top: 10px;
+            }
+            #table-controls label, #helix-controls label, #grid-controls label {
+                font-size: 12px;
+                margin-top: 8px;
+            }
+            #table-controls input[type="range"], #helix-controls input[type="range"], #grid-controls input[type="range"] {
+                width: 100%;
+                box-sizing: border-box;
+                padding: 8px 0; /* Easier to grab on mobile */
+            }
+            
+            #table-controls label:nth-of-type(2),
+            #table-controls label:nth-of-type(3) {
+                margin-top: 15px; 
+            }
+
+            /* Outliner Panel */
+            #outliner-panel {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                background-color: rgba(20, 20, 40, 0.85); /* Slightly transparent background */
+                border: 1px solid #555;
+                padding: 15px;
+                border-radius: 16px; /* Rounded corners */
+                color: #fff;
+                z-index: 2000;
+                width: 200px;
+                height: calc(100vh - 60px);
+                display: flex;
+                flex-direction: column;
+                backdrop-filter: blur(8px);
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #outliner-panel h3 {
+                margin-top: 0;
+                font-size: 16px;
+                border-bottom: 1px solid #555;
+                padding-bottom: 5px;
+            }
+            #outliner-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                overflow-y: auto;
+                flex-grow: 1;
+            }
+            #outliner-list li {
+                padding: 10px 10px;
+                cursor: pointer;
+                font-size: 14px;
+                border-bottom: 1px solid #444;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            #outliner-list li:hover {
+                background-color: rgba(136, 170, 255, 0.3);
+                border-radius: 8px;
+            }
+            #outliner-list li.selected {
+                background-color: rgba(136, 170, 255, 0.5);
+                font-weight: bold;
+                border-radius: 8px;
+            }
+
+            /* Mobile Toggle Buttons */
+            .panel-toggle {
+                display: none;
+                position: absolute;
+                top: env(safe-area-inset-top, 15px);
+                background-color: rgba(20, 20, 40, 0.68); /* 68% transparency */
+                border: 1px solid rgba(136, 170, 255, 0.75);
+                color: white;
+                padding: 12px 18px;
+                border-radius: 24px; /* Rounded corners */
+                z-index: 1001;
+                cursor: pointer;
+                font-family: Helvetica, Arial, sans-serif;
+                font-weight: bold;
+                backdrop-filter: blur(8px);
+            }
+            #toggle-settings { left: 15px; }
+            #toggle-outliner { right: 15px; }
+
+            /* Mobile View Adjustments */
+            @media (max-width: 768px) {
+                .panel-toggle {
+                    display: block; /* Show toggles on mobile */
+                }
+                
+                #side-panel {
+                    display: none;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%); /* Truly center the modal */
+                    width: 85vw;
+                    max-width: 340px;
+                    max-height: 75vh;
+                    margin: 0;
+                }
+                
+                #outliner-panel {
+                    display: none;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%); /* Truly center the modal */
+                    width: 85vw;
+                    max-width: 340px;
+                    height: 75vh;
+                    margin: 0;
+                }
+
+                #side-panel.mobile-open {
+                    display: block;
+                }
+                
+                #outliner-panel.mobile-open {
+                    display: flex;
+                }
+
+                #menu {
+                    flex-wrap: nowrap; /* Force single line */
+                    gap: 6px; /* Reduce gap to fit */
+                    padding-left: 5px;
+                    padding-right: 5px;
+                }
+                
+                #menu button {
+                    font-size: 11px;
+                    padding: 10px 5px; /* Squeeze horizontal padding */
+                    flex: 1; /* Stretch evenly */
+                    white-space: nowrap; /* Prevent breaking to two lines */
+                }
+            }
+        </style>
+    </head>
+    <body>
+
+        <!-- Global UI Toggle -->
+        <button id="toggle-ui">👁️ Hide UI</button>
+
+        <!-- Mobile Toggle Buttons -->
+        <button id="toggle-settings" class="panel-toggle">⚙️ Settings</button>
+        <button id="toggle-outliner" class="panel-toggle">📋 Elements</button>
+
+        <div id="container"></div>
+
+        <div id="side-panel">
+            <h3>Appearance</h3>
+            <label for="multicolor">
+                <!-- Checked by default for Rainbow Mode -->
+                <input type="checkbox" id="multicolor" checked> Multicolor by Group
+            </label>
+            <label>Card Opacity: <span id="opacity-val">100</span>%
+                <input type="range" id="opacity-slider" min="0" max="100" value="66">
+            </label>
+            
+            <div id="table-controls">
+                <h3>Table Layout</h3>
+                <label>Main Block Shift: <span id="main-translate-val">100</span>%
+                    <input type="range" id="main-translate-slider" min="0" max="200" value="00">
+                </label>
+                
+                <label>F-Block Y-Rotation: <span id="f-group-rotate-y-val">0</span>°
+                    <input type="range" id="f-group-rotate-y-slider" min="0" max="90" value="0">
+                </label>
+                
+                <label>F-Block X-Offset: <span id="f-x-pos-val">0</span>
+                    <input type="range" id="f-x-pos-slider" min="-1112" max="3520" value="1123">
+                </label>
+                <label>F-Block Y-Offset: <span id="f-y-pos-val">0</span>
+                    <input type="range" id="f-y-pos-slider" min="-600" max="0" value="-600">
+                </label>
+                <label>F-Block Z-Offset: <span id="f-z-pos-val">0</span>
+                    <input type="range" id="f-z-pos-slider" min="-200" max="0" value="0">
+                </label>
+            </div>
+            
+            <div id="helix-controls">
+                <h3>Helix Layout</h3>
+                <label>Radius: <span id="helix-radius-val">900</span>
+                    <input type="range" id="helix-radius" min="1" max="1500" value="900">
+                </label>
+                <label>Tightness: <span id="helix-tightness-val">8</span>
+                    <input type="range" id="helix-tightness" min="4" max="40" value="8">
+                </label>
+            </div>
+            
+            <div id="grid-controls">
+                <h3>Grid Layout</h3>
+                <label>Columns: <span id="grid-cols-val">5</span>
+                    <input type="range" id="grid-cols" min="1" max="36" value="18">
+                </label>
+                <label>X Spacing: <span id="grid-space-x-val">400</span>
+                    <input type="range" id="grid-space-x" min="200" max="800" value="0">
+                </label>
+                <label>Y Spacing: <span id="grid-space-y-val">400</span>
+                    <input type="range" id="grid-space-y" min="200" max="800" value="0">
+                </label>
+            </div>
+        </div>
+
+        <div id="outliner-panel">
+            <h3>Elements</h3>
+            <ul id="outliner-list">
+                </ul>
+        </div>
+
+        <div id="menu">
+            <button id="table">TABLE</button>
+            <button id="sphere">SPHERE</button>
+            <button id="helix">HELIX</button>
+            <button id="grid">GRID</button>
+        </div>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+                }
+            }
+        </script>
+
+        <script type="module">
+
+            import * as THREE from 'three';
+            import TWEEN from 'three/addons/libs/tween.module.js';
+            import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+            import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+            
+            let tableData;
+            let camera, scene, renderer;
+            let controls;
+
+            const groupColorMap = {
+                1: '#FF6666',  // Alkali Metal
+                2: '#FFD666',  // Alkaline Earth Metal
+                3: '#B2FF66',
+                4: '#66FF85',
+                5: '#66FFD6',
+                6: '#66D6FF',
+                7: '#6685FF',
+                8: '#B266FF',
+                9: '#FF66D6',
+                10: '#FF6685',
+                11: '#FF8C66',
+                12: '#FFB266',
+                13: '#D6FF66', // Boron Group
+                14: '#85FF66', // Carbon Group
+                15: '#66FFB2', // Pnictogens
+                16: '#66FFFF', // Chalcogens
+                17: '#66B2FF', // Halogen
+                18: '#D666FF', // Noble Gas
+            };
+
+            const objects = [];
+            let selectedObjects = [];
+            let lastSelectedObjectIndex = -1; // For Shift-select
+            
+            const targets = { table: [], tableInserted: [], sphere: [], helix: [], grid: [], manual: [] };
+            
+            let pointerDownTarget = null;
+            let pointerDownPos = new THREE.Vector2();
+            
+            // Double tap detection variables
+            let lastTapTime = 0;
+            let lastTappedObject = null;
+
+            const qInserted = new THREE.Quaternion();
+            const qFinal = new THREE.Quaternion();
+            const groupRotQuat = new THREE.Quaternion();
+            const fBlockPivot = new THREE.Vector3();
+
+            loadDataAndInit();
+            animate();
+
+            async function loadDataAndInit() {
+                try {
+                    const response = await fetch('https://raw.githubusercontent.com/Bowserinator/Periodic-Table-JSON/master/PeriodicTableJSON.json');
+                    const allData = await response.json();
+                    tableData = allData.elements.map((el, i) => ({
+                        Symbol: el.symbol,
+                        Name: el.name,
+                        AtomicWeight: el.atomic_mass,
+                        Column: el.xpos,
+                        Row: el.ypos,
+                        PricePerGramUSD: el.density ? (el.density * 10).toFixed(2) : 'N/A',
+                        RarityTier: el.category,
+                        StateAtSTP: el.phase,
+                        ColorEmoji: el.symbol.length > 1 ? `🧪` : `⚛️`
+                    }));
+                    init();
+                } catch (err)
+                    {console.error('Could not load element data:', err);}
+            }
+
+            function init() {
+                camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 1, 10000 );
+                
+                // Adjust camera based on mobile/portrait aspect ratio
+                if (window.innerWidth < window.innerHeight) {
+                    camera.position.z = 6000; // Pull further back on portrait
+                } else {
+                    camera.position.z = 3000;
+                }
+
+                scene = new THREE.Scene();
+
+                const outlinerList = document.getElementById('outliner-list');
+
+                const cardWidth = 160;
+                const cardHeight = 200;
+                const table18ColWidth = 18 * cardWidth;
+                const table32ColWidth = 32 * cardWidth;
+                const tableBaseY = 1100;
+
+                const pivotX = (3.5 * cardWidth) - (table18ColWidth / 2) - (cardWidth / 2);
+                const pivotY_La = -(9 * cardHeight) + tableBaseY;
+                const pivotY_Ac = -(10 * cardHeight) + tableBaseY;
+
+                tableData.forEach((elementData, i) => {
+                    const element = document.createElement( 'div' );
+                    element.className = 'element';
+                    
+                    // Native Double Click Support (Web/Desktop)
+                    element.addEventListener('dblclick', (event) => {
+                        handleSelection(event, objectCSS);
+                        focusOnSelection();
+                    });
+
+                    // Use pointer events for robust touch support
+                    element.addEventListener('pointerdown', (event) => onElementPointerDown(event, objectCSS));
+                    element.addEventListener('pointerup', (event) => onElementPointerUp(event, objectCSS));
+                    
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    element.appendChild(card);
+
+                    // Front Face
+                    const front = document.createElement('div');
+                    front.className = 'face front';
+                    card.appendChild(front);
+
+                    const number = document.createElement( 'div' );
+                    number.className = 'number';
+                    number.textContent = i + 1;
+                    front.appendChild( number );
+
+                    const symbol = document.createElement( 'div' );
+                    symbol.className = 'symbol';
+                    symbol.textContent = elementData.Symbol;
+                    front.appendChild( symbol );
+
+                    const details = document.createElement( 'div' );
+                    details.className = 'details';
+                    details.innerHTML = elementData.Name + '<br>' + (elementData.AtomicWeight ? elementData.AtomicWeight.toFixed(3) : '?');
+                    front.appendChild( details );
+
+                    // Back Face
+                    const back = document.createElement('div');
+                    back.className = 'face back';
+                    back.innerHTML = `
+                        <div class="info-item"><strong>Density:</strong> ${elementData.PricePerGramUSD} g/cm³</div>
+                        <div class="info-item"><strong>Category:</strong> ${elementData.RarityTier}</div>
+                        <div class="info-item"><strong>Phase:</strong> ${elementData.StateAtSTP}</div>
+                        <div class="emoji">${elementData.ColorEmoji}</div>
+                    `;
+                    card.appendChild(back);
+
+                    const objectCSS = new CSS3DObject( element );
+                    objectCSS.position.x = Math.random() * 4000 - 2000;
+                    objectCSS.position.y = Math.random() * 4000 - 2000;
+                    objectCSS.position.z = Math.random() * 4000 - 2000;
+                    scene.add( objectCSS );
+                    objects.push( objectCSS );
+
+                    element.objectCSS = objectCSS;
+                    const atomicNumber = i + 1;
+
+                    // --- Target: table (Detached / Rotated) ---
+                    const objectTable = new THREE.Object3D();
+                    if (elementData.Row === 9) { // Lanthanides
+                        objectTable.position.x = pivotX;
+                        objectTable.position.y = pivotY_La;
+                        objectTable.position.z = (atomicNumber - 57) * cardWidth;
+                        objectTable.rotation.y = -Math.PI / 2;
+                    } else if (elementData.Row === 10) { // Actinides
+                        objectTable.position.x = pivotX;
+                        objectTable.position.y = pivotY_Ac;
+                        objectTable.position.z = (atomicNumber - 89) * cardWidth;
+                        objectTable.rotation.y = -Math.PI / 2;
+                    } else { // Main block
+                        objectTable.position.x = ( elementData.Column * cardWidth ) - (table18ColWidth / 2) - (cardWidth / 2);
+                        objectTable.position.y = - ( elementData.Row * cardHeight ) + tableBaseY;
+                        objectTable.position.z = 0;
+                        objectTable.rotation.y = 0;
+                    }
+                    targets.table.push( objectTable );
+
+                    // --- Target: tableInserted (Flat / 32-col) ---
+                    const objectTableInserted = new THREE.Object3D();
+                    let tCol = elementData.Column;
+                    let tRow = elementData.Row;
+
+                    if (tRow === 9) {
+                        tRow = 6;
+                        tCol = (atomicNumber - 57) + 3;
+                    } else if (tRow === 10) {
+                        tRow = 7;
+                        tCol = (atomicNumber - 89) + 3;
+                    } else if (tRow === 6 && tCol >= 4) {
+                        tCol += 14;
+                    } else if (tRow === 7 && tCol >= 4) {
+                        tCol += 14;
+                    }
+                    
+                    objectTableInserted.position.x = ( tCol * cardWidth ) - (table32ColWidth / 2) - (cardWidth / 2);
+                    objectTableInserted.position.y = - ( tRow * cardHeight ) + tableBaseY;
+                    objectTableInserted.position.z = 0;
+                    objectTableInserted.rotation.y = 0;
+                    targets.tableInserted.push( objectTableInserted );
+
+                    // Add to outliner
+                    const li = document.createElement('li');
+                    li.textContent = `${i + 1}. ${elementData.Name} (${elementData.Symbol})`;
+                    
+                    // Outliner Click (Selection)
+                    li.addEventListener('click', (event) => handleSelection(event, objectCSS));
+                    
+                    // Outliner Double Click Native (Desktop)
+                    li.addEventListener('dblclick', (event) => {
+                        handleSelection(event, objectCSS);
+                        focusOnSelection();
+                    });
+
+                    // Outliner Double Tap Fallback (Mobile)
+                    li.addEventListener('pointerup', (event) => {
+                        if (event.pointerType === 'mouse') return; // Desktop handled by dblclick
+                        const currentTime = new Date().getTime();
+                        const tapLength = currentTime - lastTapTime;
+                        if (tapLength < 400 && tapLength > 0 && lastTappedObject === objectCSS) {
+                            focusOnSelection();
+                        }
+                        lastTapTime = currentTime;
+                        lastTappedObject = objectCSS;
+                    });
+
+                    outlinerList.appendChild(li);
+                    objectCSS.outlinerLi = li;
+                });
+
+                // sphere
+                const vector = new THREE.Vector3();
+                for ( let i = 0, l = objects.length; i < l; i ++ ) {
+                    const phi = Math.acos( - 1 + ( 2 * i ) / l );
+                    const theta = Math.sqrt( l * Math.PI ) * phi;
+                    const object = new THREE.Object3D();
+                    object.position.setFromSphericalCoords( 800, phi, theta );
+                    vector.copy( object.position ).multiplyScalar( 2 );
+                    object.lookAt( vector );
+                    targets.sphere.push( object );
+                }
+
+                // helix
+                for ( let i = 0, l = objects.length; i < l; i ++ ) {
+                    const theta = i * 0.175 + Math.PI;
+                    const y = - ( i * 8 ) + 450;
+                    const object = new THREE.Object3D();
+                    object.position.setFromCylindricalCoords( 900, theta, y );
+                    vector.x = object.position.x * 2;
+                    vector.y = object.position.y;
+                    vector.z = object.position.z * 2;
+                    object.lookAt( vector );
+                    targets.helix.push( object );
+                }
+
+                // grid
+                for ( let i = 0; i < objects.length; i ++ ) {
+                    const object = new THREE.Object3D();
+                    object.position.x = ( ( i % 5 ) * 400 ) - 800;
+                    object.position.y = ( - ( Math.floor( i / 5 ) % 5 ) * 400 ) + 800;
+                    object.position.z = ( Math.floor( i / 25 ) ) * 1000 - 2000;
+                    targets.grid.push( object );
+                }
+                
+                // Renderer
+                renderer = new CSS3DRenderer();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                document.getElementById( 'container' ).appendChild( renderer.domElement );
+
+                // Controls
+                controls = new TrackballControls( camera, renderer.domElement );
+                controls.minDistance = 200;
+                controls.maxDistance = 6000;
+                
+                // Shift the look target slightly DOWN so elements render HIGHER 
+                // preventing overlap with the bottom menu on portrait screens
+                if (window.innerWidth < window.innerHeight) {
+                    controls.target.set(0, -600, 0); 
+                }
+
+                controls.addEventListener( 'change', render );
+
+                // --- UI Toggles ---
+                const toggleUiBtn = document.getElementById('toggle-ui');
+                toggleUiBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.body.classList.toggle('ui-hidden');
+                    if (document.body.classList.contains('ui-hidden')) {
+                        toggleUiBtn.innerHTML = '👁️ Show UI';
+                    } else {
+                        toggleUiBtn.innerHTML = '👁️ Hide UI';
+                    }
+                });
+
+                const toggleSettingsBtn = document.getElementById('toggle-settings');
+                const toggleOutlinerBtn = document.getElementById('toggle-outliner');
+                const sidePanel = document.getElementById('side-panel');
+                const outlinerPanel = document.getElementById('outliner-panel');
+
+                toggleSettingsBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // prevent background click from immediately closing
+                    sidePanel.classList.toggle('mobile-open');
+                    outlinerPanel.classList.remove('mobile-open');
+                });
+
+                toggleOutlinerBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    outlinerPanel.classList.toggle('mobile-open');
+                    sidePanel.classList.remove('mobile-open');
+                });
+
+                // --- Layout / Config Listeners ---
+                document.getElementById('multicolor').addEventListener('change', updateCardColors);
+                
+                const opacitySlider = document.getElementById('opacity-slider');
+                const opacityVal = document.getElementById('opacity-val');
+                opacitySlider.addEventListener('input', () => {
+                    opacityVal.textContent = opacitySlider.value;
+                    updateCardOpacity();
+                });
+                
+                const tableControls = document.getElementById('table-controls');
+                const helixControls = document.getElementById('helix-controls');
+                const gridControls = document.getElementById('grid-controls');
+
+                document.getElementById('table').addEventListener( 'click', () => {
+                    TWEEN.removeAll(); 
+                    updateManualTableLayout(true); // Animate to slider positions
+                    tableControls.style.display = 'block';
+                    helixControls.style.display = 'none';
+                    gridControls.style.display = 'none';
+                });
+                document.getElementById('sphere').addEventListener( 'click', () => {
+                    TWEEN.removeAll();
+                    transform( targets.sphere, 2000 );
+                    tableControls.style.display = 'none';
+                    helixControls.style.display = 'none';
+                    gridControls.style.display = 'none';
+                });
+                document.getElementById('helix').addEventListener( 'click', () => {
+                    TWEEN.removeAll();
+                    updateHelixLayout(true); 
+                    tableControls.style.display = 'none';
+                    helixControls.style.display = 'block';
+                    gridControls.style.display = 'none';
+                });
+                document.getElementById('grid').addEventListener( 'click', () => {
+                    TWEEN.removeAll();
+                    updateGridLayout(true); 
+                    tableControls.style.display = 'none';
+                    helixControls.style.display = 'none';
+                    gridControls.style.display = 'block';
+                });
+
+                // --- Table Slider Listeners ---
+                const mainTranslateSlider = document.getElementById('main-translate-slider');
+                const fGroupRotateYSlider = document.getElementById('f-group-rotate-y-slider');
+                const fXPosSlider = document.getElementById('f-x-pos-slider');
+                const fYPosSlider = document.getElementById('f-y-pos-slider');
+                const fZPosSlider = document.getElementById('f-z-pos-slider');
+                
+                const mainTranslateVal = document.getElementById('main-translate-val');
+                const fGroupRotateYVal = document.getElementById('f-group-rotate-y-val');
+                const fXPosVal = document.getElementById('f-x-pos-val');
+                const fYPosVal = document.getElementById('f-y-pos-val');
+                const fZPosVal = document.getElementById('f-z-pos-val');
+
+                const tableSliders = [
+                    mainTranslateSlider, fGroupRotateYSlider, 
+                    fXPosSlider, fYPosSlider, fZPosSlider
+                ];
+                
+                tableSliders.forEach(slider => {
+                    slider.addEventListener('input', () => {
+                        mainTranslateVal.textContent = mainTranslateSlider.value;
+                        fGroupRotateYVal.textContent = fGroupRotateYSlider.value;
+                        fXPosVal.textContent = fXPosSlider.value;
+                        fYPosVal.textContent = fYPosSlider.value;
+                        fZPosVal.textContent = fZPosSlider.value;
+                        
+                        updateManualTableLayout(false);
+                    });
+                    slider.addEventListener('change', () => {
+                        updateManualTableLayout(true);
+                    });
+                });
+
+                // Helix slider listeners
+                const helixRadiusSlider = document.getElementById('helix-radius');
+                const helixTightnessSlider = document.getElementById('helix-tightness');
+                const helixRadiusVal = document.getElementById('helix-radius-val');
+                const helixTightnessVal = document.getElementById('helix-tightness-val');
+
+                helixRadiusSlider.addEventListener('input', () => {
+                    helixRadiusVal.textContent = helixRadiusSlider.value;
+                    updateHelixLayout(false); 
+                });
+                helixRadiusSlider.addEventListener('change', () => updateHelixLayout(true)); 
+                helixTightnessSlider.addEventListener('input', () => {
+                    helixTightnessVal.textContent = helixTightnessSlider.value;
+                    updateHelixLayout(false); 
+                });
+                helixTightnessSlider.addEventListener('change', () => updateHelixLayout(true)); 
+
+                // Grid slider listeners
+                const gridColsSlider = document.getElementById('grid-cols');
+                const gridSpaceXSlider = document.getElementById('grid-space-x');
+                const gridSpaceYSlider = document.getElementById('grid-space-y');
+                const gridColsVal = document.getElementById('grid-cols-val');
+                const gridSpaceXVal = document.getElementById('grid-space-x-val');
+                const gridSpaceYVal = document.getElementById('grid-space-y-val');
+
+                gridColsSlider.addEventListener('input', () => {
+                    gridColsVal.textContent = gridColsSlider.value;
+                    updateGridLayout(false);
+                });
+                gridColsSlider.addEventListener('change', () => updateGridLayout(true));
+                gridSpaceXSlider.addEventListener('input', () => {
+                    gridSpaceXVal.textContent = gridSpaceXSlider.value;
+                    updateGridLayout(false);
+                });
+                gridSpaceXSlider.addEventListener('change', () => updateGridLayout(true));
+                gridSpaceYSlider.addEventListener('input', () => {
+                    gridSpaceYVal.textContent = gridSpaceYSlider.value;
+                    updateGridLayout(false);
+                });
+                gridSpaceYSlider.addEventListener('change', () => updateGridLayout(true));
+
+                // Global Listeners
+                document.getElementById( 'container' ).addEventListener( 'pointerup', onBackgroundClick, true );
+                window.addEventListener('keydown', onKeyDown);
+                window.addEventListener( 'resize', onWindowResize );
+
+                // Initial setup
+                updateCardColors(); // Automatically utilizes the newly checked "multicolor" checkbox
+                updateCardOpacity();
+                updateManualTableLayout(true);
+                tableControls.style.display = 'block';
+            }
+
+            // --- Click Detection Functions (Updated for Touch/Pointer & Double Tap) ---
+            function onElementPointerDown(event, objectCSS) {
+                if (event.pointerType === 'mouse' && event.button !== 0) return; 
+                pointerDownTarget = objectCSS;
+                pointerDownPos.set(event.clientX, event.clientY);
+            }
+            
+            function onElementPointerUp(event, objectCSS) {
+                if (pointerDownTarget !== objectCSS) {
+                    pointerDownTarget = null;
+                    return;
+                }
+                const dist = pointerDownPos.distanceTo(new THREE.Vector2(event.clientX, event.clientY));
+                if (dist < 10) { // Slightly larger threshold for touch
+                    
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTapTime;
+                    
+                    // If tap is quick and on the same object, it's a double tap
+                    // (Note: Desktop relies on native dblclick instead for cleaner event flow)
+                    if (event.pointerType !== 'mouse' && tapLength < 400 && tapLength > 0 && lastTappedObject === objectCSS) {
+                        handleSelection(event, objectCSS); // Ensure it's selected
+                        focusOnSelection();                // Trigger the 'f' focus action
+                    } else if (event.pointerType !== 'mouse') {
+                        // Standard single click selection for touch
+                        handleSelection(event, objectCSS);
+                    } else if (event.pointerType === 'mouse') {
+                        // Single click for mouse, dblclick is handled by the dedicated event listener
+                        handleSelection(event, objectCSS);
+                    }
+                    
+                    lastTapTime = currentTime;
+                    lastTappedObject = objectCSS;
+                }
+                pointerDownTarget = null;
+            }
+
+            function onBackgroundClick(event) {
+                if (event.target.closest('.element')) {
+                    return;
+                }
+                if (pointerDownTarget) {
+                    pointerDownTarget = null;
+                    return;
+                }
+                
+                // Allow interaction with panels without triggering background dismiss
+                if (event.target.closest('#side-panel') || 
+                    event.target.closest('#outliner-panel') || 
+                    event.target.closest('#menu') ||
+                    event.target.closest('.panel-toggle') ||
+                    event.target.closest('#toggle-ui')) {
+                    return;
+                }
+                
+                clearSelection(true);
+
+                // Auto-close panels on mobile when clicking background
+                if (window.innerWidth <= 768) {
+                    document.getElementById('side-panel').classList.remove('mobile-open');
+                    document.getElementById('outliner-panel').classList.remove('mobile-open');
+                }
+            }
+
+            // --- Selection Logic ---
+            function handleSelection(event, objectCSS) {
+                const isCtrlClick = event.ctrlKey || event.metaKey;
+                const isShiftClick = event.shiftKey;
+                const clickedIndex = objects.indexOf(objectCSS);
+
+                if (isShiftClick && lastSelectedObjectIndex !== -1) {
+                    const start = Math.min(lastSelectedObjectIndex, clickedIndex);
+                    const end = Math.max(lastSelectedObjectIndex, clickedIndex);
+                    const rangeSelection = [];
+                    for (let i = start; i <= end; i++) {
+                        rangeSelection.push(objects[i]);
+                    }
+                    if (isCtrlClick) {
+                        const newSelectionSet = new Set([...selectedObjects, ...rangeSelection]);
+                        selectedObjects = Array.from(newSelectionSet);
+                    } else {
+                        clearSelection(false);
+                        selectedObjects = rangeSelection;
+                    }
+                    updateSelectionVisuals();
+                } else if (isCtrlClick) {
+                    toggleSelection(objectCSS);
+                    lastSelectedObjectIndex = clickedIndex;
+                } else {
+                    setSelection(objectCSS);
+                    lastSelectedObjectIndex = clickedIndex;
+                }
+            }
+            
+            function toggleSelection(objectCSS) {
+                const index = selectedObjects.indexOf(objectCSS);
+                if (index > -1) {
+                    selectedObjects.splice(index, 1);
+                } else {
+                    selectedObjects.push(objectCSS);
+                }
+                updateSelectionVisuals();
+            }
+
+            function setSelection(objectCSS) {
+                clearSelection(false);
+                selectedObjects.push(objectCSS);
+                updateSelectionVisuals();
+            }
+
+            function selectAll() {
+                selectedObjects = [...objects];
+                lastSelectedObjectIndex = -1;
+                updateSelectionVisuals();
+            }
+
+            function clearSelection(updateVisuals = true) {
+                selectedObjects = [];
+                lastSelectedObjectIndex = -1;
+                if (updateVisuals) {
+                    updateSelectionVisuals();
+                }
+            }
+
+            function updateSelectionVisuals() {
+                objects.forEach(obj => {
+                    const isSelected = selectedObjects.includes(obj);
+                    const accentRgb = obj.element.accentRgb || { r: 136, g: 170, b: 255 }; 
+
+                    obj.element.querySelectorAll('.face').forEach(f => {
+                        if (isSelected) {
+                            f.style.boxShadow = `0 0 25px rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.9), 0 0 15px rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.7)`;
+                            f.style.borderColor = `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.85)`;
+                        } else {
+                            f.style.boxShadow = `0px 0px 12px rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.5)`;
+                            f.style.borderColor = `rgba(${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}, 0.25)`;
+                        }
+                    });
+                    
+                    if (obj.outlinerLi) {
+                        obj.outlinerLi.classList.toggle('selected', isSelected);
+                    }
+                });
+            }
+
+
+            // --- Keydown Logic ---
+            function onKeyDown(event) {
+                switch (event.key.toLowerCase()) {
+                    case 'f':
+                        focusOnSelection();
+                        break;
+                    case 'a':
+                        if (event.ctrlKey || event.metaKey) {
+                            event.preventDefault();
+                            selectAll();
+                        }
+                        break;
+                    case 'escape':
+                        clearSelection(true);
+                        break;
+                }
+            }
+            
+            // --- Layout Updaters ---
+
+            function updateCardOpacity() {
+                const opacityValue = parseFloat(document.getElementById('opacity-slider').value) / 100.0;
+                objects.forEach(obj => {
+                    obj.element.style.opacity = opacityValue;
+                });
+            }
+
+            function updateManualTableLayout(doTransform = true) {
+                TWEEN.removeAll();
+                
+                // Get slider values
+                const mainTransPercent = parseFloat(document.getElementById('main-translate-slider').value) / 100.0;
+                const fGroupRotRad = (parseFloat(document.getElementById('f-group-rotate-y-slider').value) * Math.PI) / 180.0;
+                const fXPos = parseFloat(document.getElementById('f-x-pos-slider').value);
+                const fYPos = parseFloat(document.getElementById('f-y-pos-slider').value);
+                const fZPos = parseFloat(document.getElementById('f-z-pos-slider').value);
+                
+                const duration = doTransform ? 1000 : 0;
+                const newTargets = [];
+
+                // --- Calculate F-Block Pivot Point ---
+                const cardWidth = 160;
+                const cardHeight = 200;
+                const table32ColWidth = 32 * cardWidth;
+                const tableBaseY = 1100;
+                
+                // Center of the "inserted" f-block
+                const insertedPivotX = (
+                    ((3 * cardWidth) - (table32ColWidth / 2) - (cardWidth / 2)) + // x of col 3
+                    ((17 * cardWidth) - (table32ColWidth / 2) - (cardWidth / 2))   // x of col 17
+                ) / 2;
+                const insertedPivotY = (
+                    ((-(6 * cardHeight) + tableBaseY)) + // y of row 6
+                    ((-(7 * cardHeight) + tableBaseY))   // y of row 7
+                ) / 2;
+                const pivotInsertedCenter = new THREE.Vector3(insertedPivotX, insertedPivotY, 0);
+
+                // Pivot is now *always* the inserted center
+                fBlockPivot.copy(pivotInsertedCenter);
+
+                // Set the group rotation quaternion
+                groupRotQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), fGroupRotRad);
+                // --- End Pivot Calculation ---
+
+
+                for (let i = 0; i < objects.length; i++) {
+                    const o = new THREE.Object3D();
+                    const elementData = tableData[i];
+                    const targetHinged = targets.table[i];
+                    const targetInserted = targets.tableInserted[i];
+
+                    const isFBlock = elementData.Row === 9 || elementData.Row === 10;
+                    const isMainBlockToMove = (elementData.Row === 6 || elementData.Row === 7) && elementData.Column >= 4;
+                    
+                    if (isFBlock) {
+                        // 1. Set Position to the "inserted" target
+                        o.position.copy(targetInserted.position);
+
+                        // 2. Set individual card Rotation to "inserted" target
+                        qInserted.setFromEuler(targetInserted.rotation);
+                        qFinal.copy(qInserted);
+                        
+                        // 3. Apply Group Rotation (to position and rotation)
+                        o.position.sub(fBlockPivot); // Translate to pivot origin
+                        o.position.applyQuaternion(groupRotQuat); // Rotate position
+                        o.position.add(fBlockPivot); // Translate back
+                        
+                        qFinal.multiply(groupRotQuat); // Add group rotation to card rotation
+                        o.rotation.setFromQuaternion(qFinal);
+
+                        // 4. Apply manual F-Block offsets
+                        o.position.x += fXPos;
+                        o.position.y += fYPos;
+                        o.position.z += fZPos;
+                        
+                    } else if (isMainBlockToMove) {
+                        // 1. LERP Position based on main-translate slider
+                        o.position.lerpVectors(targetHinged.position, targetInserted.position, mainTransPercent);
+                        
+                        // 2. Rotation is static
+                        o.rotation.copy(targetHinged.rotation);
+                        
+                    } else {
+                        // "Static" element
+                        o.position.copy(targetHinged.position);
+                        o.rotation.copy(targetHinged.rotation);
+                    }
+
+                    newTargets.push(o);
+                }
+
+                targets.manual = newTargets;
+                transform(targets.manual, duration);
+            }
+
+
+            function updateHelixLayout(doTransform = true) {
+                const radius = parseFloat(document.getElementById('helix-radius').value);
+                const tightness = parseFloat(document.getElementById('helix-tightness').value);
+                const vector = new THREE.Vector3();
+                
+                const newTargets = [];
+                const l = objects.length;
+                for ( let i = 0; i < l; i ++ ) {
+                    const theta = i * 0.175 + Math.PI;
+                    const y = - ( i * tightness ) + (l * tightness / 2.5);
+                    const object = new THREE.Object3D();
+                    object.position.setFromCylindricalCoords( radius, theta, y );
+                    vector.x = object.position.x * 2;
+                    vector.y = object.position.y;
+                    vector.z = object.position.z * 2;
+                    object.lookAt( vector );
+                    newTargets.push( object );
+                }
+                targets.helix = newTargets;
+                if (doTransform) {
+                    TWEEN.removeAll();
+                    transform( targets.helix, 1000 );
+                }
+            }
+
+            function updateGridLayout(doTransform = true) {
+                const cols = parseInt(document.getElementById('grid-cols').value);
+                const spaceX = parseFloat(document.getElementById('grid-space-x').value);
+                const spaceY = parseFloat(document.getElementById('grid-space-y').value);
+
+                const newTargets = [];
+                const l = objects.length;
+                for ( let i = 0; i < l; i ++ ) {
+                    const object = new THREE.Object3D();
+                    const col = i % cols;
+                    const row = Math.floor( i / cols );
+                    
+                    const totalWidth = (cols - 1) * spaceX;
+                    const totalHeight = (Math.floor( (l - 1) / cols) ) * spaceY;
+
+                    object.position.x = ( col * spaceX ) - (totalWidth / 2);
+                    object.position.y = - ( row * spaceY ) + (totalHeight / 2);
+                    object.position.z = 0;
+                    
+                    newTargets.push( object );
+                }
+                targets.grid = newTargets;
+                if (doTransform) {
+                    TWEEN.removeAll();
+                    transform( targets.grid, 1000 );
+                }
+            }
+
+
+            function hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+            }
+
+            function updateCardColors() {
+                const isMulticolor = document.getElementById('multicolor').checked;
+                const defaultColor = '#88aaff';
+
+                objects.forEach((object, i) => {
+                    let finalColor = defaultColor;
+                    const elementData = tableData[i];
+                    const isFBlock = elementData.Row === 9 || elementData.Row === 10;
+                    
+                    if (isMulticolor) {
+                        if (isFBlock && elementData.Row === 9) {
+                            finalColor = groupColorMap[6];
+                        } else if (isFBlock && elementData.Row === 10) {
+                            finalColor = groupColorMap[10];
+                        } else if (groupColorMap[elementData.Column]) {
+                            finalColor = groupColorMap[elementData.Column];
+                        }
+                    }
+
+                    const baseRgb = hexToRgb(finalColor);
+                    object.element.accentRgb = baseRgb;
+                    
+                    const frontFace = object.element.querySelector('.front');
+                    const backFace = object.element.querySelector('.back');
+                    
+                    const l = 0.5;
+                    frontFace.style.backgroundColor = `rgba(${baseRgb.r * l}, ${baseRgb.g * l}, ${baseRgb.b * l}, 0.8)`;
+                    backFace.style.backgroundColor = `rgba(${baseRgb.r * l * 0.8}, ${baseRgb.g * l * 0.8}, ${baseRgb.b * l * 0.8}, 0.9)`;
+                    
+                    const numberEl = object.element.querySelector('.number');
+                    const symbolEl = object.element.querySelector('.symbol');
+                    const detailsEl = object.element.querySelector('.details');
+                    
+                    numberEl.style.color = `rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, 0.75)`;
+                    detailsEl.style.color = `rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, 0.85)`;
+
+                    symbolEl.style.color = `rgba(255, 255, 255, 0.85)`;
+                    symbolEl.style.textShadow = `0 0 10px rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, 0.95)`;
+
+                    const backInfoItems = backFace.querySelectorAll('.info-item');
+                    backInfoItems.forEach(item => {
+                        item.style.color = 'rgba(255, 255, 255, 0.8)';
+                        const strongEl = item.querySelector('strong');
+                        if (strongEl) {
+                            strongEl.style.color = 'rgba(255, 255, 255, 1)';
+                        }
+                    });
+                });
+                
+                updateSelectionVisuals();
+            }
+
+            function focusOnSelection() {
+                let targetPosition, targetLookAt;
+
+                if (selectedObjects.length === 0) {
+                    targetPosition = new THREE.Vector3(0, 0, 3000);
+                    targetLookAt = new THREE.Vector3(0, 0, 0);
+                } else {
+                    const boundingBox = new THREE.Box3();
+                    const center = new THREE.Vector3();
+                    
+                    selectedObjects.forEach(obj => {
+                        boundingBox.expandByPoint(obj.position);
+                    });
+                    
+                    boundingBox.getCenter(center);
+                    
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const fov = camera.fov * (Math.PI / 180);
+                    
+                    let cameraZ = Math.abs(maxDim / 1.5 / Math.tan(fov / 2));
+                    cameraZ *= 1.5; 
+                    
+                    const minDistance = (selectedObjects.length === 1) ? 350 : 600;
+                    cameraZ = Math.max(cameraZ, minDistance);
+                    
+                    // Direct camera look target, exactly centered on selection
+                    targetLookAt = center;
+                    
+                    // Apply camera distance logic dynamically
+                    const aspect = window.innerWidth / window.innerHeight;
+                    if (aspect < 1) {
+                        cameraZ /= aspect;
+                    }
+                    
+                    targetPosition = new THREE.Vector3(center.x, center.y, center.z + cameraZ);
+                }
+
+                tweenCamera(targetPosition, targetLookAt);
+            }
+
+            function tweenCamera(targetPosition, targetLookAt) {
+                TWEEN.removeAll(); 
+                
+                new TWEEN.Tween(camera.position)
+                    .to({ x: targetPosition.x, y: targetPosition.y, z: targetPosition.z }, 1000)
+                    .easing(TWEEN.Easing.Exponential.Out)
+                    .start();
+
+                new TWEEN.Tween(controls.target)
+                    .to({ x: targetLookAt.x, y: targetLookAt.y, z: targetLookAt.z }, 1000)
+                    .easing(TWEEN.Easing.Exponential.Out)
+                    .start();
+                
+                new TWEEN.Tween(camera.up)
+                    .to({ x: 0, y: 1, z: 0 }, 1000)
+                    .easing(TWEEN.Easing.Exponential.Out)
+                    .start();
+                
+                new TWEEN.Tween( this )
+                    .to( {}, 1000 )
+                    .onUpdate( render )
+                    .start();
+            }
+
+            function transform( targets, duration ) {
+                if (duration === 0) {
+                    for (let i = 0; i < objects.length; i++) {
+                        const object = objects[i];
+                        const target = targets[i];
+                        object.position.copy(target.position);
+                        object.rotation.copy(target.rotation);
+                    }
+                    render();
+                    return;
+                }
+
+                for ( let i = 0; i < objects.length; i ++ ) {
+                    const object = objects[ i ];
+                    const target = targets[ i ];
+                    new TWEEN.Tween( object.position )
+                        .to( { x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * duration + duration )
+                        .easing( TWEEN.Easing.Exponential.InOut )
+                        .start();
+                    new TWEEN.Tween( object.rotation )
+                        .to( { x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * duration + duration )
+                        .easing( TWEEN.Easing.Exponential.InOut )
+                        .start();
+                }
+                new TWEEN.Tween( this )
+                    .to( {}, duration * 2 )
+                    .onUpdate( render )
+                    .start();
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                render();
+            }
+
+            function animate() {
+                requestAnimationFrame( animate );
+                TWEEN.update();
+                controls.update();
+            }
+
+            function render() {
+                renderer.render( scene, camera );
+            }
+
+        </script>
+    </body>
+</html>

@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>3D Bookshelf</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+        <style>
+            body {
+                background-color: #0a0a14;
+                color: #fff;
+                font-family: Helvetica, Arial, sans-serif;
+                margin: 0;
+                overflow: hidden;
+                touch-action: none;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+            a { color: #8af; }
+
+            /* ---- Import Overlay ---- */
+            #import-overlay {
+                position: fixed; inset: 0;
+                background: rgba(0,0,0,0.88);
+                z-index: 9000;
+                display: flex; align-items: center; justify-content: center;
+                backdrop-filter: blur(6px);
+            }
+            #import-overlay.hidden { display: none; }
+            #import-box {
+                background: rgba(20,20,40,0.97);
+                border: 1px solid #445; border-radius: 20px;
+                padding: 26px 30px;
+                width: min(480px, 90vw); max-height: 90vh; overflow-y: auto;
+                box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+            }
+            #import-box h2 { margin: 0 0 5px; font-size: 21px; }
+            #import-box > p { margin: 0 0 16px; color: #aab; font-size: 12px; }
+            #server-notice {
+                display: none;
+                background: rgba(50,180,100,0.12); border: 1px solid rgba(50,220,110,0.3);
+                border-radius: 8px; padding: 9px 12px; margin-bottom: 14px;
+                font-size: 12px; color: #6eb; line-height: 1.4;
+            }
+            .import-section { margin-bottom: 14px; }
+            .import-section label { display: block; font-size: 12px; color: #99b; margin-bottom: 5px; }
+            .import-section input[type="file"] { display: none; }
+            .import-divider {
+                text-align: center; color: #556; font-size: 11px; margin: 12px 0; position: relative;
+            }
+            .import-divider::before, .import-divider::after {
+                content: ''; position: absolute; top: 50%; width: 36%; height: 1px; background: #334;
+            }
+            .import-divider::before { left: 0; } .import-divider::after { right: 0; }
+            .status-msg { display: block; font-size: 11px; color: #88f; margin-top: 5px; min-height: 14px; }
+            .status-msg.error { color: #f88; }
+            .status-msg.ok    { color: #6e6; }
+
+            .gr-input-row {
+                display: flex; gap: 6px; align-items: stretch; margin-top: 5px;
+            }
+            .gr-input-row input[type="text"] {
+                flex: 1; background: rgba(255,255,255,0.07); border: 1px solid #446;
+                border-radius: 10px; color: #fff; padding: 9px 11px; font-size: 12px;
+                outline: none; min-width: 0;
+            }
+            .gr-input-row input[type="text"]:focus { border-color: rgba(136,170,255,0.5); }
+            .gr-input-row button { padding: 9px 14px; font-size: 12px; border-radius: 10px; white-space: nowrap; }
+
+            /* ---- Shared Buttons ---- */
+            button {
+                pointer-events: auto;
+                color: rgba(136,170,255,0.95);
+                background: rgba(20,20,40,0.72);
+                outline: 1px solid rgba(136,170,255,0.5);
+                border: 0; padding: 10px 18px; border-radius: 22px;
+                cursor: pointer; font-family: Helvetica, Arial, sans-serif;
+                font-weight: bold; font-size: 13px; letter-spacing: 0.3px;
+                backdrop-filter: blur(8px);
+                transition: background 0.2s, transform 0.1s;
+            }
+            button:hover  { background: rgba(136,170,255,0.3); }
+            button:active { color: #000; background: rgba(136,170,255,0.9); transform: scale(0.95); }
+            .btn-block { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; text-align: center; }
+            .btn-file-label {
+                display: block; text-align: center; padding: 10px 18px; border-radius: 22px;
+                cursor: pointer; font-weight: bold; font-size: 13px;
+                background: rgba(30,30,60,0.7); outline: 1px solid rgba(136,170,255,0.4);
+                color: rgba(136,170,255,0.95); transition: background 0.2s; pointer-events: auto; box-sizing: border-box;
+            }
+            .btn-file-label:hover { background: rgba(136,170,255,0.22); }
+
+            /* ---- Book Cards ---- */
+            .book-card {
+                width: 115px; height: 170px;
+                cursor: pointer; background: transparent;
+            }
+            .book-card.spacer { pointer-events: none; opacity: 0 !important; }
+            .book-card .card {
+                width: 100%; height: 100%; position: relative;
+                transform-style: preserve-3d; transition: transform 0.5s;
+            }
+            .book-card .face {
+                position: absolute; width: 100%; height: 100%;
+                backface-visibility: hidden; border-radius: 5px;
+                box-sizing: border-box; overflow: hidden;
+                border: 1.5px solid rgba(136,170,255,0.2);
+                transition: border-color 0.2s, box-shadow 0.2s, opacity 0.3s;
+            }
+            .book-card.dim .face { opacity: 0.08 !important; }
+            .book-card .front { position: relative; }
+            .book-card .cover-img {
+                position: absolute; inset: 0; width: 100%; height: 100%;
+                object-fit: cover; display: none;
+            }
+            .book-card .cover-fallback {
+                position: absolute; inset: 0;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                padding: 10px 8px; text-align: center;
+            }
+            .book-card .fallback-title {
+                font-size: 12px; font-weight: bold;
+                color: rgba(255,255,255,0.95); line-height: 1.3;
+                text-shadow: 0 1px 4px rgba(0,0,0,0.7); margin-bottom: 6px;
+                display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+            }
+            .book-card .fallback-author {
+                font-size: 10px; color: rgba(255,255,255,0.7);
+                text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+            }
+            .book-card .cover-overlay {
+                position: absolute; bottom: 0; left: 0; right: 0;
+                padding: 18px 6px 5px;
+                background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.55) 60%, transparent 100%);
+                display: none;
+            }
+            .book-card .overlay-title {
+                font-size: 9px; font-weight: bold; color: #fff;
+                line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .book-card .overlay-author {
+                font-size: 8px; color: rgba(255,255,255,0.72);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .book-card .back {
+                transform: rotateY(180deg); padding: 9px 8px;
+                display: flex; flex-direction: column; gap: 4px;
+                background: rgba(12,12,28,0.97); font-size: 10px;
+            }
+            .book-card .back-title {
+                font-size: 11px; font-weight: bold; color: #fff; line-height: 1.3;
+                display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+                margin-bottom: 2px;
+            }
+            .book-card .back .info-item { color: rgba(200,210,255,0.8); line-height: 1.4; }
+            .book-card .back .info-item strong { color: #fff; }
+            .book-card .back .stars { color: #ffd700; }
+            .book-card .back .gr-link { margin-top: auto; font-size: 9px; }
+            .book-card .back .gr-link a { color: #8af; }
+
+            /* ---- Sort buttons ---- */
+            .sort-row {
+                display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px;
+            }
+            .sort-btn {
+                flex: 1 1 auto;
+                padding: 6px 6px; font-size: 11px; border-radius: 14px;
+                background: rgba(20,20,50,0.6);
+                outline: 1px solid rgba(136,170,255,0.25);
+                color: rgba(136,170,255,0.7);
+                min-width: 0; white-space: nowrap;
+            }
+            .sort-btn:hover  { background: rgba(136,170,255,0.2); color: #fff; }
+            .sort-btn.active { background: rgba(136,170,255,0.35); color: #fff; outline-color: rgba(136,170,255,0.8); }
+            .sort-btn.off    { background: rgba(60,20,20,0.5); outline-color: rgba(255,100,100,0.3); color: rgba(255,150,150,0.6); }
+            #sort-desc-label { font-size: 11px; margin-top: 6px; }
+
+            /* ---- Search ---- */
+            #search-input {
+                width: 100%; box-sizing: border-box;
+                background: rgba(255,255,255,0.06); border: 1px solid #446;
+                border-radius: 10px; color: #fff; padding: 7px 10px;
+                font-size: 12px; outline: none; margin: 6px 0 4px;
+                pointer-events: auto;
+            }
+            #search-input::placeholder { color: #558; }
+            #search-input:focus { border-color: rgba(136,170,255,0.5); }
+
+            /* ---- Bottom Menu ---- */
+            #menu {
+                position: absolute; bottom: 0; width: 100%; text-align: center;
+                z-index: 10; padding: 30px 10px calc(20px + env(safe-area-inset-bottom)) 10px;
+                background: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 60%, transparent 100%);
+                pointer-events: none;
+                display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+                box-sizing: border-box;
+            }
+
+            /* ---- UI Visibility ---- */
+            body.ui-hidden #menu, body.ui-hidden #side-panel,
+            body.ui-hidden #outliner-panel, body.ui-hidden .panel-toggle { display: none !important; }
+            #toggle-ui {
+                position: absolute; top: env(safe-area-inset-top, 15px);
+                left: 50%; transform: translateX(-50%);
+                z-index: 3000; padding: 8px 15px; font-size: 12px;
+            }
+
+            /* ---- Side Panel ---- */
+            #side-panel {
+                position: absolute; top: 20px; left: 20px;
+                background: rgba(14,14,30,0.88); border: 1px solid #445;
+                padding: 15px; border-radius: 16px; z-index: 2000;
+                width: 220px; max-height: calc(100vh - 40px); overflow-y: auto;
+                backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #side-panel h3 { margin: 0 0 8px; font-size: 14px; border-bottom: 1px solid #445; padding-bottom: 5px; }
+            #side-panel label { display: block; margin-top: 9px; font-size: 12px; }
+            #side-panel input[type="range"] { width: 100%; box-sizing: border-box; padding: 7px 0; }
+            #side-panel input[type="checkbox"] { margin-right: 5px; }
+            .layout-controls { display: none; margin-top: 12px; border-top: 1px solid #445; padding-top: 10px; }
+            .layout-controls label { font-size: 11px; margin-top: 6px; }
+            #sort-section { margin-top: 12px; border-top: 1px solid #445; padding-top: 10px; }
+            #shelf-filter-section { display: none; margin-top: 12px; border-top: 1px solid #445; padding-top: 10px; }
+
+            /* ---- Outliner ---- */
+            #outliner-panel {
+                position: absolute; top: 20px; right: 20px;
+                background: rgba(14,14,30,0.88); border: 1px solid #445;
+                padding: 15px; border-radius: 16px; z-index: 2000;
+                width: 200px; height: calc(100vh - 60px);
+                display: flex; flex-direction: column;
+                backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #outliner-header {
+                display: flex; align-items: center; justify-content: space-between;
+                border-bottom: 1px solid #445; padding-bottom: 7px;
+            }
+            #outliner-header h3 { margin: 0; font-size: 14px; }
+            #reimport-btn { padding: 4px 8px; font-size: 11px; border-radius: 10px; outline-color: rgba(136,170,255,0.3); }
+            #outliner-list {
+                list-style: none; padding: 0; margin: 0;
+                overflow-y: auto; flex-grow: 1;
+            }
+            #outliner-list li {
+                padding: 7px 8px; cursor: pointer; font-size: 12px;
+                border-bottom: 1px solid #333;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ccd;
+            }
+            #outliner-list li:hover  { background: rgba(136,170,255,0.2); border-radius: 6px; }
+            #outliner-list li.selected { background: rgba(136,170,255,0.4); font-weight: bold; border-radius: 6px; color: #fff; }
+            #outliner-list li.hidden { display: none; }
+
+            /* ---- Mobile ---- */
+            .panel-toggle {
+                display: none; position: absolute;
+                top: env(safe-area-inset-top, 15px); padding: 10px 15px; border-radius: 22px; z-index: 1001;
+            }
+            #toggle-settings { left: 15px; } #toggle-outliner { right: 15px; }
+            @media (max-width: 768px) {
+                .panel-toggle { display: block; }
+                #side-panel, #outliner-panel {
+                    display: none; position: fixed; top: 50%; left: 50%;
+                    transform: translate(-50%,-50%); width: 85vw; max-width: 340px; margin: 0;
+                }
+                #outliner-panel { height: 75vh; max-height: 75vh; }
+                #side-panel { max-height: 75vh; }
+                #side-panel.mobile-open   { display: block; }
+                #outliner-panel.mobile-open { display: flex; }
+                #menu { flex-wrap: nowrap; gap: 5px; padding-left: 5px; padding-right: 5px; }
+                #menu button { font-size: 11px; padding: 9px 4px; flex: 1; white-space: nowrap; }
+            }
+
+            /* ---- Cover / sort status ---- */
+            #cover-status {
+                position: absolute; bottom: 86px; left: 50%; transform: translateX(-50%);
+                font-size: 11px; color: rgba(136,170,255,0.6); z-index: 100;
+                pointer-events: none; white-space: nowrap; transition: opacity 0.6s;
+            }
+            #cover-status.hidden { opacity: 0; }
+        </style>
+    </head>
+    <body>
+
+        <!-- ===== IMPORT OVERLAY ===== -->
+        <div id="import-overlay">
+            <div id="import-box">
+                <h2>📚 3D Bookshelf</h2>
+                <p>Visualize your book collection in 3D — sort, search, fly around.</p>
+
+                <div id="server-notice">
+                    ⚡ <strong>Server mode</strong> — covers cached locally for instant loading on repeat visits
+                </div>
+
+                <!-- CSV upload -->
+                <div class="import-section">
+                    <label>Upload a CSV — Goodreads export, <code>data/elements.csv</code>, or output from <code>data/</code></label>
+                    <label class="btn-file-label" for="csv-upload">📂 Choose CSV File</label>
+                    <input type="file" id="csv-upload" accept=".csv">
+                    <span class="status-msg" id="csv-status"></span>
+                </div>
+
+                <!-- Goodreads URL (server mode only) -->
+                <div class="import-section server-only" style="display:none">
+                    <label>Goodreads user ID or profile URL <span style="color:#556">(server mode)</span></label>
+                    <div class="gr-input-row">
+                        <input type="text" id="gr-userid" placeholder="e.g. 12345678 or profile URL" autocomplete="off">
+                        <button id="gr-fetch-btn">Fetch</button>
+                    </div>
+                    <span class="status-msg" id="gr-status"></span>
+                </div>
+
+                <div class="import-divider">how to get a CSV</div>
+
+                <div class="import-section">
+                    <label style="color:#99b;font-size:12px;line-height:1.6">
+                        <strong>Goodreads export</strong><br>
+                        <span style="color:#778">goodreads.com → My Books → Import and Export → Export Library → upload above</span>
+                    </label>
+                    <label style="color:#99b;font-size:12px;line-height:1.6;margin-top:8px">
+                        <strong>Periodic table demo</strong><br>
+                        <span style="color:#778">Load <code style="background:rgba(255,255,255,0.07);padding:1px 4px;border-radius:4px">data/elements.csv</code> then click PTABLE layout</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MAIN UI ===== -->
+        <button id="toggle-ui">👁️ Hide UI</button>
+        <button id="toggle-settings" class="panel-toggle">⚙️ Settings</button>
+        <button id="toggle-outliner" class="panel-toggle">📚 Books</button>
+
+        <div id="container"></div>
+        <div id="cover-status" class="hidden"></div>
+
+        <!-- Settings Panel -->
+        <div id="side-panel">
+            <h3>Appearance</h3>
+            <label><input type="checkbox" id="multicolor" checked> Color by Author</label>
+            <label>Opacity: <span id="opacity-val">85</span>%
+                <input type="range" id="opacity-slider" min="0" max="100" value="85">
+            </label>
+
+            <div id="sort-section">
+                <h3>Sort</h3>
+                <div class="sort-row">
+                    <button class="sort-btn active" data-sort="none">Default</button>
+                    <button class="sort-btn" data-sort="title">Title</button>
+                    <button class="sort-btn" data-sort="author">Author</button>
+                    <button class="sort-btn" data-sort="year">Year</button>
+                    <button class="sort-btn" data-sort="color">Color</button>
+                </div>
+                <label id="sort-desc-label"><input type="checkbox" id="sort-desc"> Reverse</label>
+            </div>
+
+            <!-- Shelf filter — populated dynamically after load -->
+            <div id="shelf-filter-section">
+                <h3>Shelves</h3>
+                <div id="shelf-filter-buttons" class="sort-row"></div>
+            </div>
+
+            <div id="shelf-controls" class="layout-controls">
+                <h3>Shelf Layout</h3>
+                <label>Books per Row: <span id="shelf-cols-val">12</span>
+                    <input type="range" id="shelf-cols" min="3" max="30" value="12">
+                </label>
+                <label>Row Spacing: <span id="shelf-spacing-val">200</span>
+                    <input type="range" id="shelf-spacing" min="150" max="350" value="200">
+                </label>
+            </div>
+
+            <div id="helix-controls" class="layout-controls">
+                <h3>Helix Layout</h3>
+                <label>Radius: <span id="helix-radius-val">900</span>
+                    <input type="range" id="helix-radius" min="100" max="1500" value="900">
+                </label>
+                <label>Tightness: <span id="helix-tightness-val">8</span>
+                    <input type="range" id="helix-tightness" min="4" max="40" value="8">
+                </label>
+            </div>
+
+            <div id="grid-controls" class="layout-controls">
+                <h3>Grid Layout</h3>
+                <label>Columns: <span id="grid-cols-val">10</span>
+                    <input type="range" id="grid-cols" min="1" max="36" value="10">
+                </label>
+                <label>X Spacing: <span id="grid-space-x-val">150</span>
+                    <input type="range" id="grid-space-x" min="100" max="600" value="150">
+                </label>
+                <label>Y Spacing: <span id="grid-space-y-val">200</span>
+                    <input type="range" id="grid-space-y" min="100" max="600" value="200">
+                </label>
+            </div>
+        </div>
+
+        <!-- Outliner -->
+        <div id="outliner-panel">
+            <div id="outliner-header">
+                <h3 id="outliner-title">Books</h3>
+                <button id="reimport-btn" title="Import books">📥</button>
+            </div>
+            <input type="text" id="search-input" placeholder="Search title, author…" autocomplete="off">
+            <ul id="outliner-list"></ul>
+        </div>
+
+        <!-- Layout Buttons -->
+        <div id="menu">
+            <button id="shelf-btn">SHELF</button>
+            <button id="sphere-btn">SPHERE</button>
+            <button id="helix-btn">HELIX</button>
+            <button id="grid-btn">GRID</button>
+            <button id="ptable-btn" style="display:none">PTABLE</button>
+        </div>
+
+        <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+            }
+        }
+        </script>
+
+        <script type="module">
+            import * as THREE from 'three';
+            import TWEEN from 'three/addons/libs/tween.module.js';
+            import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+            import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+            // ---- Environment ----
+            const IS_SERVER = ['http:', 'https:'].includes(location.protocol);
+            if (IS_SERVER) {
+                document.getElementById('server-notice').style.display = 'block';
+                document.querySelectorAll('.server-only').forEach(el => el.style.display = 'block');
+            }
+
+            // ---- Globals ----
+            let bookData = [];
+            let camera, scene, renderer, controls;
+            const objects = [];
+            let selectedObjects = [];
+            let lastSelectedObjectIndex = -1;
+            const targets = { shelf: [], sphere: [], helix: [], grid: [], ptable: [] };
+            let currentLayout = 'shelf';
+            let pointerDownTarget = null;
+            const pointerDownPos = new THREE.Vector2();
+            let lastTapTime = 0, lastTappedObject = null;
+
+            // Sort state
+            let sortKey  = 'none';
+            let sortDesc = false;
+            // Per-book dominant color (extracted from cover after load)
+            const dominantHues = {};  // index → hue 0-360
+
+            // Search + shelf filter state
+            let searchQuery  = '';
+            let activeShelves = null; // null = all visible
+
+            // ---- Color helpers ----
+            function hashStr(str) {
+                let h = 0;
+                for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
+                return Math.abs(h);
+            }
+            function hslToRgb(h, s, l) {
+                s /= 100; l /= 100;
+                const a = s * Math.min(l, 1 - l);
+                const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); };
+                return { r: Math.round(f(0)*255), g: Math.round(f(8)*255), b: Math.round(f(4)*255) };
+            }
+            function rgbToHue(r, g, b) {
+                r /= 255; g /= 255; b /= 255;
+                const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+                if (d === 0) return 0;
+                let h = max === r ? ((g-b)/d)%6 : max === g ? (b-r)/d+2 : (r-g)/d+4;
+                return ((h*60)+360) % 360;
+            }
+            function authorRgb(author) {
+                return hslToRgb(hashStr(author || 'Unknown') % 360, 62, 52);
+            }
+            function bookHue(i) {
+                if (dominantHues[i] !== undefined) return dominantHues[i];
+                return hashStr(bookData[i]?.author || '') % 360;
+            }
+
+            // ---- Sort / rank ----
+            function getSortedRanks() {
+                // Only rank non-spacer books (spacers keep their natural order)
+                const indices = objects.map((_, i) => i).filter(i => !isSpacerBook(i));
+                if (sortKey !== 'none') {
+                    indices.sort((a, b) => {
+                        const ba = bookData[a], bb = bookData[b];
+                        let cmp = 0;
+                        if      (sortKey === 'title')  cmp = (ba.title  || '').localeCompare(bb.title  || '');
+                        else if (sortKey === 'author') cmp = (ba.author || '').localeCompare(bb.author || '');
+                        else if (sortKey === 'year')   cmp = (parseInt(ba.year) || 9999) - (parseInt(bb.year) || 9999);
+                        else if (sortKey === 'color')  cmp = bookHue(a) - bookHue(b);
+                        return sortDesc ? -cmp : cmp;
+                    });
+                } else if (sortDesc) {
+                    indices.reverse();
+                }
+                // ranks[bookIdx] = display slot (among non-spacers)
+                const ranks = new Array(objects.length);
+                indices.forEach((bookIdx, pos) => { ranks[bookIdx] = pos; });
+                // Spacers keep their original index as rank
+                objects.forEach((_, i) => { if (isSpacerBook(i)) ranks[i] = i; });
+                return ranks;
+            }
+
+            function isSpacerBook(i) {
+                return bookData[i]?.shelf === 'spacer' || !bookData[i]?.title;
+            }
+
+            function applySort() {
+                computeCurrentLayoutTargets();
+                transform(targets[currentLayout], 1200);
+            }
+
+            // ---- Filters (search + shelf) ----
+            function applyFilters() {
+                const q = searchQuery.toLowerCase().trim();
+                let hits = 0;
+                objects.forEach((obj, i) => {
+                    if (isSpacerBook(i)) return; // spacers are always invisible
+                    const b = bookData[i];
+                    const matchSearch = !q
+                        || (b.title  || '').toLowerCase().includes(q)
+                        || (b.author || '').toLowerCase().includes(q)
+                        || String(b.year || '').includes(q)
+                        || (b.shelf  || '').toLowerCase().includes(q);
+                    const matchShelf = !activeShelves || activeShelves.has(b.shelf || '');
+                    const match = matchSearch && matchShelf;
+                    obj.element.classList.toggle('dim', !match);
+                    if (obj.outlinerLi) obj.outlinerLi.classList.toggle('hidden', !match);
+                    if (match) hits++;
+                });
+                const nonSpacers = bookData.filter((b, i) => !isSpacerBook(i)).length;
+                const titleEl = document.getElementById('outliner-title');
+                titleEl.textContent = (q || activeShelves) ? `${hits} / ${nonSpacers}` : 'Books';
+            }
+
+            // ---- Shelf filter UI ----
+            function buildShelfFilter() {
+                const shelves = [...new Set(
+                    bookData.filter((b, i) => !isSpacerBook(i)).map(b => b.shelf || '')
+                )].filter(Boolean);
+
+                const section  = document.getElementById('shelf-filter-section');
+                const btnRow   = document.getElementById('shelf-filter-buttons');
+                btnRow.innerHTML = '';
+
+                if (shelves.length < 2) { section.style.display = 'none'; activeShelves = null; return; }
+                section.style.display = 'block';
+                activeShelves = null;
+
+                // "All" toggle
+                const allBtn = document.createElement('button');
+                allBtn.className = 'sort-btn active';
+                allBtn.textContent = 'All';
+                allBtn.dataset.shelf = '__all__';
+                btnRow.appendChild(allBtn);
+
+                shelves.forEach(shelf => {
+                    const btn = document.createElement('button');
+                    btn.className = 'sort-btn active';
+                    btn.textContent = shelf;
+                    btn.dataset.shelf = shelf;
+                    btnRow.appendChild(btn);
+                });
+
+                btnRow.addEventListener('click', e => {
+                    const btn = e.target.closest('button[data-shelf]');
+                    if (!btn) return;
+                    const shelf = btn.dataset.shelf;
+
+                    if (shelf === '__all__') {
+                        btnRow.querySelectorAll('button[data-shelf]').forEach(b => {
+                            b.classList.add('active'); b.classList.remove('off');
+                        });
+                        activeShelves = null;
+                    } else {
+                        btn.classList.toggle('active');
+                        btn.classList.toggle('off', !btn.classList.contains('active'));
+                        const active = [...btnRow.querySelectorAll('button[data-shelf]:not([data-shelf="__all__"]).active')].map(b => b.dataset.shelf);
+                        const allBtnEl = btnRow.querySelector('[data-shelf="__all__"]');
+                        if (active.length === shelves.length) {
+                            activeShelves = null;
+                            allBtnEl.classList.add('active'); allBtnEl.classList.remove('off');
+                        } else {
+                            activeShelves = new Set(active);
+                            allBtnEl.classList.remove('active'); allBtnEl.classList.add('off');
+                        }
+                    }
+                    applyFilters();
+                });
+            }
+
+            // ---- IndexedDB cover URL cache ----
+            let _idb = null;
+            async function getIDB() {
+                if (_idb) return _idb;
+                return new Promise((res, rej) => {
+                    const r = indexedDB.open('bookshelf-covers', 1);
+                    r.onupgradeneeded = e => e.target.result.createObjectStore('covers', { keyPath: 'k' });
+                    r.onsuccess = e => { _idb = e.target.result; res(_idb); };
+                    r.onerror   = () => rej(r.error);
+                });
+            }
+            function idbKey(book) {
+                return book.isbn ? `isbn:${book.isbn}` : `tb:${(book.title+'|'+book.author).toLowerCase()}`;
+            }
+            async function idbGet(book) {
+                try {
+                    const db = await getIDB();
+                    return new Promise(res => {
+                        const r = db.transaction('covers').objectStore('covers').get(idbKey(book));
+                        r.onsuccess = () => res(r.result?.url ?? null);
+                        r.onerror   = () => res(null);
+                    });
+                } catch { return null; }
+            }
+            async function idbPut(book, url) {
+                try {
+                    const db = await getIDB();
+                    const tx = db.transaction('covers', 'readwrite');
+                    tx.objectStore('covers').put({ k: idbKey(book), url });
+                } catch {}
+            }
+
+            // ---- CSV parsing ----
+            function parseCSVLine(line) {
+                const result = []; let cur = ''; let inQ = false;
+                for (const ch of line) {
+                    if (ch === '"') inQ = !inQ;
+                    else if (ch === ',' && !inQ) { result.push(cur); cur = ''; }
+                    else cur += ch;
+                }
+                result.push(cur); return result;
+            }
+
+            function parseBookshelfCsv(text) {
+                const lines = text.trim().split('\n');
+                const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase());
+                const idx = n => headers.indexOf(n);
+                const books = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const c = parseCSVLine(lines[i]).map(v => v.replace(/"/g,'').trim());
+                    const shelf = c[idx('shelf')] || '';
+                    const title = c[idx('title')] || '';
+                    // Include spacers (empty title with shelf=spacer)
+                    if (!title && shelf !== 'spacer') continue;
+                    books.push({
+                        title:        title,
+                        author:       c[idx('author')]      || '',
+                        year:         c[idx('year')]        || null,
+                        isbn:         c[idx('isbn')]        || null,
+                        rating:       c[idx('rating')]      || null,
+                        myRating:     c[idx('my_rating')]   || null,
+                        pages:        c[idx('pages')]       || null,
+                        coverUrl:     c[idx('cover_url')]   || null,
+                        goodreadsUrl: c[idx('goodreads_url')] || null,
+                        shelf:        shelf || null,
+                    });
+                }
+                return books;
+            }
+
+            function parseCustomCsv(text) {
+                const lines = text.trim().split('\n');
+                const books = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const c = parseCSVLine(lines[i]);
+                    const title = c[0]?.trim();
+                    if (!title || title === 'nan') continue;
+                    const author = c[1]?.trim();
+                    books.push({
+                        title,
+                        author: (!author || author === 'nan') ? 'Unknown' : author,
+                        year: c[3]?.trim() || null,
+                        goodreadsUrl: c[6]?.trim() || null,
+                        shelf: 'read',
+                        coverUrl: null, rating: null, pages: null,
+                    });
+                }
+                return books;
+            }
+
+            function parseGoodreadsExportCsv(text) {
+                const lines = text.trim().split('\n');
+                const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+                const idx = n => headers.indexOf(n);
+                const books = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const c = parseCSVLine(lines[i]).map(v => v.replace(/"/g,'').replace(/^=/,'').trim());
+                    if (!c[idx('Title')]) continue;
+                    const bookId = c[idx('Book Id')];
+                    books.push({
+                        title:        c[idx('Title')]  || 'Unknown',
+                        author:       c[idx('Author')] || 'Unknown',
+                        year:         c[idx('Original Publication Year')] || c[idx('Year Published')] || null,
+                        isbn:         c[idx('ISBN13')]?.replace(/\D/g,'') || null,
+                        rating:       c[idx('Average Rating')] || null,
+                        myRating:     c[idx('My Rating')] || null,
+                        pages:        c[idx('Number of Pages')] || null,
+                        shelf:        c[idx('Exclusive Shelf')] || 'read',
+                        coverUrl:     null,
+                        goodreadsUrl: bookId ? `https://www.goodreads.com/book/show/${bookId}` : null,
+                    });
+                }
+                return books;
+            }
+
+            function detectAndParse(text) {
+                const fl = text.split('\n')[0].toLowerCase();
+                if (fl.includes('book id') || fl.includes('my rating')) return parseGoodreadsExportCsv(text);
+                if (fl.startsWith('title,') || fl.startsWith('"title"')) return parseBookshelfCsv(text);
+                return parseCustomCsv(text);
+            }
+
+            // ---- Cover loading ----
+            let coverQueue = [], coverRunning = false;
+
+            async function queueCoverFetch(book, el) {
+                if (isSpacerBook(bookData.indexOf(book))) return; // no covers for spacers
+                if (book.coverUrl) { applyCoverToCard(el, book.coverUrl, book); return; }
+                const cached = await idbGet(book);
+                if (cached) { book.coverUrl = cached; applyCoverToCard(el, cached, book); return; }
+                coverQueue.push({ book, el });
+                if (!coverRunning) drainCoverQueue();
+            }
+
+            async function drainCoverQueue() {
+                coverRunning = true;
+                const statusEl = document.getElementById('cover-status');
+                while (coverQueue.length > 0) {
+                    statusEl.textContent = `Loading covers... ${coverQueue.length} remaining`;
+                    statusEl.classList.remove('hidden');
+                    const { book, el } = coverQueue.shift();
+                    try {
+                        const url = await fetchOpenLibraryCover(book.title, book.author);
+                        if (url) {
+                            book.coverUrl = url;
+                            await idbPut(book, url);
+                            applyCoverToCard(el, url, book);
+                        }
+                    } catch(e) {}
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                coverRunning = false;
+                statusEl.classList.add('hidden');
+            }
+
+            async function fetchOpenLibraryCover(title, author) {
+                if (!title) return null;
+                const q = encodeURIComponent(`${title} ${author}`);
+                const resp = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=1&fields=cover_i`);
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                if (data.docs?.[0]?.cover_i) return `https://covers.openlibrary.org/b/id/${data.docs[0].cover_i}-M.jpg`;
+                return null;
+            }
+
+            function applyCoverToCard(el, url, book) {
+                const img      = el.querySelector('.cover-img');
+                const fallback = el.querySelector('.cover-fallback');
+                const overlay  = el.querySelector('.cover-overlay');
+                if (!img) return;
+                img.crossOrigin = 'anonymous';
+                img.onload = () => {
+                    img.style.display = 'block';
+                    if (fallback) fallback.style.display = 'none';
+                    if (overlay)  overlay.style.display  = 'block';
+                    // Extract dominant color for color sort
+                    try {
+                        const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+                        cv.getContext('2d').drawImage(img, 0, 0, 1, 1);
+                        const [r, g, b] = cv.getContext('2d').getImageData(0, 0, 1, 1).data;
+                        const i = objects.findIndex(o => o.element === el.closest('.book-card') || o.element === el);
+                        if (i !== -1) dominantHues[i] = rgbToHue(r, g, b);
+                    } catch {}
+                };
+                img.onerror = () => { img.style.display = 'none'; };
+                img.src = url;
+            }
+
+            // ---- Import overlay ----
+            function showImportOverlay() { document.getElementById('import-overlay').classList.remove('hidden'); }
+            function hideImportOverlay() { document.getElementById('import-overlay').classList.add('hidden'); }
+
+            async function processViaServer(file) {
+                const s = document.getElementById('csv-status');
+                s.textContent = 'Parsing CSV...'; s.className = 'status-msg';
+                try {
+                    const text = await file.text();
+                    const resp = await fetch('/api/process', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+                        body: text,
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+                        throw new Error(err.error || `HTTP ${resp.status}`);
+                    }
+                    const result = await resp.json();
+                    if (result.error) throw new Error(result.error);
+                    const books = Array.isArray(result) ? result : result.books || [];
+                    if (!books.length) throw new Error('No books found');
+                    // Remap snake_case keys from server to camelCase
+                    bookData = books.map(remapServerBook);
+                    const cached = bookData.filter(b => b.coverUrl).length;
+                    s.textContent = `Loaded ${bookData.length} books (${cached} covers cached)`;
+                    s.className = 'status-msg ok';
+                    setTimeout(() => { hideImportOverlay(); buildScene(); }, 400);
+                } catch(e) {
+                    s.textContent = 'Error: ' + e.message;
+                    s.className = 'status-msg error';
+                }
+            }
+
+            async function fetchFromGoodreads() {
+                const userid = document.getElementById('gr-userid').value.trim();
+                if (!userid) return;
+                const s = document.getElementById('gr-status');
+                s.textContent = 'Fetching from Goodreads...'; s.className = 'status-msg';
+                try {
+                    const resp = await fetch(`/api/goodreads?userid=${encodeURIComponent(userid)}`);
+                    const result = await resp.json();
+                    if (!resp.ok || result.error) throw new Error(result.error || `HTTP ${resp.status}`);
+                    const books = result.books || [];
+                    if (!books.length) throw new Error('No books found');
+                    bookData = books.map(remapServerBook);
+                    const saved = result.saved ? ` — saved as ${result.saved}` : '';
+                    s.textContent = `Loaded ${bookData.length} books${saved}`;
+                    s.className = 'status-msg ok';
+                    setTimeout(() => { hideImportOverlay(); buildScene(); }, 400);
+                } catch(e) {
+                    s.textContent = e.message;
+                    s.className = 'status-msg error';
+                }
+            }
+
+            function remapServerBook(b) {
+                // Server returns snake_case; internal JS uses camelCase
+                return {
+                    title:        b.title        || '',
+                    author:       b.author       || 'Unknown',
+                    year:         b.year         || null,
+                    isbn:         b.isbn         || null,
+                    rating:       b.rating       || null,
+                    myRating:     b.my_rating    || b.myRating    || null,
+                    pages:        b.pages        || null,
+                    coverUrl:     b.cover_url    || b.coverUrl    || null,
+                    goodreadsUrl: b.goodreads_url|| b.goodreadsUrl|| null,
+                    shelf:        b.shelf        || null,
+                };
+            }
+
+            function handleCsvUpload(file) {
+                if (IS_SERVER) { processViaServer(file); return; }
+                const s = document.getElementById('csv-status');
+                s.textContent = 'Reading...'; s.className = 'status-msg';
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const books = detectAndParse(e.target.result);
+                    if (!books.length) { s.textContent = 'No books found.'; s.className = 'status-msg error'; return; }
+                    bookData = books;
+                    hideImportOverlay();
+                    buildScene();
+                };
+                reader.onerror = () => { s.textContent = 'Error reading file.'; s.className = 'status-msg error'; };
+                reader.readAsText(file);
+            }
+
+            // Wire import UI
+            document.getElementById('csv-upload').addEventListener('change', e => {
+                if (e.target.files[0]) handleCsvUpload(e.target.files[0]);
+            });
+            document.getElementById('reimport-btn').addEventListener('click', showImportOverlay);
+            document.getElementById('gr-fetch-btn').addEventListener('click', fetchFromGoodreads);
+            document.getElementById('gr-userid').addEventListener('keydown', e => {
+                if (e.key === 'Enter') fetchFromGoodreads();
+            });
+
+            // ---- Detect if this looks like element data (has xpos/ypos in rating/myRating) ----
+            function hasElementData() {
+                // Elements CSV stores xpos in rating, ypos in myRating
+                const sample = bookData.filter(b => !isSpacerBook(bookData.indexOf(b))).slice(0, 10);
+                return sample.length > 5 && sample.every(b => {
+                    const x = parseInt(b.rating), y = parseInt(b.myRating);
+                    return x >= 1 && x <= 18 && y >= 1 && y <= 10;
+                });
+            }
+
+            // ---- Build 3D Scene ----
+            function buildScene() {
+                if (scene) objects.forEach(o => scene.remove(o));
+                objects.length = 0; selectedObjects.length = 0;
+                lastSelectedObjectIndex = -1;
+                coverQueue.length = 0;
+                Object.keys(targets).forEach(k => { targets[k] = []; });
+                Object.keys(dominantHues).forEach(k => delete dominantHues[k]);
+                document.getElementById('outliner-list').innerHTML = '';
+                searchQuery = '';
+                activeShelves = null;
+                document.getElementById('search-input').value = '';
+                document.getElementById('outliner-title').textContent = 'Books';
+                // Reset sort
+                document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === 'none'));
+                sortKey = 'none'; sortDesc = false;
+                document.getElementById('sort-desc').checked = false;
+
+                if (!camera) {
+                    camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 10000);
+                    camera.position.z = window.innerWidth < window.innerHeight ? 5000 : 3200;
+                    scene    = new THREE.Scene();
+                    renderer = new CSS3DRenderer();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    document.getElementById('container').appendChild(renderer.domElement);
+                    controls = new TrackballControls(camera, renderer.domElement);
+                    controls.minDistance = 150; controls.maxDistance = 9000;
+                    if (window.innerWidth < window.innerHeight) controls.target.set(0, -400, 0);
+                    controls.addEventListener('change', render);
+                    window.addEventListener('resize', onWindowResize);
+                    window.addEventListener('keydown', onKeyDown);
+                    document.getElementById('container').addEventListener('pointerup', onBackgroundClick, true);
+                    setupUIControls();
+                    animate();
+                }
+
+                const outlinerList = document.getElementById('outliner-list');
+                const isElements   = hasElementData();
+                document.getElementById('ptable-btn').style.display = isElements ? 'inline-flex' : 'none';
+
+                bookData.forEach((book, i) => {
+                    const isSpacer = isSpacerBook(i);
+                    const el = document.createElement('div');
+                    el.className = 'book-card' + (isSpacer ? ' spacer' : '');
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    el.appendChild(card);
+
+                    if (!isSpacer) {
+                        // Front
+                        const front = document.createElement('div');
+                        front.className = 'face front';
+
+                        const img = document.createElement('img');
+                        img.className = 'cover-img';
+                        img.alt = book.title;
+                        img.style.display = 'none';
+                        front.appendChild(img);
+
+                        const fallback = document.createElement('div');
+                        fallback.className = 'cover-fallback';
+                        fallback.innerHTML =
+                            `<div class="fallback-title">${esc(book.title)}</div>` +
+                            `<div class="fallback-author">${esc(book.author)}</div>`;
+                        front.appendChild(fallback);
+
+                        const overlay = document.createElement('div');
+                        overlay.className = 'cover-overlay';
+                        overlay.style.display = 'none';
+                        overlay.innerHTML =
+                            `<div class="overlay-title">${esc(book.title)}</div>` +
+                            `<div class="overlay-author">${esc(book.author)}</div>`;
+                        front.appendChild(overlay);
+                        card.appendChild(front);
+
+                        // Back
+                        const back = document.createElement('div');
+                        back.className = 'face back';
+                        const ratingNum = parseFloat(book.rating);
+                        const starsN = !isNaN(ratingNum) ? Math.min(5, Math.max(0, Math.round(ratingNum))) : 0;
+                        const stars = !isNaN(ratingNum) && ratingNum >= 0 && ratingNum <= 5 ? '★'.repeat(starsN) + '☆'.repeat(5 - starsN) : '';
+                        back.innerHTML =
+                            `<div class="back-title">${esc(book.title)}</div>` +
+                            `<div class="info-item"><strong>${esc(book.author)}</strong></div>` +
+                            (book.year  ? `<div class="info-item">📅 ${book.year}</div>` : '') +
+                            (book.pages ? `<div class="info-item">📖 ${book.pages} pages</div>` : '') +
+                            (stars      ? `<div class="info-item"><span class="stars">${stars}</span> ${ratingNum.toFixed(1)}</div>` : '') +
+                            (book.goodreadsUrl ? `<div class="gr-link"><a href="${esc(book.goodreadsUrl)}" target="_blank">More info</a></div>` : '');
+                        card.appendChild(back);
+                    }
+
+                    const objectCSS = new CSS3DObject(el);
+                    el.objectCSS = objectCSS;
+                    if (!isSpacer) {
+                        el.addEventListener('dblclick', ev => { handleSelection(ev, objectCSS); focusOnSelection(); });
+                        el.addEventListener('pointerdown', ev => onElementPointerDown(ev, objectCSS));
+                        el.addEventListener('pointerup',   ev => onElementPointerUp(ev, objectCSS));
+                    }
+                    objectCSS.position.set(Math.random()*4000-2000, Math.random()*4000-2000, Math.random()*4000-2000);
+                    scene.add(objectCSS); objects.push(objectCSS);
+
+                    // Outliner (skip spacers)
+                    if (!isSpacer) {
+                        const li = document.createElement('li');
+                        li.textContent = book.title;
+                        li.title = `${book.title} — ${book.author}`;
+                        li.addEventListener('click', ev => handleSelection(ev, objectCSS));
+                        li.addEventListener('dblclick', ev => { handleSelection(ev, objectCSS); focusOnSelection(); });
+                        li.addEventListener('pointerup', ev => {
+                            if (ev.pointerType === 'mouse') return;
+                            const now = Date.now(), gap = now - lastTapTime;
+                            if (gap < 400 && gap > 0 && lastTappedObject === objectCSS) focusOnSelection();
+                            lastTapTime = now; lastTappedObject = objectCSS;
+                        });
+                        outlinerList.appendChild(li);
+                        objectCSS.outlinerLi = li;
+
+                        queueCoverFetch(book, el);
+                    }
+                });
+
+                computeShelfTargets(); computeSphereTargets();
+                computeHelixTargets(); computeGridTargets();
+                if (isElements) computePtableTargets();
+                updateCardColors(); updateCardOpacity();
+                buildShelfFilter();
+                transform(targets.shelf, 2000);
+                showLayoutControls('shelf');
+            }
+
+            // ---- Layout computations ----
+
+            function positionsForSlots(n, positionFn) {
+                return Array.from({ length: n }, (_, rank) => positionFn(rank, n));
+            }
+
+            function assignTargets(key, positionFn) {
+                // Only sort non-spacer books; spacers use their own computed positions
+                const nonSpacerCount = objects.filter((_, i) => !isSpacerBook(i)).length;
+                const ranks = getSortedRanks();
+                const pos   = positionsForSlots(nonSpacerCount, positionFn);
+                targets[key] = objects.map((_, i) => {
+                    if (isSpacerBook(i)) {
+                        // Spacers get placed in their sequential order among all objects
+                        const o = new THREE.Object3D();
+                        o.position.set(0, 0, -5000); // off-screen
+                        return o;
+                    }
+                    return pos[ranks[i]];
+                });
+            }
+
+            function computeShelfTargets() {
+                const cols    = parseInt(document.getElementById('shelf-cols').value)    || 12;
+                const spacingY = parseInt(document.getElementById('shelf-spacing').value) || 200;
+                const spacingX = 128;
+                const nonSpacers = objects.filter((_, i) => !isSpacerBook(i)).length;
+                const numRows  = Math.ceil(nonSpacers / cols);
+                const totalW   = (cols - 1) * spacingX;
+                const totalH   = (numRows - 1) * spacingY;
+                assignTargets('shelf', (rank) => {
+                    const o = new THREE.Object3D();
+                    o.position.set(
+                        (rank % cols) * spacingX - totalW / 2,
+                        -Math.floor(rank / cols) * spacingY + totalH / 2,
+                        0
+                    );
+                    return o;
+                });
+            }
+
+            function computeSphereTargets() {
+                const v = new THREE.Vector3();
+                assignTargets('sphere', (rank, n) => {
+                    const phi   = Math.acos(-1 + (2*rank)/n);
+                    const theta = Math.sqrt(n * Math.PI) * phi;
+                    const o = new THREE.Object3D();
+                    o.position.setFromSphericalCoords(900, phi, theta);
+                    v.copy(o.position).multiplyScalar(2);
+                    o.lookAt(v);
+                    return o;
+                });
+            }
+
+            function computeHelixTargets() {
+                const radius    = parseInt(document.getElementById('helix-radius').value)     || 900;
+                const tightness = parseFloat(document.getElementById('helix-tightness').value) || 8;
+                const v = new THREE.Vector3();
+                assignTargets('helix', (rank, n) => {
+                    const theta = rank * 0.175 + Math.PI;
+                    const y     = -(rank * tightness) + (n * tightness / 2.5);
+                    const o = new THREE.Object3D();
+                    o.position.setFromCylindricalCoords(radius, theta, y);
+                    v.set(o.position.x*2, o.position.y, o.position.z*2);
+                    o.lookAt(v);
+                    return o;
+                });
+            }
+
+            function computeGridTargets() {
+                const cols   = parseInt(document.getElementById('grid-cols').value)     || 10;
+                const spaceX = parseInt(document.getElementById('grid-space-x').value) || 150;
+                const spaceY = parseInt(document.getElementById('grid-space-y').value) || 200;
+                const nonSpacers = objects.filter((_, i) => !isSpacerBook(i)).length;
+                assignTargets('grid', (rank) => {
+                    const totalW = (cols - 1) * spaceX;
+                    const totalH = (Math.ceil(nonSpacers / cols) - 1) * spaceY;
+                    const o = new THREE.Object3D();
+                    o.position.set(
+                        (rank % cols) * spaceX - totalW / 2,
+                        -Math.floor(rank / cols) * spaceY + totalH / 2,
+                        0
+                    );
+                    return o;
+                });
+            }
+
+            function computePtableTargets() {
+                // Uses rating=xpos (1-18), myRating=ypos (1-10) stored in elements.csv
+                const spacingX = 128, spacingY = 185;
+                targets.ptable = objects.map((_, i) => {
+                    const b = bookData[i];
+                    const xpos = parseInt(b.rating)   || 1;
+                    const ypos = parseInt(b.myRating) || 1;
+                    const o = new THREE.Object3D();
+                    o.position.set(
+                        (xpos - 1) * spacingX - 8.5 * spacingX,
+                        -(ypos - 1) * spacingY + 4.5 * spacingY,
+                        0
+                    );
+                    return o;
+                });
+            }
+
+            function computeCurrentLayoutTargets() {
+                if      (currentLayout === 'shelf')  computeShelfTargets();
+                else if (currentLayout === 'sphere') computeSphereTargets();
+                else if (currentLayout === 'helix')  computeHelixTargets();
+                else if (currentLayout === 'grid')   computeGridTargets();
+                else if (currentLayout === 'ptable') computePtableTargets();
+            }
+
+            function showLayoutControls(name) {
+                ['shelf', 'helix', 'grid'].forEach(n => {
+                    document.getElementById(`${n}-controls`).style.display = n === name ? 'block' : 'none';
+                });
+                currentLayout = name;
+            }
+
+            // ---- UI Controls ----
+            function setupUIControls() {
+                document.getElementById('toggle-ui').addEventListener('click', e => {
+                    e.stopPropagation();
+                    document.body.classList.toggle('ui-hidden');
+                    document.getElementById('toggle-ui').textContent =
+                        document.body.classList.contains('ui-hidden') ? '👁️ Show UI' : '👁️ Hide UI';
+                });
+                document.getElementById('toggle-settings').addEventListener('click', e => {
+                    e.stopPropagation();
+                    document.getElementById('side-panel').classList.toggle('mobile-open');
+                    document.getElementById('outliner-panel').classList.remove('mobile-open');
+                });
+                document.getElementById('toggle-outliner').addEventListener('click', e => {
+                    e.stopPropagation();
+                    document.getElementById('outliner-panel').classList.toggle('mobile-open');
+                    document.getElementById('side-panel').classList.remove('mobile-open');
+                });
+
+                document.getElementById('multicolor').addEventListener('change', updateCardColors);
+                document.getElementById('opacity-slider').addEventListener('input', function() {
+                    document.getElementById('opacity-val').textContent = this.value;
+                    updateCardOpacity();
+                });
+
+                // Sort buttons
+                document.querySelectorAll('.sort-btn[data-sort]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.sort-btn[data-sort]').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        sortKey = btn.dataset.sort;
+                        applySort();
+                    });
+                });
+                document.getElementById('sort-desc').addEventListener('change', function() {
+                    sortDesc = this.checked;
+                    applySort();
+                });
+
+                // Search
+                document.getElementById('search-input').addEventListener('input', function() {
+                    searchQuery = this.value;
+                    applyFilters();
+                });
+                document.getElementById('search-input').addEventListener('keydown', e => {
+                    if (e.key === 'Escape') { e.target.value = ''; searchQuery = ''; applyFilters(); }
+                });
+
+                // Layout buttons
+                const layoutBtn = (id, key, computeFn, ctrl) => {
+                    document.getElementById(id).addEventListener('click', () => {
+                        TWEEN.removeAll();
+                        computeFn();
+                        transform(targets[key], 1500);
+                        showLayoutControls(ctrl);
+                    });
+                };
+                layoutBtn('shelf-btn',  'shelf',  computeShelfTargets,  'shelf');
+                layoutBtn('sphere-btn', 'sphere', computeSphereTargets, 'none');
+                layoutBtn('helix-btn',  'helix',  computeHelixTargets,  'helix');
+                layoutBtn('grid-btn',   'grid',   computeGridTargets,   'grid');
+                layoutBtn('ptable-btn', 'ptable', computePtableTargets, 'none');
+
+                // Live sliders
+                const liveSlider = (id, valId, computeFn, key) => {
+                    const valEl = document.getElementById(valId);
+                    document.getElementById(id).addEventListener('input', function() {
+                        if (valEl) valEl.textContent = this.value;
+                        if (currentLayout === key) { computeFn(); transform(targets[key], 300); }
+                    });
+                };
+                liveSlider('shelf-cols',    'shelf-cols-val',    computeShelfTargets, 'shelf');
+                liveSlider('shelf-spacing', 'shelf-spacing-val', computeShelfTargets, 'shelf');
+                liveSlider('helix-radius',    'helix-radius-val',    computeHelixTargets, 'helix');
+                liveSlider('helix-tightness', 'helix-tightness-val', computeHelixTargets, 'helix');
+                liveSlider('grid-cols',    'grid-cols-val',    computeGridTargets, 'grid');
+                liveSlider('grid-space-x', 'grid-space-x-val', computeGridTargets, 'grid');
+                liveSlider('grid-space-y', 'grid-space-y-val', computeGridTargets, 'grid');
+            }
+
+            // ---- Card Styling ----
+            function updateCardColors() {
+                const multi = document.getElementById('multicolor').checked;
+                objects.forEach((obj, i) => {
+                    if (isSpacerBook(i)) return;
+                    const rgb  = multi ? authorRgb(bookData[i].author) : { r: 55, g: 65, b: 130 };
+                    obj.element.accentRgb = rgb;
+                    const dark = { r: Math.round(rgb.r*0.4), g: Math.round(rgb.g*0.4), b: Math.round(rgb.b*0.4) };
+                    const front = obj.element.querySelector('.front');
+                    const back  = obj.element.querySelector('.back');
+                    if (front) front.style.backgroundColor = `rgba(${dark.r},${dark.g},${dark.b},0.9)`;
+                    if (back)  back.style.borderTop = `3px solid rgba(${rgb.r},${rgb.g},${rgb.b},0.65)`;
+                });
+                updateSelectionVisuals();
+            }
+            function updateCardOpacity() {
+                const v = parseFloat(document.getElementById('opacity-slider').value) / 100;
+                objects.forEach((o, i) => {
+                    if (isSpacerBook(i)) return;
+                    if (!o.element.classList.contains('dim')) o.element.style.opacity = v;
+                });
+            }
+
+            // ---- Selection ----
+            function handleSelection(event, objectCSS) {
+                const ctrl = event.ctrlKey || event.metaKey, shift = event.shiftKey;
+                const idx  = objects.indexOf(objectCSS);
+                if (shift && lastSelectedObjectIndex !== -1) {
+                    const lo = Math.min(lastSelectedObjectIndex, idx), hi = Math.max(lastSelectedObjectIndex, idx);
+                    const range = objects.slice(lo, hi + 1).filter((_, ri) => !isSpacerBook(lo + ri));
+                    selectedObjects = ctrl ? [...new Set([...selectedObjects, ...range])] : range;
+                    updateSelectionVisuals();
+                } else if (ctrl) {
+                    const si = selectedObjects.indexOf(objectCSS);
+                    if (si > -1) selectedObjects.splice(si, 1); else selectedObjects.push(objectCSS);
+                    lastSelectedObjectIndex = idx; updateSelectionVisuals();
+                } else {
+                    selectedObjects = [objectCSS]; lastSelectedObjectIndex = idx; updateSelectionVisuals();
+                }
+            }
+            function selectAll()     { selectedObjects = objects.filter((_, i) => !isSpacerBook(i)); lastSelectedObjectIndex = -1; updateSelectionVisuals(); }
+            function clearSelection(){ selectedObjects = []; lastSelectedObjectIndex = -1; updateSelectionVisuals(); }
+            function updateSelectionVisuals() {
+                objects.forEach((obj, i) => {
+                    if (isSpacerBook(i)) return;
+                    const sel = selectedObjects.includes(obj);
+                    const rgb = obj.element.accentRgb || { r: 136, g: 170, b: 255 };
+                    obj.element.querySelectorAll('.face').forEach(f => {
+                        f.style.boxShadow   = sel ? `0 0 28px rgba(${rgb.r},${rgb.g},${rgb.b},0.95),0 0 12px rgba(${rgb.r},${rgb.g},${rgb.b},0.7)` : `0 0 10px rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`;
+                        f.style.borderColor = sel ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.9)` : `rgba(${rgb.r},${rgb.g},${rgb.b},0.22)`;
+                    });
+                    if (obj.outlinerLi) obj.outlinerLi.classList.toggle('selected', sel);
+                });
+            }
+
+            // ---- Pointer Events ----
+            function onElementPointerDown(event, objectCSS) {
+                if (event.pointerType === 'mouse' && event.button !== 0) return;
+                pointerDownTarget = objectCSS; pointerDownPos.set(event.clientX, event.clientY);
+            }
+            function onElementPointerUp(event, objectCSS) {
+                if (pointerDownTarget !== objectCSS) { pointerDownTarget = null; return; }
+                if (pointerDownPos.distanceTo(new THREE.Vector2(event.clientX, event.clientY)) < 10) {
+                    const now = Date.now(), gap = now - lastTapTime;
+                    if (event.pointerType !== 'mouse' && gap < 400 && gap > 0 && lastTappedObject === objectCSS) {
+                        handleSelection(event, objectCSS); focusOnSelection();
+                    } else { handleSelection(event, objectCSS); }
+                    lastTapTime = now; lastTappedObject = objectCSS;
+                }
+                pointerDownTarget = null;
+            }
+            function onBackgroundClick(event) {
+                if (event.target.closest('.book-card')) return;
+                if (pointerDownTarget) { pointerDownTarget = null; return; }
+                if (event.target.closest('#side-panel,#outliner-panel,#menu,.panel-toggle,#toggle-ui,#import-overlay')) return;
+                clearSelection();
+                if (window.innerWidth <= 768) {
+                    document.getElementById('side-panel').classList.remove('mobile-open');
+                    document.getElementById('outliner-panel').classList.remove('mobile-open');
+                }
+            }
+
+            // ---- Keyboard ----
+            function onKeyDown(e) {
+                if (e.target.tagName === 'INPUT') return;
+                switch(e.key.toLowerCase()) {
+                    case 'f': focusOnSelection(); break;
+                    case 'a': if (e.ctrlKey||e.metaKey) { e.preventDefault(); selectAll(); } break;
+                    case 'escape': clearSelection(); break;
+                }
+            }
+
+            // ---- Camera ----
+            function focusOnSelection() {
+                if (!camera) return;
+                let pos, lookAt;
+                if (!selectedObjects.length) {
+                    pos = new THREE.Vector3(0, 0, camera.position.z);
+                    lookAt = new THREE.Vector3(0, 0, 0);
+                } else {
+                    const box = new THREE.Box3();
+                    selectedObjects.forEach(o => box.expandByPoint(o.position));
+                    const center = new THREE.Vector3(); box.getCenter(center);
+                    const size   = new THREE.Vector3(); box.getSize(size);
+                    let dist = Math.abs(Math.max(size.x, size.y, size.z) / 1.5 / Math.tan(camera.fov * Math.PI / 360)) * 1.6;
+                    dist = Math.max(dist, selectedObjects.length === 1 ? 280 : 500);
+                    if (window.innerWidth < window.innerHeight) dist /= (window.innerWidth / window.innerHeight);
+                    lookAt = center.clone();
+                    pos = new THREE.Vector3(center.x, center.y, center.z + dist);
+                }
+                tweenCamera(pos, lookAt);
+            }
+            function tweenCamera(pos, lookAt) {
+                TWEEN.removeAll();
+                new TWEEN.Tween(camera.position).to({x:pos.x,y:pos.y,z:pos.z},1000).easing(TWEEN.Easing.Exponential.Out).start();
+                new TWEEN.Tween(controls.target).to({x:lookAt.x,y:lookAt.y,z:lookAt.z},1000).easing(TWEEN.Easing.Exponential.Out).start();
+                new TWEEN.Tween(camera.up).to({x:0,y:1,z:0},1000).easing(TWEEN.Easing.Exponential.Out).start();
+                new TWEEN.Tween({}).to({},1000).onUpdate(render).start();
+            }
+
+            // ---- Transform / Render ----
+            function transform(tgts, duration) {
+                if (!tgts?.length) return;
+                if (duration === 0) {
+                    objects.forEach((o, i) => { o.position.copy(tgts[i].position); o.rotation.copy(tgts[i].rotation); });
+                    render(); return;
+                }
+                objects.forEach((o, i) => {
+                    const t = tgts[i];
+                    new TWEEN.Tween(o.position).to({x:t.position.x,y:t.position.y,z:t.position.z}, Math.random()*duration+duration).easing(TWEEN.Easing.Exponential.InOut).start();
+                    new TWEEN.Tween(o.rotation).to({x:t.rotation.x,y:t.rotation.y,z:t.rotation.z}, Math.random()*duration+duration).easing(TWEEN.Easing.Exponential.InOut).start();
+                });
+                new TWEEN.Tween({}).to({},duration*2).onUpdate(render).start();
+            }
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                render();
+            }
+            function animate() { requestAnimationFrame(animate); TWEEN.update(); controls.update(); }
+            function render()  { if (renderer && scene && camera) renderer.render(scene, camera); }
+            function esc(s)    { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        </script>
+    </body>
+</html>

@@ -1,0 +1,967 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+export interface Chapter {
+  title: string;
+  content: string[];
+}
+
+export interface Book {
+  title: string;
+  author: string;
+  chapters: Chapter[];
+}
+
+export interface Bookmark {
+  id: string;
+  chapterIndex: number;
+  pageIndex: number;
+  text: string;
+  timestamp: string;
+}
+
+export interface TextHighlight {
+  id: string;
+  chapterIndex: number;
+  pageIndex: number;
+  selectedText: string;
+  color: string;
+  timestamp: string;
+}
+
+export interface LocalBook {
+  id: string;
+  title: string;
+  author: string;
+  handle?: FileSystemFileHandle;
+  bookData?: Book;
+  lastRead: string;
+  progress: number;
+  rating: number;
+  pages: number;
+  bookmarks: number;
+  highlights: number;
+}
+
+interface BookContextType {
+  book: Book;
+  currentChapterIndex: number;
+  currentChapter: Chapter | null;
+  currentPage: number;
+  totalPages: number;
+  isPlaying: boolean;
+  highlightedWordIndex: number;
+  readWordIndices: number[];
+  playbackSpeed: number;
+  volume: number;
+  fontSize: number;
+  selectedVoice: SpeechSynthesisVoice | null;
+  columnCount: number;
+  wordSpacing: number;
+  sentenceSpacing: number;
+  readerWidth: number;
+  readerHeight: number;
+  fontFamily: string;
+  accentColor: string;
+  highlightColor: string;
+  autoPlayNext: boolean;
+  backgroundImage: string;
+  showPageNumbers: boolean;
+  paddingSize: 'small' | 'medium' | 'large' | 'extra-large';
+  marginSize: 'narrow' | 'normal' | 'wide' | 'extra-wide';
+  pageWidth: number;
+  pageHeight: number;
+  containerTransparent: boolean;
+  bookmarks: Bookmark[];
+  isMobile: boolean;
+  translationLanguage: 'none' | 'zh' | 'fr';
+  translatedText: string;
+  isTranslating: boolean;
+  localBooks: LocalBook[];
+  isLoadingLocalBooks: boolean;
+  showSideBySide: boolean;
+  textHighlights: TextHighlight[];
+  continuousScroll: boolean;
+  addTextHighlight: (highlight: Omit<TextHighlight, 'id' | 'timestamp'>) => void;
+  removeTextHighlight: (id: string) => void;
+  setContinuousScroll: (v: boolean) => void;
+
+  setBook: (book: Book) => void;
+  addUploadedBook: (book: Book) => void;
+  loadLocalBooks: () => Promise<void>;
+  loadLocalBookContent: (fileHandle: FileSystemFileHandle) => Promise<void>;
+  setCurrentChapter: (index: number) => void;
+  setCurrentPage: (page: number) => void;
+  goToNextPage: () => void;
+  goToPreviousPage: () => void;
+  goToNextChapter: () => void;
+  goToPreviousChapter: () => void;
+  togglePlayback: () => void;
+  stopPlayback: () => void;
+  setPlaybackSpeed: (speed: number) => void;
+  setVolume: (volume: number) => void;
+  setFontSize: (size: number) => void;
+  setSelectedVoice: (voice: SpeechSynthesisVoice | null) => void;
+  setColumnCount: (count: number) => void;
+  setWordSpacing: (spacing: number) => void;
+  setSentenceSpacing: (spacing: number) => void;
+  setReaderWidth: (width: number) => void;
+  setReaderHeight: (height: number) => void;
+  setFontFamily: (family: string) => void;
+  setAccentColor: (color: string) => void;
+  setHighlightColor: (color: string) => void;
+  setAutoPlayNext: (auto: boolean) => void;
+  setBackgroundImage: (image: string) => void;
+  setShowPageNumbers: (show: boolean) => void;
+  setPaddingSize: (size: 'small' | 'medium' | 'large' | 'extra-large') => void;
+  setMarginSize: (size: 'narrow' | 'normal' | 'wide' | 'extra-wide') => void;
+  setPageWidth: (width: number) => void;
+  setPageHeight: (height: number) => void;
+  setContainerTransparent: (transparent: boolean) => void;
+  repaginateCurrentChapter: () => void;
+  addBookmark: () => void;
+  removeBookmark: (id: string) => void;
+  goToBookmark: (bookmark: Bookmark) => void;
+  setTranslationLanguage: (language: 'none' | 'zh' | 'fr') => void;
+  translateCurrentPage: () => Promise<void>;
+  setShowSideBySide: (show: boolean) => void;
+}
+
+const BookContext = createContext<BookContextType | undefined>(undefined);
+
+export const useBook = () => {
+  const context = useContext(BookContext);
+  if (!context) {
+    throw new Error('useBook must be used within a BookProvider');
+  }
+  return context;
+};
+
+interface BookProviderProps {
+  children: React.ReactNode;
+  initialBook: Book;
+}
+
+export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBook }) => {
+  const [book, setBookState] = useState<Book>(initialBook);
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+  const [readWordIndices, setReadWordIndices] = useState<number[]>([]);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.2);
+  const [volume, setVolume] = useState(0.8);
+  const [fontSize, setFontSize] = useState(18);
+  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [speechUtterance, setSpeechUtterance] = useState<SpeechSynthesisUtterance | null>(null);
+  const [columnCount, setColumnCount] = useState(1);
+  const [wordSpacing, setWordSpacing] = useState(0);
+  const [sentenceSpacing, setSentenceSpacing] = useState(1.2);
+  const [readerWidth, setReaderWidth] = useState(92);
+  const [readerHeight, setReaderHeight] = useState(88);
+  const [fontFamily, setFontFamily] = useState('Georgia, serif');
+  const [accentColor, setAccentColor] = useState('#A8B5C7');
+  const [highlightColor, setHighlightColor] = useState('#A8B5C7');
+  const [autoPlayNext, setAutoPlayNext] = useState(true);
+  const [backgroundImage, setBackgroundImage] = useState('/aranprime-KbytCpI1i5I-unsplash.jpg');
+  const [showPageNumbers, setShowPageNumbers] = useState(true);
+  const [paddingSize, setPaddingSize] = useState<'small' | 'medium' | 'large' | 'extra-large'>('medium');
+  const [marginSize, setMarginSize] = useState<'narrow' | 'normal' | 'wide' | 'extra-wide'>('normal');
+  const [pageWidth, setPageWidth] = useState(7.5);
+  const [pageHeight, setPageHeight] = useState(4.4);
+  const [containerTransparent, setContainerTransparent] = useState(true);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [translationLanguage, setTranslationLanguage] = useState<'none' | 'zh' | 'fr'>('none');
+  const [translatedText, setTranslatedText] = useState('');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [showSideBySide, setShowSideBySide] = useState(false);
+  const [textHighlights, setTextHighlights] = useState<TextHighlight[]>([]);
+  const [continuousScroll, setContinuousScroll] = useState(false);
+  const [localBooks, setLocalBooks] = useState<LocalBook[]>([{
+    id: 'sample-book',
+    title: initialBook.title,
+    author: initialBook.author,
+    bookData: initialBook,
+    lastRead: new Date().toISOString(),
+    progress: 0,
+    rating: 0,
+    pages: initialBook.chapters.reduce((sum, ch) => sum + ch.content.length, 0),
+    bookmarks: 0,
+    highlights: 0,
+  }]);
+  const [isLoadingLocalBooks, setIsLoadingLocalBooks] = useState(false);
+
+  // Load persisted library from localStorage on mount (merge with sample book)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('reader-library');
+      if (stored) {
+        const parsed: LocalBook[] = JSON.parse(stored);
+        setLocalBooks(prev => {
+          const existingIds = new Set(prev.map(b => b.id));
+          const toAdd = parsed.filter(b => b.bookData && !existingIds.has(b.id));
+          return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+        });
+      }
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  // Save library to localStorage whenever it changes (skip file handles)
+  useEffect(() => {
+    try {
+      const saveable = localBooks
+        .filter(b => b.bookData)
+        .map(({ handle, ...rest }) => rest);
+      localStorage.setItem('reader-library', JSON.stringify(saveable));
+    } catch (e) { /* quota exceeded or other error */ }
+  }, [localBooks]);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice = window.innerWidth <= 768 || 
+                           /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(isMobileDevice);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Translation function using Google Translate API (client-side fallback)
+  const translateText = async (text: string, targetLang: string): Promise<string> => {
+    try {
+      // Using a free translation API service (MyMemory)
+      const response = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLang}`
+      );
+      const data = await response.json();
+      
+      if (data.responseStatus === 200) {
+        return data.responseData.translatedText;
+      } else {
+        throw new Error('Translation failed');
+      }
+    } catch (error) {
+      console.error('Translation error:', error);
+      // Fallback: return original text if translation fails
+      return text;
+    }
+  };
+
+  const translateCurrentPage = async () => {
+    if (translationLanguage === 'none' || !currentChapter) return;
+    
+    setIsTranslating(true);
+    try {
+      const pageContent = currentChapter.content[currentPage - 1];
+      const translated = await translateText(pageContent, translationLanguage);
+      setTranslatedText(translated);
+    } catch (error) {
+      console.error('Translation failed:', error);
+      setTranslatedText('Translation failed. Please try again.');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  // Auto-translate when language or page changes
+  useEffect(() => {
+    if (translationLanguage !== 'none') {
+      translateCurrentPage();
+    } else {
+      setTranslatedText('');
+    }
+  }, [translationLanguage, currentPage, currentChapterIndex]);
+
+  const currentChapter = book.chapters[currentChapterIndex] || null;
+  const totalPages = currentChapter?.content.length || 0;
+
+  // Function to repaginate text based on current viewport and font settings
+  const repaginateText = useCallback((text: string): string[] => {
+    // Available reading area: full viewport minus top bar (64px), control panel (80px), content padding (py-8 = 64px), chapter title (~60px)
+    const availableHeight = window.innerHeight - 64 - 80 - 64 - 60;
+    // Text column: max-w-2xl (672px) minus px-8 (64px each side)
+    const availableWidth = Math.min(672, window.innerWidth * 0.9) - 64;
+
+    const avgCharWidth = fontSize * 0.52; // Georgia ~0.52x width ratio
+    const lineHeight = fontSize * sentenceSpacing;
+
+    const charsPerLine = Math.floor(availableWidth / avgCharWidth);
+    const linesPerPage = Math.floor(availableHeight / lineHeight);
+    const charsPerPage = Math.max(800, charsPerLine * linesPerPage);
+    
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const pages: string[] = [];
+    let currentPageText = '';
+    
+    for (const sentence of sentences) {
+      const testText = currentPageText + (currentPageText ? ' ' : '') + sentence;
+      
+      if (testText.length > charsPerPage && currentPageText.length > 0) {
+        const trimmedPage = currentPageText.trim();
+        if (trimmedPage) {
+          pages.push(trimmedPage);
+        }
+        currentPageText = sentence;
+      } else {
+        currentPageText = testText;
+      }
+    }
+    
+    if (currentPageText.trim()) {
+      pages.push(currentPageText.trim());
+    }
+    
+    return pages.filter(page => page.length > 0);
+  }, [fontSize, sentenceSpacing]);
+
+  const repaginateCurrentChapter = useCallback(() => {
+    if (currentChapter) {
+      const fullText = currentChapter.content.join(' ');
+      const newPages = repaginateText(fullText);
+      
+      const updatedChapters = [...book.chapters];
+      updatedChapters[currentChapterIndex] = {
+        ...currentChapter,
+        content: newPages
+      };
+      
+      setBookState({
+        ...book,
+        chapters: updatedChapters
+      });
+      
+      if (currentPage > newPages.length) {
+        setCurrentPage(Math.max(1, newPages.length));
+      }
+    }
+  }, [currentChapter, currentChapterIndex, book, currentPage, repaginateText]);
+
+  useEffect(() => {
+    if (currentChapter) {
+      repaginateCurrentChapter();
+    }
+  }, [fontSize, sentenceSpacing]);
+
+  // Repaginate on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (currentChapter) repaginateCurrentChapter();
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [repaginateCurrentChapter]);
+
+  const setBook = useCallback((newBook: Book) => {
+    setBookState(newBook);
+    setCurrentChapterIndex(0);
+    setCurrentPage(1);
+    setIsPlaying(false);
+    speechSynthesis.cancel();
+    setHighlightedWordIndex(-1);
+    setReadWordIndices([]);
+    setBookmarks([]);
+  }, []);
+
+  const addUploadedBook = useCallback((newBook: Book) => {
+    const entry: LocalBook = {
+      id: `uploaded-${Date.now()}`,
+      title: newBook.title,
+      author: newBook.author,
+      bookData: newBook,
+      lastRead: new Date().toISOString(),
+      progress: 0,
+      rating: 0,
+      pages: newBook.chapters.reduce((sum, ch) => sum + ch.content.length, 0),
+      bookmarks: 0,
+      highlights: 0,
+    };
+    setLocalBooks(prev => {
+      const exists = prev.some(b => b.title === entry.title && b.author === entry.author);
+      return exists ? prev : [entry, ...prev];
+    });
+  }, []);
+
+  const addTextHighlight = useCallback((h: Omit<TextHighlight, 'id' | 'timestamp'>) => {
+    setTextHighlights(prev => [...prev, { ...h, id: Date.now().toString(), timestamp: new Date().toISOString() }]);
+  }, []);
+
+  const removeTextHighlight = useCallback((id: string) => {
+    setTextHighlights(prev => prev.filter(h => h.id !== id));
+  }, []);
+
+  const splitIntoPages = (text: string, charactersPerPage: number = 900): string[] => {
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const pages = [];
+    let currentPage = '';
+    
+    for (const sentence of sentences) {
+      if (currentPage.length + sentence.length > charactersPerPage && currentPage.length > 0) {
+        pages.push(currentPage.trim());
+        currentPage = sentence;
+      } else {
+        currentPage += (currentPage ? ' ' : '') + sentence;
+      }
+    }
+    
+    if (currentPage.trim()) {
+      pages.push(currentPage.trim());
+    }
+    
+    return pages.filter(page => page.length > 0);
+  };
+
+  const createChaptersFromText = (text: string) => {
+    const chapterSplits = text.split(/(?:^|\n)\s*(?:Chapter|CHAPTER|Ch\.|CH\.)\s*\d+/i);
+    
+    if (chapterSplits.length > 1) {
+      return chapterSplits.slice(1).map((chapterText, index) => {
+        const pages = splitIntoPages(chapterText.trim());
+        return {
+          title: `Chapter ${index + 1}`,
+          content: pages
+        };
+      });
+    } else {
+      const sections = text.split(/\n\s*\n\s*\n/).filter(section => section.trim().length > 100);
+      
+      if (sections.length > 1) {
+        return sections.map((section, index) => {
+          const lines = section.trim().split('\n').filter(line => line.trim());
+          const title = lines[0]?.trim() || `Section ${index + 1}`;
+          const content = lines.slice(1).join('\n').trim() || section.trim();
+          
+          return {
+            title: title.length > 50 ? title.substring(0, 50) + '...' : title,
+            content: splitIntoPages(content)
+          };
+        });
+      } else {
+        const pages = splitIntoPages(text);
+        const chaptersFromPages = [];
+        const pagesPerChapter = Math.max(3, Math.ceil(pages.length / 10));
+        
+        for (let i = 0; i < pages.length; i += pagesPerChapter) {
+          chaptersFromPages.push({
+            title: `Chapter ${Math.floor(i / pagesPerChapter) + 1}`,
+            content: pages.slice(i, i + pagesPerChapter)
+          });
+        }
+        
+        return chaptersFromPages;
+      }
+    }
+  };
+
+  const loadLocalBooks = async () => {
+    setIsLoadingLocalBooks(true);
+    try {
+      const directoryHandle = await (window as any).showDirectoryPicker();
+      const books: LocalBook[] = [];
+      
+      const scanDirectory = async (handle: FileSystemDirectoryHandle) => {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'file') {
+            if (entry.name.toLowerCase().endsWith('.epub')) {
+              books.push({
+                id: entry.name,
+                title: entry.name.replace(/\.[^/.]+$/, ''),
+                author: 'Local EPUB',
+                handle: entry as FileSystemFileHandle,
+                lastRead: new Date().toISOString(),
+                progress: 0,
+                rating: 0,
+                pages: 0,
+                bookmarks: 0,
+                highlights: 0
+              });
+            }
+          } else if (entry.kind === 'directory') {
+            await scanDirectory(entry);
+          }
+        }
+      };
+
+      await scanDirectory(directoryHandle);
+      setLocalBooks(books);
+    } catch (error) {
+      console.error('Failed to load local books:', error);
+    } finally {
+      setIsLoadingLocalBooks(false);
+    }
+  };
+
+  const loadLocalBookContent = async (fileHandle: FileSystemFileHandle) => {
+    try {
+      const file = await fileHandle.getFile();
+      const fileExtension = file.name.toLowerCase().split('.').pop();
+      let bookData: Book;
+
+      if (fileExtension === 'txt' || fileExtension === 'md') {
+        const text = await file.text();
+        bookData = {
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          author: 'Local File',
+          chapters: createChaptersFromText(text)
+        };
+        setBook(bookData);
+      } else if (fileExtension === 'epub') {
+        const zip = new JSZip();
+        const zipContent = await zip.loadAsync(file);
+
+        // OPF parsing logic (simplified from DocumentUpload)
+        let opfFile = null;
+        let opfContent = '';
+        let opfBasePath = '';
+        const containerFile = zipContent.file('META-INF/container.xml');
+        if (containerFile) {
+          const containerXml = await containerFile.async('text');
+          const opfPathMatch = containerXml.match(/full-path="([^"]+)"/);
+          if (opfPathMatch) {
+            const opfPath = opfPathMatch[1];
+            const slashIdx = opfPath.lastIndexOf('/');
+            opfBasePath = slashIdx >= 0 ? opfPath.substring(0, slashIdx + 1) : '';
+            opfFile = zipContent.file(opfPath);
+          }
+        }
+
+        if (!opfFile) {
+          const opfFiles = Object.keys(zipContent.files).filter(name => name.endsWith('.opf'));
+          if (opfFiles.length > 0) {
+            const opfPath = opfFiles[0];
+            const slashIdx = opfPath.lastIndexOf('/');
+            opfBasePath = slashIdx >= 0 ? opfPath.substring(0, slashIdx + 1) : '';
+            opfFile = zipContent.file(opfPath);
+          }
+        }
+        
+        if (opfFile) opfContent = await opfFile.async('text');
+        
+        let title = file.name.replace(/\.[^/.]+$/, '');
+        let author = 'Unknown Author';
+        if (opfContent) {
+          const titleMatch = opfContent.match(/<dc:title[^>]*>([^<]+)<\/dc:title>/i);
+          const authorMatch = opfContent.match(/<dc:creator[^>]*>([^<]+)<\/dc:creator>/i);
+          if (titleMatch) title = titleMatch[1].trim();
+          if (authorMatch) author = authorMatch[1].trim();
+        }
+        
+        const spineItems: string[] = [];
+        if (opfContent) {
+          const spineMatches = opfContent.match(/<spine[^>]*>(.*?)<\/spine>/is);
+          if (spineMatches) {
+            const itemrefMatches = spineMatches[1].match(/<itemref[^>]*idref="([^"]+)"/g);
+            if (itemrefMatches) {
+              itemrefMatches.forEach(match => {
+                const idMatch = match.match(/idref="([^"]+)"/);
+                if (idMatch) {
+                  const manifestMatch = opfContent.match(new RegExp(`<item[^>]*id="${idMatch[1]}"[^>]*href="([^"]+)"`, 'i'));
+                  if (manifestMatch) spineItems.push(manifestMatch[1]);
+                }
+              });
+            }
+          }
+        }
+        
+        const chapters: any[] = [];
+        let chapterIndex = 1;
+        for (const filename of spineItems) {
+          const zipFile = zipContent.file(opfBasePath + filename) || zipContent.file(filename);
+          if (zipFile) {
+            const content = await zipFile.async('text');
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(content, 'text/html');
+            doc.querySelectorAll('script, style').forEach(el => el.remove());
+            let textContent = doc.body?.textContent || doc.documentElement?.textContent || '';
+            textContent = textContent.replace(/\s+/g, ' ').trim();
+            
+            if (textContent.length > 100) {
+              let chapterTitle = `Chapter ${chapterIndex}`;
+              const headings = doc.querySelectorAll('h1, h2, h3');
+              if (headings.length > 0) chapterTitle = headings[0].textContent?.trim() || chapterTitle;
+              
+              chapters.push({
+                title: chapterTitle,
+                content: splitIntoPages(textContent)
+              });
+              chapterIndex++;
+            }
+          }
+        }
+        
+        bookData = { title, author, chapters };
+        setBook(bookData);
+      }
+    } catch (error) {
+      console.error('Failed to load book content:', error);
+    }
+  };
+
+  const setCurrentChapter = useCallback((index: number) => {
+    if (index >= 0 && index < book.chapters.length) {
+      setCurrentChapterIndex(index);
+      setCurrentPage(1);
+      setIsPlaying(false);
+      speechSynthesis.cancel();
+      setHighlightedWordIndex(-1);
+      setReadWordIndices([]);
+    }
+  }, [book.chapters.length]);
+
+  const goToNextPage = useCallback(() => {
+    if (currentChapter && currentPage < currentChapter.content.length) {
+      setCurrentPage(prev => prev + 1);
+      setHighlightedWordIndex(-1);
+      setReadWordIndices([]);
+    } else {
+      goToNextChapter();
+    }
+  }, [currentChapter, currentPage]);
+
+  const goToPreviousPage = useCallback(() => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+      setHighlightedWordIndex(-1);
+      setReadWordIndices([]);
+    } else {
+      goToPreviousChapter();
+    }
+  }, [currentPage]);
+
+  const goToNextChapter = useCallback(() => {
+    if (currentChapterIndex < book.chapters.length - 1) {
+      setCurrentChapter(currentChapterIndex + 1);
+    }
+  }, [currentChapterIndex, book.chapters.length, setCurrentChapter]);
+
+  const goToPreviousChapter = useCallback(() => {
+    if (currentChapterIndex > 0) {
+      setCurrentChapter(currentChapterIndex - 1);
+      const prevChapter = book.chapters[currentChapterIndex - 1];
+      setCurrentPage(prevChapter.content.length);
+    }
+  }, [currentChapterIndex, book.chapters, setCurrentChapter]);
+
+  const stopPlayback = useCallback(() => {
+    speechSynthesis.cancel();
+    setIsPlaying(false);
+    setHighlightedWordIndex(-1);
+  }, []);
+
+  const speakText = useCallback((text: string) => {
+    speechSynthesis.cancel();
+    setReadWordIndices([]);
+    
+    // Determine what text to speak based on translation mode
+    let textToSpeak = text;
+    let voiceLang = 'en';
+    
+    if (translationLanguage !== 'none' && translatedText) {
+      if (showSideBySide) {
+        // In side-by-side mode, speak the translated text
+        textToSpeak = translatedText;
+        voiceLang = translationLanguage;
+      } else {
+        // In overlay mode, speak original text
+        textToSpeak = text;
+        voiceLang = 'en';
+      }
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.rate = playbackSpeed;
+    utterance.volume = volume;
+    
+    // Set voice based on what we're actually speaking
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    } else {
+      const voices = speechSynthesis.getVoices();
+      
+      let preferredVoice = null;
+      
+      if (voiceLang === 'zh') {
+        // Chinese voices
+        preferredVoice = voices.find(voice => 
+          voice.lang.includes('zh') || voice.lang.includes('cmn')
+        );
+      } else if (voiceLang === 'fr') {
+        // French voices
+        preferredVoice = voices.find(voice => 
+          voice.lang.includes('fr')
+        );
+      } else {
+        // English voices (UK Male preferred)
+        preferredVoice = voices.find(voice => 
+          voice.lang.includes('en-GB') && 
+          (voice.name.toLowerCase().includes('male') || 
+           voice.name.toLowerCase().includes('daniel') ||
+           voice.name.toLowerCase().includes('arthur'))
+        ) || voices.find(voice => voice.lang.includes('en-GB')) || voices.find(voice => voice.lang.startsWith('en'));
+      }
+      
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+    }
+
+    // Extract words from text (matching our rendering logic)
+    const words = text.match(/\S+/g) || []; // Always use original text for word tracking
+    let currentWordIndex = 0;
+    let charPosition = 0;
+
+    console.log('Starting speech with words:', words, 'Speaking:', voiceLang, 'Text:', textToSpeak.substring(0, 50)); // Debug log
+
+    utterance.onboundary = (event) => {
+      if (event.name === 'word') {
+        console.log(`Word boundary at char ${event.charIndex}, word index: ${currentWordIndex}`); // Debug log
+        
+        // Mark previous word as read
+        if (currentWordIndex > 0) {
+          setReadWordIndices(prev => {
+            if (!prev.includes(currentWordIndex - 1)) {
+              return [...prev, currentWordIndex - 1];
+            }
+            return prev;
+          });
+        }
+        
+        // Highlight current word
+        setHighlightedWordIndex(currentWordIndex);
+        currentWordIndex++;
+      }
+    };
+
+    utterance.onend = () => {
+      console.log('Speech ended'); // Debug log
+      
+      // Mark the last word as read
+      if (currentWordIndex > 0) {
+        setReadWordIndices(prev => {
+          const lastWordIndex = Math.min(currentWordIndex - 1, words.length - 1);
+          if (!prev.includes(lastWordIndex)) {
+            return [...prev, lastWordIndex];
+          }
+          return prev;
+        });
+      }
+      
+      setHighlightedWordIndex(-1);
+      setIsPlaying(false);
+      
+      // Auto-play next page if enabled
+      if (autoPlayNext) {
+        setTimeout(() => {
+          if (currentChapter && currentPage < currentChapter.content.length) {
+            setCurrentPage(prev => prev + 1);
+            setTimeout(() => {
+              const nextPageContent = currentChapter.content[currentPage];
+              if (nextPageContent) {
+                setIsPlaying(true);
+                speakText(nextPageContent);
+              }
+            }, 500);
+          } else if (currentChapterIndex < book.chapters.length - 1) {
+            setCurrentChapter(currentChapterIndex + 1);
+            setTimeout(() => {
+              const nextChapter = book.chapters[currentChapterIndex + 1];
+              if (nextChapter && nextChapter.content[0]) {
+                setIsPlaying(true);
+                speakText(nextChapter.content[0]);
+              }
+            }, 500);
+          }
+        }, 1000);
+      }
+    };
+
+    utterance.onerror = (event) => {
+      console.error('Speech error:', event); // Debug log
+      setIsPlaying(false);
+      setHighlightedWordIndex(-1);
+    };
+
+    setSpeechUtterance(utterance);
+    speechSynthesis.speak(utterance);
+  }, [playbackSpeed, volume, selectedVoice, autoPlayNext, currentChapter, currentPage, currentChapterIndex, book.chapters.length, setCurrentChapter, translationLanguage, translatedText]);
+
+  const togglePlayback = useCallback(() => {
+    if (isPlaying) {
+      speechSynthesis.cancel();
+      setIsPlaying(false);
+      setHighlightedWordIndex(-1);
+    } else {
+      if (currentChapter && currentPage <= currentChapter.content.length) {
+        const pageContent = translationLanguage !== 'none' && translatedText 
+          ? translatedText 
+          : currentChapter.content[currentPage - 1];
+        console.log('Starting playback for page content:', pageContent); // Debug log
+        setIsPlaying(true);
+        speakText(pageContent);
+      }
+    }
+  }, [isPlaying, currentChapter, currentPage, speakText, translationLanguage, translatedText]);
+
+  // Bookmark functions
+  const addBookmark = useCallback(() => {
+    if (currentChapter && currentPage <= currentChapter.content.length) {
+      const pageContent = currentChapter.content[currentPage - 1];
+      const preview = pageContent.substring(0, 100) + (pageContent.length > 100 ? '...' : '');
+      
+      const bookmark: Bookmark = {
+        id: Date.now().toString(),
+        chapterIndex: currentChapterIndex,
+        pageIndex: currentPage - 1,
+        text: preview,
+        timestamp: new Date().toISOString()
+      };
+      
+      setBookmarks(prev => [...prev, bookmark]);
+    }
+  }, [currentChapter, currentPage, currentChapterIndex]);
+
+  const removeBookmark = useCallback((id: string) => {
+    setBookmarks(prev => prev.filter(bookmark => bookmark.id !== id));
+  }, []);
+
+  const goToBookmark = useCallback((bookmark: Bookmark) => {
+    setCurrentChapterIndex(bookmark.chapterIndex);
+    setCurrentPage(bookmark.pageIndex + 1);
+    setHighlightedWordIndex(-1);
+    setReadWordIndices([]);
+  }, []);
+
+  // Update speech settings when they change during playback
+  useEffect(() => {
+    if (speechUtterance && isPlaying) {
+      speechSynthesis.cancel();
+      if (currentChapter && currentPage <= currentChapter.content.length) {
+        const pageContent = currentChapter.content[currentPage - 1];
+        speakText(pageContent);
+      }
+    }
+  }, [playbackSpeed, volume, selectedVoice]);
+
+  // Reset highlighting when page changes
+  useEffect(() => {
+    setHighlightedWordIndex(-1);
+    setReadWordIndices([]);
+  }, [currentPage, currentChapterIndex]);
+
+  // Load voices when available - prioritize UK Male English
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0 && !selectedVoice) {
+        // Try to find UK Male English voice (Google UK English Male, Daniel, etc.)
+        const ukMaleVoice = voices.find(voice => 
+          voice.lang.includes('en-GB') && 
+          (voice.name.toLowerCase().includes('male') || 
+           voice.name.toLowerCase().includes('daniel') ||
+           voice.name.toLowerCase().includes('arthur'))
+        ) || voices.find(voice => voice.lang.includes('en-GB')) || voices.find(voice => voice.lang.startsWith('en'));
+        
+        setSelectedVoice(ukMaleVoice || voices[0]);
+      }
+    };
+
+    loadVoices();
+    speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      speechSynthesis.onvoiceschanged = null;
+    };
+  }, [selectedVoice]);
+
+  const value: BookContextType = {
+    book,
+    currentChapterIndex,
+    currentChapter,
+    currentPage,
+    totalPages,
+    isPlaying,
+    highlightedWordIndex,
+    readWordIndices,
+    playbackSpeed,
+    volume,
+    fontSize,
+    selectedVoice,
+    columnCount,
+    wordSpacing,
+    sentenceSpacing,
+    readerWidth,
+    readerHeight,
+    fontFamily,
+    accentColor,
+    highlightColor,
+    autoPlayNext,
+    backgroundImage,
+    showPageNumbers,
+    paddingSize,
+    marginSize,
+    pageWidth,
+    pageHeight,
+    containerTransparent,
+    bookmarks,
+    isMobile,
+    translationLanguage,
+    translatedText,
+    isTranslating,
+    showSideBySide,
+    textHighlights,
+    continuousScroll,
+    addTextHighlight,
+    removeTextHighlight,
+    setContinuousScroll,
+    localBooks,
+    isLoadingLocalBooks,
+
+    setBook,
+    addUploadedBook,
+    loadLocalBooks,
+    loadLocalBookContent,
+    setCurrentChapter,
+    setCurrentPage,
+    goToNextPage,
+    goToPreviousPage,
+    goToNextChapter,
+    goToPreviousChapter,
+    togglePlayback,
+    stopPlayback,
+    setPlaybackSpeed,
+    setVolume,
+    setFontSize,
+    setSelectedVoice,
+    setColumnCount,
+    setWordSpacing,
+    setSentenceSpacing,
+    setReaderWidth,
+    setReaderHeight,
+    setFontFamily,
+    setAccentColor,
+    setHighlightColor,
+    setAutoPlayNext,
+    setBackgroundImage,
+    setShowPageNumbers,
+    setPaddingSize,
+    setMarginSize,
+    setPageWidth,
+    setPageHeight,
+    setContainerTransparent,
+    repaginateCurrentChapter,
+    addBookmark,
+    removeBookmark,
+    goToBookmark,
+    setTranslationLanguage,
+    translateCurrentPage,
+    setShowSideBySide,
+  };
+
+  return (
+    <BookContext.Provider value={value}>
+      {children}
+    </BookContext.Provider>
+  );
+};

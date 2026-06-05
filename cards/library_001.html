@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Library</title>
+    <meta charset="utf-8">
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #6b5a48; overflow: hidden; font-family: Helvetica, sans-serif; }
+        #menu {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 10;
+        }
+        button {
+            color: rgba(255,230,180,0.9); background: rgba(25,18,8,0.78);
+            border: 1px solid rgba(255,210,130,0.35); padding: 10px 22px;
+            border-radius: 22px; font-family: inherit; font-size: 12px;
+            font-weight: 700; letter-spacing: 1.5px; cursor: pointer;
+            backdrop-filter: blur(10px); transition: background 0.2s, border-color 0.2s;
+        }
+        button:hover { background: rgba(255,210,130,0.22); }
+        button.active { background: rgba(255,210,130,0.16); border-color: rgba(255,210,130,0.7); }
+        #tooltip {
+            position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+            background: rgba(15,10,5,0.82); color: rgba(255,230,180,0.92);
+            padding: 8px 18px; border-radius: 14px; font-size: 13px;
+            pointer-events: none; opacity: 0; transition: opacity 0.25s;
+            border: 1px solid rgba(255,210,130,0.2); white-space: nowrap;
+        }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            color: rgba(255,230,180,0.5); font-size: 14px; letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+<div id="loading">LOADING LIBRARY…</div>
+<div id="tooltip"></div>
+<div id="menu">
+    <button id="shelf-btn">SHELF</button>
+    <button id="grid-btn">GRID</button>
+    <button id="sphere-btn">SPHERE</button>
+    <button id="helix-btn">HELIX</button>
+    <button id="linen-btn">LINEN</button>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "/assets/js/three/three.module.js",
+    "three/addons/": "/assets/js/three/addons/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import TWEEN from 'three/addons/libs/tween.module.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ── Model configs — populated dynamically in init() ───────────────────────────
+const MODEL_CFGS = {};
+const BOOKS      = [];
+
+const BOOK_COLORS = ['#5c2d0e','#1e3a2f','#2a1a3e','#1b3050','#3b1a0a','#0f2a1a','#3a0e1e','#2e2416'];
+
+// ── UV Atlas layout ────────────────────────────────────────────────────────────
+// Canvas coords: x = U * ATLAS_SIZE,  y = (1-V) * ATLAS_SIZE
+// ISL values are stored per-model in MODEL_CFGS (each HC model has a different atlas layout).
+const ATLAS_SIZE = 2048;
+
+// ── Scene setup ───────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x6b5a48);
+scene.fog = new THREE.FogExp2(0x6b5a48, 0.018);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 200);
+camera.position.set(0, 2, 50);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.07;
+controls.minDistance = 3; controls.maxDistance = 60;
+
+
+scene.add(new THREE.AmbientLight(0xfff0d0, 0.7));
+const keyLight = new THREE.DirectionalLight(0xfff5e0, 1.4);
+keyLight.position.set(5, 10, 7); scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xffd0a0, 0.4);
+fillLight.position.set(-8, 3, 5); scene.add(fillLight);
+const rimLight = new THREE.DirectionalLight(0xffe8c0, 0.25);
+rimLight.position.set(0, -5, -8); scene.add(rimLight);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let linenMode = false;
+let linenImg   = null;  // HTMLImageElement for canvas pattern
+let linenNormal = null; // THREE.Texture for normal map
+const bookState = [];   // { inner, cfg, book, color, coverImg }
+const selected  = new Set();  // selected group objects
+
+// ── Asset loaders ─────────────────────────────────────────────────────────────
+function loadHTMLImage(src) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+    });
+}
+
+function loadTHREETexture(src) {
+    return new Promise(resolve => {
+        new THREE.TextureLoader().load(src,
+            t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.flipY = false; resolve(t); },
+            undefined, () => resolve(null));
+    });
+}
+
+// ── GLTF helpers ──────────────────────────────────────────────────────────────
+function cloneGltf(gltf) {
+    const root = gltf.scene.clone(true);
+    const mm = new Map();
+    root.traverse(n => {
+        if (!n.isMesh) return;
+        const wasArray = Array.isArray(n.material);
+        const mats = wasArray ? n.material : [n.material];
+        const cloned = mats.map(m => {
+            if (!mm.has(m.uuid)) mm.set(m.uuid, m.clone());
+            return mm.get(m.uuid);
+        });
+        n.material = wasArray ? cloned : cloned[0];
+    });
+    return root;
+}
+
+function applyToMesh(root, tex, normalTex, coverMats) {
+    root.traverse(n => {
+        if (!n.isMesh) return;
+        const mats = Array.isArray(n.material) ? n.material : [n.material];
+        mats.forEach(m => {
+            if (coverMats && !coverMats.includes((m.name||'').toLowerCase())) return;
+            m.map = tex;
+            m.color.set(0xffffff);
+            m.normalMap = normalTex || null;
+            if (normalTex) m.normalScale = new THREE.Vector2(0.5, 0.5);
+            m.needsUpdate = true;
+        });
+    });
+}
+
+// ── Canvas texture generators ─────────────────────────────────────────────────
+function wrapText(ctx, text, cx, cy, maxW, lineH) {
+    const words = text.split(' ');
+    let line = '';
+    const lines = [];
+    for (const w of words) {
+        const test = line + (line ? ' ' : '') + w;
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+        else line = test;
+    }
+    lines.push(line);
+    const startY = cy - (lines.length - 1) * lineH / 2;
+    lines.forEach((l, i) => ctx.fillText(l, cx, startY + i * lineH));
+}
+
+function hexToRgb(hex) {
+    const c = parseInt(hex.slice(1), 16);
+    return [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+}
+
+function shadeHex(hex, d) {
+    const [r, g, b] = hexToRgb(hex);
+    const clamp = v => Math.max(0, Math.min(255, v + Math.round(d * 255)));
+    return `rgb(${clamp(r)},${clamp(g)},${clamp(b)})`;
+}
+
+// Draw linen pattern tinted by bookColor onto ctx, rect (x,y,w,h)
+function drawLinen(ctx, x, y, w, h, hexColor) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    // fill with book color
+    ctx.fillStyle = hexColor;
+    ctx.fillRect(x, y, w, h);
+    // multiply linen texture over it
+    if (linenImg) {
+        const pat = ctx.createPattern(linenImg, 'repeat');
+        ctx.fillStyle = pat;
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = 0.88;
+        ctx.fillRect(x, y, w, h);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+}
+
+// Embossed border + ornament on a linen cover face
+function drawLinenCoverDecor(ctx, isl) {
+    const { x, y, w, h } = isl;
+    ctx.strokeStyle = 'rgba(255,240,195,0.22)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 16, y + 16, w - 32, h - 32);
+    ctx.strokeRect(x + 22, y + 22, w - 44, h - 44);
+
+    // small diamond ornament near top
+    const ox = x + w / 2, oy = y + h * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy - 14); ctx.lineTo(ox + 9, oy);
+    ctx.lineTo(ox, oy + 14); ctx.lineTo(ox - 9, oy);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,240,195,0.32)'; ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // rule lines flanking title area
+    const mid = y + h * 0.48;
+    ctx.strokeStyle = 'rgba(255,235,185,0.28)'; ctx.lineWidth = 1;
+    [[mid - 32, 0.14], [mid + 28, 0.14]].forEach(([ry, ow]) => {
+        ctx.beginPath();
+        ctx.moveTo(x + w * ow + 36, ry); ctx.lineTo(x + w * (1 - ow) - 36, ry);
+        ctx.stroke();
+    });
+}
+
+// Typographic fallback (no cover image)
+function drawTypoFront(ctx, title, author, hexColor, isl) {
+    const { x, y, w, h } = isl;
+    // gradient background
+    const g = ctx.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, shadeHex(hexColor, 0.18));
+    g.addColorStop(1, hexColor);
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    // borders
+    ctx.strokeStyle = 'rgba(255,220,150,0.25)'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 14, y + 14, w - 28, h - 28);
+    ctx.strokeRect(x + 20, y + 20, w - 40, h - 40);
+    // title
+    const fs = Math.round(h * 0.1);
+    ctx.font = `bold ${fs}px Georgia, serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,242,205,0.95)';
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 6;
+    wrapText(ctx, title, x + w / 2, y + h * 0.44, w * 0.78, fs * 1.3);
+    ctx.shadowColor = 'transparent';
+    // divider
+    ctx.strokeStyle = 'rgba(255,220,150,0.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 55, y + h * 0.62); ctx.lineTo(x + w - 55, y + h * 0.62); ctx.stroke();
+    // author
+    ctx.font = `${Math.round(h * 0.055)}px Georgia, serif`;
+    ctx.fillStyle = 'rgba(255,228,165,0.7)';
+    ctx.fillText(author, x + w / 2, y + h * 0.73);
+}
+
+// Draw img into (x,y,w,h) using object-fit:cover — fills the box, crops excess
+function drawImageCover(ctx, img, x, y, w, h) {
+    const ia = img.width / img.height, ba = w / h;
+    let sx, sy, sw, sh;
+    if (ia > ba) { sh = img.height; sw = sh * ba; sx = (img.width - sw) / 2; sy = 0; }
+    else         { sw = img.width;  sh = sw / ba; sx = 0; sy = (img.height - sh) / 2; }
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+    ctx.restore();
+}
+
+// ── HC atlas (2048×2048 matching the GLB UV layout) ───────────────────────────
+function generateHCAtlas(title, author, coverImg, hexColor, isl) {
+    const c = document.createElement('canvas');
+    c.width = c.height = ATLAS_SIZE;
+    const ctx = c.getContext('2d');
+
+    // fill base color everywhere (spine/edges)
+    ctx.fillStyle = hexColor;
+    ctx.fillRect(0, 0, ATLAS_SIZE, ATLAS_SIZE);
+
+    const { face1: f1, face2: f2 } = isl;
+
+    // Helper: draw cover image (or typo) into one face slot
+    function drawFace(isl) {
+        if (linenMode) {
+            drawLinenCoverDecor(ctx, isl);
+            const fs = Math.round(isl.h * 0.098);
+            ctx.font = `bold ${fs}px Georgia, serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(255,248,222,0.92)';
+            ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+            wrapText(ctx, title, isl.x + isl.w/2, isl.y + isl.h * 0.495, isl.w * 0.72, fs * 1.28);
+            ctx.shadowColor = 'transparent'; ctx.shadowOffsetY = 0;
+            ctx.font = `${Math.round(isl.h * 0.056)}px Georgia, serif`;
+            ctx.fillStyle = 'rgba(255,238,192,0.62)';
+            ctx.fillText(author, isl.x + isl.w/2, isl.y + isl.h * 0.77);
+        } else if (coverImg) {
+            drawImageCover(ctx, coverImg, isl.x, isl.y, isl.w, isl.h);
+            const vg = ctx.createLinearGradient(isl.x, isl.y, isl.x, isl.y + isl.h);
+            vg.addColorStop(0, 'rgba(0,0,0,0.07)'); vg.addColorStop(0.12, 'rgba(0,0,0,0)');
+            vg.addColorStop(0.88, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.1)');
+            ctx.fillStyle = vg; ctx.fillRect(isl.x, isl.y, isl.w, isl.h);
+        } else {
+            drawTypoFront(ctx, title, author, hexColor, isl);
+        }
+    }
+
+    if (linenMode) {
+        drawLinen(ctx, 0, 0, ATLAS_SIZE, ATLAS_SIZE, hexColor);
+    }
+    // Draw cover on BOTH face slots — whichever the camera sees after rotation will show it
+    drawFace(f1);
+    drawFace(f2);
+
+    const t = new THREE.CanvasTexture(c);
+    t.flipY = false; t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+}
+
+// ── SC cover wrap canvas (1024×1024, applied to 'cover' material) ────────────
+// UV analysis: 'cover' exterior faces +Z (no rotation) at U[0.537-0.987].
+// The -X face (front exterior) is at U[0.448-1.0] — both use the right half.
+// So placing our cover image at x[459-1024] covers both visible front regions.
+const SC_FRONT_X = Math.round(0.448 * 1024);  // 459px — start of front cover UV
+function generateSCWrap(title, author, coverImg, hexColor) {
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 1024;
+    const ctx = c.getContext('2d');
+
+    const FCW = 1024 - SC_FRONT_X;  // 565px wide front cover region
+
+    if (linenMode) {
+        drawLinen(ctx, 0, 0, 1024, 1024, hexColor);
+        // back cover subtle border
+        ctx.strokeStyle = 'rgba(255,235,185,0.12)'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(14, 14, SC_FRONT_X - 28, 996);
+        // front cover embossed treatment
+        const isl = { x: SC_FRONT_X + 18, y: 18, w: FCW - 36, h: 988 };
+        drawLinenCoverDecor(ctx, { x: SC_FRONT_X, y: 0, w: FCW, h: 1024 });
+        const fs = Math.round(1024 * 0.072);
+        ctx.font = `bold ${fs}px Georgia, serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,248,222,0.92)';
+        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+        wrapText(ctx, title, SC_FRONT_X + FCW / 2, 512, FCW * 0.72, fs * 1.28);
+        ctx.shadowColor = 'transparent'; ctx.shadowOffsetY = 0;
+        ctx.font = `${Math.round(1024 * 0.042)}px Georgia, serif`;
+        ctx.fillStyle = 'rgba(255,238,192,0.62)';
+        ctx.fillText(author, SC_FRONT_X + FCW / 2, 730);
+    } else {
+        // back cover base
+        ctx.fillStyle = shadeHex(hexColor, -0.08);
+        ctx.fillRect(0, 0, SC_FRONT_X, 1024);
+        ctx.strokeStyle = 'rgba(255,220,150,0.1)'; ctx.lineWidth = 1;
+        ctx.strokeRect(14, 14, SC_FRONT_X - 28, 996);
+
+        // front cover image or typographic fallback
+        if (coverImg) {
+            drawImageCover(ctx, coverImg, SC_FRONT_X, 0, FCW, 1024);
+            // edge vignette
+            const vg = ctx.createLinearGradient(SC_FRONT_X, 0, SC_FRONT_X, 1024);
+            vg.addColorStop(0, 'rgba(0,0,0,0.07)');
+            vg.addColorStop(0.08, 'rgba(0,0,0,0)');
+            vg.addColorStop(0.92, 'rgba(0,0,0,0)');
+            vg.addColorStop(1, 'rgba(0,0,0,0.1)');
+            ctx.fillStyle = vg; ctx.fillRect(SC_FRONT_X, 0, FCW, 1024);
+        } else {
+            drawTypoFront(ctx, title, author, hexColor,
+                { x: SC_FRONT_X, y: 0, w: FCW, h: 1024 });
+        }
+    }
+
+    const t = new THREE.CanvasTexture(c);
+    t.flipY = false; t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+}
+
+// ── Skin a book with current mode ─────────────────────────────────────────────
+function skinBook(state) {
+    const { inner, cfg, book, color, coverImg } = state;
+    const normalTex = (linenMode && linenNormal) ? linenNormal : null;
+    if (normalTex) normalTex.repeat.set(3, 3);
+
+    if (cfg.isHC) {
+        const tex = generateHCAtlas(book.title, book.author, coverImg, color, cfg.isl);
+        applyToMesh(inner, tex, normalTex, null);
+    } else {
+        // Apply cover wrap to 'cover' material — this is the exterior layer visible to camera.
+        // 'front' material (interior page) is left as original GLB texture.
+        const wrapTex = generateSCWrap(book.title, book.author, coverImg, color);
+        applyToMesh(inner, wrapTex, normalTex, ['cover']);
+    }
+}
+
+// ── UV island auto-analysis (runs on loaded Three.js geometry) ────────────────
+function analyzeHCIslands(gltf) {
+    // Find the mesh primitive with the most triangles
+    let geo = null, maxTris = 0;
+    gltf.scene.traverse(n => {
+        if (!n.isMesh) return;
+        const t = n.geometry.index ? n.geometry.index.count / 3 : n.geometry.attributes.position.count / 3;
+        if (t > maxTris) { maxTris = t; geo = n.geometry; }
+    });
+    if (!geo || !geo.attributes.uv || !geo.attributes.normal) return null;
+
+    const nrm = geo.attributes.normal, uv = geo.attributes.uv, idx = geo.index;
+    const S = 2048, groups = {};
+    const triCount = idx ? idx.count / 3 : nrm.count / 3;
+
+    for (let t = 0; t < triCount; t++) {
+        const i0 = idx ? idx.getX(t*3)   : t*3;
+        const i1 = idx ? idx.getX(t*3+1) : t*3+1;
+        const i2 = idx ? idx.getX(t*3+2) : t*3+2;
+        const nx = (nrm.getX(i0)+nrm.getX(i1)+nrm.getX(i2))/3;
+        const ny = (nrm.getY(i0)+nrm.getY(i1)+nrm.getY(i2))/3;
+        const nz = (nrm.getZ(i0)+nrm.getZ(i1)+nrm.getZ(i2))/3;
+        const dirs = [['X+',nx],['X-',-nx],['Y+',ny],['Y-',-ny],['Z+',nz],['Z-',-nz]];
+        const dir  = dirs.reduce((a,b) => a[1]>b[1]?a:b)[0];
+        const u0=uv.getX(i0),v0=uv.getY(i0), u1=uv.getX(i1),v1=uv.getY(i1), u2=uv.getX(i2),v2=uv.getY(i2);
+        const area = Math.abs((u1-u0)*(v2-v0)-(u2-u0)*(v1-v0))/2;
+        const bk = `${dir}_${Math.round(Math.min(u0,u1,u2)/0.1)}_${Math.round(Math.min(v0,v1,v2)/0.1)}`;
+        if (!groups[bk]) groups[bk] = {dir,area:0,umin:1,umax:0,vmin:1,vmax:0};
+        const g = groups[bk];
+        g.area+=area; g.umin=Math.min(g.umin,u0,u1,u2); g.umax=Math.max(g.umax,u0,u1,u2);
+        g.vmin=Math.min(g.vmin,v0,v1,v2); g.vmax=Math.max(g.vmax,v0,v1,v2);
+    }
+    const best = dir => {
+        const cs = Object.values(groups).filter(g=>g.dir===dir);
+        if (!cs.length) return null;
+        const b = cs.reduce((a,c)=>a.area>c.area?a:c);
+        return { x:Math.round(b.umin*S), y:Math.round((1-b.vmax)*S),
+                 w:Math.round((b.umax-b.umin)*S), h:Math.round((b.vmax-b.vmin)*S) };
+    };
+    return { face1: best('Y+'), face2: best('Y-'), spine: best('Z+') };
+}
+
+// ── Load & build ───────────────────────────────────────────────────────────────
+const gltfLoader = new GLTFLoader();
+const templates = {};
+const objects = [];
+const targets = { shelf:[], grid:[], sphere:[], helix:[] };
+const SAMPLE_ISBNS = ['9780441013593','9780451524935','9780547928227','9780439708180',
+                      '9780141439518','9780060929879','9780143107637','9780544176492',
+                      '9780544003415','9780141441146','9780141439556','9780743273565'];
+
+async function init() {
+    // Detect file:// — GLBs require a server
+    if (location.protocol === 'file:') {
+        document.getElementById('loading').textContent =
+            'Open via server: run python server.py then open http://localhost:8765/library_001.html';
+        return;
+    }
+
+    [linenImg, linenNormal] = await Promise.all([
+        loadHTMLImage('assets/textures/linen_tile_1024.png'),
+        loadTHREETexture('assets/textures/linen_normal_1024.png'),
+    ]);
+
+    // Discover all GLBs — fall back to hardcoded list if API unavailable
+    let glbFiles = ['hardcover_01.glb','hardcover_02.glb','hardcover_03.glb','softcover_01.glb'];
+    try { glbFiles = await fetch('/api/models').then(r => r.json()); } catch(e) {}
+
+    // Load all GLBs, skip any that fail
+    await Promise.all(glbFiles.map(f =>
+        gltfLoader.loadAsync(`assets/models/${f}`)
+            .then(g => { templates[f] = g; })
+            .catch(e => console.warn(`Skipping ${f}:`, e))
+    ));
+
+    // Build MODEL_CFGS + BOOKS from what loaded
+    let isbnIdx = 0;
+    for (const [f, gltf] of Object.entries(templates)) {
+        const key  = f.replace('.glb','');
+        const isHC = f.toLowerCase().includes('hardcover');
+        if (isHC) {
+            const isl = analyzeHCIslands(gltf);
+            MODEL_CFGS[key] = { url:`assets/models/${f}`, scale:8, isHC:true, coverMats:null, isl };
+        } else {
+            MODEL_CFGS[key] = { url:`assets/models/${f}`, scale:0.67, isHC:false, coverMats:['cover'], isl:null };
+        }
+        BOOKS.push({ title:key, author:f, isbn:SAMPLE_ISBNS[isbnIdx++ % SAMPLE_ISBNS.length], model:key });
+    }
+
+    document.getElementById('loading').remove();
+
+    BOOKS.forEach((book, i) => {
+        const cfg = MODEL_CFGS[book.model];
+        const inner = cloneGltf(templates[book.model]);
+        inner.scale.setScalar(cfg.scale);
+
+        // Center the mesh at group origin regardless of model's native pivot
+        inner.updateMatrixWorld(true);
+        const bbox = new THREE.Box3().setFromObject(inner);
+        const bCenter = bbox.getCenter(new THREE.Vector3());
+        inner.position.sub(bCenter);
+
+        const group = new THREE.Group();
+        group.userData = { ...book, index: i };
+        group.position.set((Math.random()-0.5)*30, (Math.random()-0.5)*15, (Math.random()-0.5)*15);
+        group.add(inner);
+        scene.add(group);
+        objects.push(group);
+
+        const color = BOOK_COLORS[i % BOOK_COLORS.length];
+        const state = { inner, cfg, book, color, coverImg: null };
+        bookState.push(state);
+        skinBook(state);
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => { state.coverImg = img; skinBook(state); };
+        img.src = `https://covers.openlibrary.org/b/isbn/${book.isbn}-M.jpg`;
+    });
+
+    computeTargets();
+    transform(targets.shelf, 2000);
+}
+
+// ── Layouts ───────────────────────────────────────────────────────────────────
+function computeTargets() {
+    const n = objects.length;
+    targets.shelf = objects.map((_,i) => ({ x: i*3 - (n-1)*3/2, y: 0, z: 0, ry: 0 }));
+
+    const cols=4, gx=1.7, gy=2.4, rows=Math.ceil(n/cols);
+    targets.grid = objects.map((_,i) => ({
+        x: (i%cols)*gx - (cols-1)*gx/2,
+        y: -Math.floor(i/cols)*gy + (rows-1)*gy/2,
+        z: 0, ry: 0
+    }));
+
+    const R = 10;
+    targets.sphere = objects.map((_,i) => {
+        const phi = Math.acos(-1 + 2*i/n);
+        const theta = Math.sqrt(n*Math.PI) * phi;
+        return {
+            x: R*Math.sin(phi)*Math.cos(theta),
+            y: R*Math.sin(phi)*Math.sin(theta),
+            z: R*Math.cos(phi),
+            ry: Math.atan2(R*Math.sin(phi)*Math.cos(theta), R*Math.cos(phi))
+        };
+    });
+
+    const tightness = 4;
+    targets.helix = objects.map((_,i) => {
+        const theta = i * 0.5 + Math.PI;
+        return {
+            x: 6*Math.sin(theta),
+            y: -(i*tightness) + (n*tightness/2.5),
+            z: 6*Math.cos(theta),
+            ry: -theta
+        };
+    });
+}
+
+function transform(tgts, dur) {
+    TWEEN.removeAll();
+    objects.forEach((obj,i) => {
+        const t = tgts[i], jitter = Math.random()*dur*0.4;
+        new TWEEN.Tween(obj.position).to({x:t.x,y:t.y,z:t.z}, dur+jitter)
+            .easing(TWEEN.Easing.Exponential.InOut).start();
+        new TWEEN.Tween(obj.rotation).to({y:t.ry}, dur+jitter)
+            .easing(TWEEN.Easing.Exponential.InOut).start();
+    });
+}
+
+// ── Selection helpers ─────────────────────────────────────────────────────────
+function setHighlight(group, on) {
+    group.traverse(n => {
+        if (!n.isMesh) return;
+        const mats = Array.isArray(n.material) ? n.material : [n.material];
+        mats.forEach(m => { m.emissive.setRGB(on ? 0.25 : 0, on ? 0.15 : 0, 0); });
+    });
+}
+
+function selectGroup(group) {
+    if (!group) {
+        selected.forEach(g => setHighlight(g, false));
+        selected.clear();
+    } else if (selected.has(group)) {
+        selected.delete(group);
+        setHighlight(group, false);
+    } else {
+        selected.add(group);
+        setHighlight(group, true);
+    }
+}
+
+// ── Focus / recentre ──────────────────────────────────────────────────────────
+function focusOnSelected() {
+    const pool = selected.size > 0 ? [...selected] : objects;
+    const box = new THREE.Box3();
+    pool.forEach(obj => box.expandByObject(obj));
+    const center = box.getCenter(new THREE.Vector3());
+    const size   = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fovRad = camera.fov * Math.PI / 180;
+    const dist   = (maxDim / 2) / Math.tan(fovRad / 2) * 1.6;
+    const newPos = new THREE.Vector3(center.x, center.y, center.z + dist);
+    new TWEEN.Tween(camera.position)
+        .to({ x: newPos.x, y: newPos.y, z: newPos.z }, 700)
+        .easing(TWEEN.Easing.Quadratic.InOut).start();
+    new TWEEN.Tween(controls.target)
+        .to({ x: center.x, y: center.y, z: center.z }, 700)
+        .easing(TWEEN.Easing.Quadratic.InOut)
+        .onUpdate(() => controls.update()).start();
+}
+
+// ── Hover + click ─────────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse     = new THREE.Vector2();
+const tooltip   = document.getElementById('tooltip');
+let pointerDownPos = null;
+let lastClickTime  = 0;
+let lastClickGroup = null;
+
+window.addEventListener('mousemove', e => {
+    mouse.set((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(objects, true);
+    if (hits.length) {
+        let g = hits[0].object;
+        while (g && !g.userData.title) g = g.parent;
+        if (g) { tooltip.textContent = `${g.userData.title}  ·  ${g.userData.author}`; tooltip.style.opacity='1'; return; }
+    }
+    tooltip.style.opacity = '0';
+});
+
+window.addEventListener('pointerdown', e => {
+    pointerDownPos = { x: e.clientX, y: e.clientY };
+});
+
+window.addEventListener('pointerup', e => {
+    if (!pointerDownPos) return;
+    const dx = e.clientX - pointerDownPos.x;
+    const dy = e.clientY - pointerDownPos.y;
+    pointerDownPos = null;
+    if (Math.hypot(dx, dy) > 6) return;  // was a drag, not a click
+
+    mouse.set((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(objects, true);
+    let hitGroup = null;
+    if (hits.length) {
+        let g = hits[0].object;
+        while (g && !g.userData.title) g = g.parent;
+        hitGroup = g || null;
+    }
+
+    const now = Date.now();
+    const dblClick = now - lastClickTime < 350 && hitGroup === lastClickGroup;
+    lastClickTime  = now;
+    lastClickGroup = hitGroup;
+
+    if (dblClick) { focusOnSelected(); return; }
+
+    selectGroup(hitGroup);
+});
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+    if (e.key === 'f' || e.key === 'F') focusOnSelected();
+});
+
+// ── UI ────────────────────────────────────────────────────────────────────────
+document.getElementById('shelf-btn').onclick  = () => transform(targets.shelf,  1200);
+document.getElementById('grid-btn').onclick   = () => transform(targets.grid,   1200);
+document.getElementById('sphere-btn').onclick = () => transform(targets.sphere, 1400);
+document.getElementById('helix-btn').onclick  = () => transform(targets.helix,  1400);
+
+const linenBtn = document.getElementById('linen-btn');
+linenBtn.onclick = () => {
+    linenMode = !linenMode;
+    linenBtn.classList.toggle('active', linenMode);
+    linenBtn.textContent = linenMode ? 'COVER' : 'LINEN';
+    bookState.forEach(s => skinBook(s));
+};
+
+window.addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+// ── Loop ──────────────────────────────────────────────────────────────────────
+function animate() { requestAnimationFrame(animate); TWEEN.update(); controls.update(); renderer.render(scene, camera); }
+
+init().then(animate);
+</script>
+</body>
+</html>

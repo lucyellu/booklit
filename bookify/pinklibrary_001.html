@@ -1,0 +1,404 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Book, Feather, Stamp, Clock, Compass, Coffee, Check, X, ArrowRight } from 'lucide-react';
+
+// --- Components ---
+
+const LibraryCard = () => {
+  const canvasRef = useRef(null);
+  const cardRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasDrawn, setHasDrawn] = useState(false);
+  const [tilt, setTilt] = useState({ x: 0, y: 0, glareX: 50, glareY: 50, isHovering: false });
+
+  // Initialize canvas context
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Set display size
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 100; // fixed height for signature area
+
+    // Set drawing style - Fountain Pen Blue
+    ctx.lineWidth = 2.0;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1e3a8a'; 
+  }, []);
+
+  const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches && e.touches.length > 0) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const startDrawing = (e) => {
+    e.preventDefault();
+    const { x, y } = getCoordinates(e);
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+    setHasDrawn(true);
+  };
+
+  const draw = (e) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const { x, y } = getCoordinates(e);
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!cardRef.current || isDrawing) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    
+    const rotateX = -((y - centerY) / centerY) * 10;
+    const rotateY = ((x - centerX) / centerX) * 10;
+    
+    const glareX = (x / rect.width) * 100;
+    const glareY = (y / rect.height) * 100;
+
+    setTilt({ x: rotateX, y: rotateY, glareX, glareY, isHovering: true });
+  };
+
+  const handleMouseLeave = () => {
+    if (!isDrawing) {
+      setTilt({ x: 0, y: 0, glareX: 50, glareY: 50, isHovering: false });
+    }
+  };
+
+  return (
+    <div className="relative w-full max-w-md mx-auto z-10 [perspective:1000px] mt-12 mb-12">
+      {/* Card Shadow/Depth */}
+      <div className="absolute inset-0 bg-[#4A2C2A]/20 rounded-sm translate-y-8 translate-x-4 blur-xl -z-10 transition-opacity duration-500"></div>
+      
+      {/* Main Card - Vintage Paper Style */}
+      <div 
+        ref={cardRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+          transition: tilt.isHovering ? 'transform 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          transformStyle: 'preserve-3d'
+        }}
+        className="bg-[#FDF8E7] rounded-sm shadow-2xl overflow-hidden flex flex-col relative p-2 border border-[#D1C6B4]"
+      >
+        {/* Inner Vintage Border */}
+        <div className="border-[3px] border-double border-[#2C1810] h-full flex flex-col relative z-20">
+          
+          {/* Glare Effect */}
+          <div 
+            className="absolute inset-0 pointer-events-none transition-opacity duration-300 z-50 mix-blend-overlay"
+            style={{
+              background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 60%)`,
+              opacity: tilt.isHovering ? 1 : 0
+            }}
+          />
+
+          {/* Card Header */}
+          <div className="bg-[#B94A41] px-6 py-4 flex justify-between items-center border-b-[3px] border-double border-[#2C1810]">
+            <div>
+              <h3 className="font-sans font-bold text-[10px] tracking-[0.2em] uppercase text-[#FDF8E7]/80">Patron identification</h3>
+              <p className="font-serif text-xl italic text-[#FDF8E7] mt-1">Zubrowka Archives</p>
+            </div>
+            <Stamp className="text-[#FDF8E7]/80 w-8 h-8" />
+          </div>
+
+          {/* Card Body */}
+          <div className="p-6 bg-[#FDF8E7]">
+            <div className="flex justify-between items-end mb-8">
+              <div className="w-1/2">
+                <p className="text-[10px] text-[#2C1810]/60 uppercase tracking-widest mb-1 font-bold">Issued To</p>
+                <div className="h-6 border-b border-[#2C1810] w-full"></div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-[#2C1810]/60 uppercase tracking-widest mb-1 font-bold">Registry No.</p>
+                <p className="font-mono text-sm text-[#B94A41] font-bold tracking-widest">№ 1932-GB</p>
+              </div>
+            </div>
+
+            {/* Signature Area */}
+            <div 
+              className="relative mt-4"
+              onMouseEnter={() => setTilt({ x: 0, y: 0, glareX: 50, glareY: 50, isHovering: false })}
+            >
+              <p className="text-[10px] text-[#2C1810]/60 uppercase tracking-widest mb-2 font-bold text-center">Patron's Signature (In Ink)</p>
+              <div className="relative border-b-2 border-dashed border-[#2C1810]/30 bg-[#FDF8E7] group">
+                {!hasDrawn && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <p className="text-[#2C1810]/30 text-sm font-serif italic group-hover:text-[#2C1810]/50 transition-colors">Sign carefully upon the line</p>
+                  </div>
+                )}
+                <canvas
+                  ref={canvasRef}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  onTouchStart={startDrawing}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDrawing}
+                  className="w-full cursor-crosshair touch-none relative z-10"
+                />
+              </div>
+              {hasDrawn && (
+                <button 
+                  onClick={clearSignature}
+                  className="absolute -top-6 right-0 text-[10px] font-bold tracking-wider uppercase text-[#B94A41] hover:text-[#2C1810] transition-colors z-50 relative"
+                >
+                  [ Erase ]
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Vintage Date Due Grid instead of Barcode */}
+          <div className="border-t-[3px] border-double border-[#2C1810] px-4 py-3 bg-[#E4D5B7] flex flex-col items-center">
+             <p className="text-[8px] uppercase tracking-widest font-bold text-[#2C1810] mb-2">Date Due Returns</p>
+             <div className="grid grid-cols-6 gap-1 w-full">
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="h-6 border border-[#2C1810]/20 flex items-center justify-center bg-[#FDF8E7]/50">
+                     {i === 2 && <span className="font-mono text-[8px] text-[#B94A41] -rotate-12 opacity-80">OCT 12</span>}
+                     {i === 7 && <span className="font-mono text-[8px] text-[#1e3a8a] rotate-6 opacity-60">NOV 04</span>}
+                  </div>
+                ))}
+             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const FAQItem = ({ question, answer }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="border-b border-[#2C1810]/20 py-6">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex justify-between items-center text-left focus:outline-none group"
+      >
+        <h4 className="font-serif text-2xl text-[#2C1810] group-hover:text-[#B94A41] transition-colors">{question}</h4>
+        <div className="ml-4 flex-shrink-0 transition-transform duration-300">
+          {isOpen ? <X className="w-6 h-6 text-[#2C1810]" /> : <Check className="w-6 h-6 text-[#2C1810] opacity-0 group-hover:opacity-100 transition-opacity" />}
+        </div>
+      </button>
+      <div 
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}
+      >
+        <p className="text-[#2C1810]/80 font-sans leading-relaxed text-lg">{answer}</p>
+      </div>
+    </div>
+  );
+};
+
+// --- Main App ---
+
+export default function App() {
+  return (
+    <div className="min-h-screen bg-[#F5D5D5] text-[#2C1810] selection:bg-[#E3B505] selection:text-[#2C1810]">
+      {/* Custom Fonts & Base Styles */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @import url('https://fonts.googleapis.com/css2?family=Jost:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Courier+Prime&display=swap');
+        
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .font-sans { font-family: 'Jost', sans-serif; }
+        .font-mono { font-family: 'Courier Prime', monospace; }
+        
+        body {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          background-color: #F5D5D5;
+          background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(44, 24, 16, 0.02) 2px, rgba(44, 24, 16, 0.02) 4px);
+        }
+      `}} />
+
+      {/* Navigation - Symmetrical */}
+      <nav className="fixed w-full top-0 z-50 bg-[#F5D5D5]/90 backdrop-blur-md border-b-2 border-[#2C1810]">
+        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="hidden md:flex space-x-8 text-xs font-bold uppercase tracking-widest text-[#2C1810]">
+            <a href="#about" className="hover:text-[#B94A41] transition-colors">The Curator</a>
+            <a href="#collections" className="hover:text-[#B94A41] transition-colors">Collections</a>
+          </div>
+          
+          <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center">
+             <div className="font-serif text-3xl font-bold tracking-tight text-[#B94A41]">Z.A.S.</div>
+             <div className="text-[8px] font-sans uppercase tracking-[0.3em] font-bold">Est. 1932</div>
+          </div>
+
+          <div className="hidden md:flex space-x-8 text-xs font-bold uppercase tracking-widest text-[#2C1810] items-center">
+            <a href="#regulations" className="hover:text-[#B94A41] transition-colors">Regulations</a>
+            <button className="bg-[#E3B505] text-[#2C1810] border-2 border-[#2C1810] px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-[#B94A41] hover:text-[#FDF8E7] transition-colors shadow-[2px_2px_0px_#2C1810]">
+              Procure Card
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <main className="pt-32">
+        {/* Symmetrical Hero Section */}
+        <section className="pb-20 px-6 max-w-4xl mx-auto min-h-[90vh] flex flex-col items-center justify-center text-center gap-8 relative">
+          
+          {/* Decorative Top Border */}
+          <div className="w-full max-w-md mx-auto flex items-center justify-center space-x-4 mb-4 opacity-70">
+            <div className="h-px bg-[#2C1810] flex-1"></div>
+            <Feather className="w-5 h-5 text-[#B94A41]" />
+            <div className="h-px bg-[#2C1810] flex-1"></div>
+          </div>
+
+          <div className="inline-flex items-center space-x-2 bg-[#E3B505] border-2 border-[#2C1810] px-4 py-1.5 text-[10px] font-bold text-[#2C1810] uppercase tracking-[0.2em] shadow-[2px_2px_0px_rgba(44,24,16,1)]">
+            <span>Open to the Public</span>
+          </div>
+          
+          <h1 className="font-serif text-6xl md:text-8xl leading-[1.1] text-[#2C1810] px-4">
+            The Zubrowka <br/>
+            <span className="italic text-[#B94A41]">Archival Society</span>
+          </h1>
+          
+          <p className="font-sans text-xl text-[#2C1810]/80 max-w-2xl leading-relaxed mt-4">
+            A meticulous repository of obscure poetry, botanical illustrations, and moderately tragic memoirs. Please present your credentials below.
+          </p>
+
+          <LibraryCard />
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mt-4">
+            <button className="bg-[#B94A41] text-[#FDF8E7] border-2 border-[#2C1810] px-10 py-4 text-sm font-bold uppercase tracking-widest hover:bg-[#2C1810] transition-colors shadow-[4px_4px_0px_#2C1810] group flex items-center gap-3">
+              <span>Apply for Membership</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+            <a href="#collections" className="text-[12px] uppercase tracking-widest font-bold text-[#2C1810] hover:text-[#B94A41] border-b-2 border-transparent hover:border-[#B94A41] transition-all pb-1">
+              Peruse the Catalog
+            </a>
+          </div>
+        </section>
+
+        {/* The Curator Section */}
+        <section id="about" className="py-24 bg-[#7FB0A6] border-y-4 border-double border-[#2C1810] relative overflow-hidden">
+          {/* Decorative background lines */}
+          <div className="absolute inset-0 opacity-10 flex flex-col justify-between pointer-events-none">
+            {[...Array(20)].map((_, i) => <div key={i} className="w-full h-px bg-[#2C1810]"></div>)}
+          </div>
+
+          <div className="max-w-3xl mx-auto px-6 text-center space-y-8 relative z-10 bg-[#FDF8E7] border-2 border-[#2C1810] p-12 shadow-[8px_8px_0px_#2C1810]">
+            <div className="w-24 h-24 mx-auto rounded-full border-4 border-[#2C1810] overflow-hidden bg-[#E3B505] flex items-center justify-center mb-6">
+              <img 
+                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Gustave&accessories=round&facialHair=moustacheMagnum&backgroundColor=E3B505" 
+                alt="The Curator" 
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <h2 className="font-serif text-5xl text-[#2C1810]">M. Gustave Moustafa</h2>
+            <h3 className="font-sans text-xs uppercase tracking-[0.2em] font-bold text-[#B94A41]">Head Librarian & Concierge</h3>
+            <p className="font-sans text-xl text-[#2C1810]/80 leading-relaxed max-w-xl mx-auto mt-6">
+              "A library is not merely a collection of books; it is a meticulously orchestrated symphony of silence, dust, and deeply held secrets. Please, wipe your shoes."
+            </p>
+          </div>
+        </section>
+
+        {/* Collections Grid */}
+        <section id="collections" className="py-32 px-6 max-w-6xl mx-auto">
+          <div className="text-center mb-20 relative">
+             <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-full max-w-2xl h-px bg-[#2C1810]/20 -z-10"></div>
+            <h2 className="font-serif text-5xl text-[#2C1810] bg-[#F5D5D5] inline-block px-8">Special Collections</h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[
+              { icon: Book, title: "Peculiar Periodicals", desc: "Magazines detailing the precise art of taxidermy, discontinued railway timetables, and obscure hotel reviews." },
+              { icon: Compass, title: "Cartography of the Lost", desc: "Hand-drawn maps of islands that have either sunk, vanished, or were entirely fabricated by bored sailors." },
+              { icon: Clock, title: "Tardy Returns", desc: "A fascinating display of books returned over a century late, accompanied by the heavily accrued fine ledgers." },
+              { icon: Coffee, title: "The Reading Room", desc: "A strictly enforced quiet zone. Espresso is served promptly at 3:00 PM. No dunking of pastries permitted." },
+              { icon: Feather, title: "Melancholic Memoirs", desc: "Diaries of minor aristocracy detailing their tragic love affairs with entirely unsuitable telegraph operators." },
+              { icon: Stamp, title: "Philatelic Curiosities", desc: "Postage stamps featuring misprinted monarchs and countries that ceased to exist before the ink was dry." }
+            ].map((feature, idx) => (
+              <div key={idx} className="bg-[#FDF8E7] p-10 border-2 border-[#2C1810] text-center group hover:-translate-y-2 transition-transform duration-300 shadow-[4px_4px_0px_#2C1810]">
+                <div className="mx-auto w-12 h-12 bg-[#E3B505] border-2 border-[#2C1810] rounded-full flex items-center justify-center mb-6 group-hover:bg-[#B94A41] transition-colors">
+                  <feature.icon className="w-5 h-5 text-[#2C1810] group-hover:text-[#FDF8E7] transition-colors" />
+                </div>
+                <h3 className="font-serif text-2xl text-[#2C1810] mb-4">{feature.title}</h3>
+                <div className="h-px w-12 bg-[#B94A41] mx-auto mb-4"></div>
+                <p className="font-sans text-[#2C1810]/70 leading-relaxed text-sm">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Regulations / FAQ */}
+        <section id="regulations" className="py-32 bg-[#E3B505] px-6 border-t-4 border-[#2C1810]">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="font-serif text-5xl text-[#2C1810] mb-12 text-center">Library Regulations</h2>
+            <div className="bg-[#FDF8E7] border-4 border-double border-[#2C1810] p-8 md:p-16 shadow-[12px_12px_0px_rgba(44,24,16,0.2)]">
+              <FAQItem 
+                question="Are domestic pets or trained falcons permitted?" 
+                answer="Only emotionally stunted whippets and very quiet turtles are allowed within the reading rooms. Falcons must be checked at the cloakroom."
+              />
+              <FAQItem 
+                question="What is the penalty for a dog-eared page?" 
+                answer="A fine of twelve Zubrowkan Klubecks, or a formal written apology to the author, delivered by telegram within 48 hours of the offense."
+              />
+              <FAQItem 
+                question="May I borrow the Original Manuscript of 'The Boy with the Apple'?" 
+                answer="Absolutely not. It is kept in a climate-controlled vault guarded by a very serious man named Dmitri. You may, however, look at a postcard of it in the gift shop."
+              />
+              <FAQItem 
+                question="Is the lobby boy available to fetch obscure reference materials?" 
+                answer="Zero is currently indisposed, but he will be happy to assist you upon his return from the pastry shop. Please ring the bell precisely once."
+              />
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-[#2C1810] text-[#FDF8E7] py-16 px-6 border-t-[8px] border-[#B94A41]">
+        <div className="max-w-6xl mx-auto flex flex-col items-center justify-center text-center space-y-8">
+          <div className="font-serif text-4xl italic">Z.A.S.</div>
+          
+          <div className="flex space-x-6 text-[10px] font-bold uppercase tracking-widest text-[#FDF8E7]/60">
+            <a href="#" className="hover:text-[#E3B505] transition-colors">Telegrams</a>
+            <span>•</span>
+            <a href="#" className="hover:text-[#E3B505] transition-colors">Bylaws</a>
+            <span>•</span>
+            <a href="#" className="hover:text-[#E3B505] transition-colors">Concierge</a>
+          </div>
+
+          <div className="text-[10px] text-[#FDF8E7]/40 font-sans uppercase tracking-[0.2em] pt-8 border-t border-[#FDF8E7]/10 w-full max-w-md">
+            © {new Date().getFullYear()} The Zubrowka Archival Society. Formally incorporated.
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}

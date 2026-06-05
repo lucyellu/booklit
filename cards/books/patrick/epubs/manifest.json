@@ -1,0 +1,2659 @@
+{
+  "gutenberg": [
+    {
+      "title": "Aftermath",
+      "path": "./books/patrick/epubs/gutenberg/Aftermath.epub"
+    },
+    {
+      "title": "East African",
+      "path": "./books/patrick/epubs/gutenberg/East African.epub"
+    },
+    {
+      "title": "Electricity and Magnetism",
+      "path": "./books/patrick/epubs/gutenberg/Electricity and Magnetism.epub"
+    },
+    {
+      "title": "Enemies",
+      "path": "./books/patrick/epubs/gutenberg/Enemies.epub"
+    },
+    {
+      "title": "Immigrants",
+      "path": "./books/patrick/epubs/gutenberg/Immigrants.epub"
+    },
+    {
+      "title": "In Our Time",
+      "path": "./books/patrick/epubs/gutenberg/In Our Time.epub"
+    },
+    {
+      "title": "Labyrinths",
+      "path": "./books/patrick/epubs/gutenberg/Labyrinths.epub"
+    },
+    {
+      "title": "Longitude",
+      "path": "./books/patrick/epubs/gutenberg/Longitude.epub"
+    },
+    {
+      "title": "Mathematics",
+      "path": "./books/patrick/epubs/gutenberg/Mathematics.epub"
+    },
+    {
+      "title": "Pacific",
+      "path": "./books/patrick/epubs/gutenberg/Pacific.epub"
+    },
+    {
+      "title": "Slack",
+      "path": "./books/patrick/epubs/gutenberg/Slack.epub"
+    },
+    {
+      "title": "The Ascent of Man",
+      "path": "./books/patrick/epubs/gutenberg/The Ascent of Man.epub"
+    },
+    {
+      "title": "The Chip",
+      "path": "./books/patrick/epubs/gutenberg/The Chip.epub"
+    },
+    {
+      "title": "The thirty years war",
+      "path": "./books/patrick/epubs/gutenberg/The thirty years war.epub"
+    },
+    {
+      "title": "Unknown Quantity",
+      "path": "./books/patrick/epubs/gutenberg/Unknown Quantity.epub"
+    }
+  ],
+  "open_library": [
+    {
+      "title": "A Beautiful Question",
+      "url": "https://openlibrary.org/books/OL25761675M"
+    },
+    {
+      "title": "A Confederacy of Dunces",
+      "url": "https://openlibrary.org/books/OL24203981M"
+    },
+    {
+      "title": "A Country of Cities",
+      "url": "https://openlibrary.org/books/OL27148386M"
+    },
+    {
+      "title": "A Decade of Research",
+      "url": "https://archive.org/details/decadeofresearch0000unse"
+    },
+    {
+      "title": "A Devil's Chaplain",
+      "url": "https://openlibrary.org/books/OL7604806M"
+    },
+    {
+      "title": "A Farewell to Alms",
+      "url": "https://openlibrary.org/books/OL17891886M"
+    },
+    {
+      "title": "A Fine Balance",
+      "url": "https://openlibrary.org/works/OL2980902W"
+    },
+    {
+      "title": "A Great Leap Forward",
+      "url": "https://openlibrary.org/books/OL26154613M"
+    },
+    {
+      "title": "A History of Western Philosophy; And its Connection with Political and Social Circumstances from the Earliest Times to t",
+      "url": "https://openlibrary.org/books/OL7482225M"
+    },
+    {
+      "title": "A Journey",
+      "url": "https://openlibrary.org/books/OL25254115M"
+    },
+    {
+      "title": "A Mathematician's Apology",
+      "url": "https://openlibrary.org/books/OL15058182M"
+    },
+    {
+      "title": "A Pattern Language",
+      "url": "https://openlibrary.org/books/OL5059163M"
+    },
+    {
+      "title": "A Photographer's Life",
+      "url": "https://openlibrary.org/books/OL7425962M"
+    },
+    {
+      "title": "A Piece of the Action",
+      "url": "https://openlibrary.org/books/OL1102661M"
+    },
+    {
+      "title": "A Portrait of the Artist as a Young Man (Transatlantic Classics)",
+      "url": "https://archive.org/details/portraitofartist0000joyc_c7o4"
+    },
+    {
+      "title": "A Practical Guide for Policy Analysis",
+      "url": "https://openlibrary.org/books/OL24939596M"
+    },
+    {
+      "title": "A Primer of Drug Action",
+      "url": "https://openlibrary.org/books/OL25403200M"
+    },
+    {
+      "title": "A Problem from Hell",
+      "url": "https://openlibrary.org/books/OL27155245M"
+    },
+    {
+      "title": "A Small Matter of Programming",
+      "url": "https://openlibrary.org/books/OL1401276M"
+    },
+    {
+      "title": "A Splendid Exchange",
+      "url": "https://openlibrary.org/books/OL27146249M"
+    },
+    {
+      "title": "A Theory of Fun for Game Design",
+      "url": "https://openlibrary.org/books/OL8807047M"
+    },
+    {
+      "title": "A Thousand Hills",
+      "url": "https://openlibrary.org/books/OL16789807M"
+    },
+    {
+      "title": "A Vast Machine",
+      "url": "https://openlibrary.org/books/OL29549201M"
+    },
+    {
+      "title": "A Window on Eternity",
+      "url": "https://openlibrary.org/books/OL27158196M"
+    },
+    {
+      "title": "A course in mathematical analysis",
+      "url": "https://openlibrary.org/books/OL9678690M"
+    },
+    {
+      "title": "About Face 2.0",
+      "url": "https://openlibrary.org/books/OL3575525M"
+    },
+    {
+      "title": "About Face 3",
+      "url": "https://openlibrary.org/books/OL17849770M"
+    },
+    {
+      "title": "Abstract Algebra",
+      "url": "https://openlibrary.org/books/OL3689578M"
+    },
+    {
+      "title": "Accelerando (Singularity)",
+      "url": "https://openlibrary.org/books/OL3421772M"
+    },
+    {
+      "title": "Accidence Will Happen",
+      "url": "https://openlibrary.org/books/OL48152807M"
+    },
+    {
+      "title": "Advanced Topics in Types and Programming Languages",
+      "url": "https://openlibrary.org/books/OL17146611M"
+    },
+    {
+      "title": "Aerodynamics for Naval Aviators",
+      "url": "https://openlibrary.org/books/OL28502195M"
+    },
+    {
+      "title": "Age of Ambition",
+      "url": "https://openlibrary.org/books/OL25651604M"
+    },
+    {
+      "title": "Airplane Performance Stability and Control",
+      "url": "https://openlibrary.org/works/OL7426871W"
+    },
+    {
+      "title": "Alexander Hamilton",
+      "url": "https://openlibrary.org/books/OL35261741M"
+    },
+    {
+      "title": "Alibaba",
+      "url": "https://openlibrary.org/books/OL27203936M"
+    },
+    {
+      "title": "All Art Is Propaganda Critical Essays",
+      "url": "https://openlibrary.org/books/OL16726494M"
+    },
+    {
+      "title": "Amazing Airplanes (Amazing Machines)",
+      "url": "https://openlibrary.org/books/OL7987228M"
+    },
+    {
+      "title": "America Between the Wars",
+      "url": "https://openlibrary.org/books/OL27950046M"
+    },
+    {
+      "title": "American Colossus",
+      "url": "https://openlibrary.org/books/OL27726540M"
+    },
+    {
+      "title": "American Tabloid",
+      "url": "https://openlibrary.org/books/OL1116785M"
+    },
+    {
+      "title": "Amusing Ourselves to Death",
+      "url": "https://openlibrary.org/works/OL137916W"
+    },
+    {
+      "title": "An Autobiography",
+      "url": "https://openlibrary.org/books/OL56013265M"
+    },
+    {
+      "title": "An Enquiry concerning Human Understanding",
+      "url": "https://openlibrary.org/books/OL7402083M"
+    },
+    {
+      "title": "An Essay on Typography First Thus Edition",
+      "url": "https://openlibrary.org/books/OL2062002M"
+    },
+    {
+      "title": "An Evil Cradling",
+      "url": "https://openlibrary.org/books/OL50515884M"
+    },
+    {
+      "title": "An Introduction to Harmonic Analysis (Cambridge Mathematical Library)",
+      "url": "https://openlibrary.org/books/OL3692120M"
+    },
+    {
+      "title": "An Introduction to Political Philosophy Ten Essays",
+      "url": "https://openlibrary.org/books/OL2208097M"
+    },
+    {
+      "title": "And Suddenly the Inventor Appeared",
+      "url": "https://openlibrary.org/books/OL8525206M"
+    },
+    {
+      "title": "Andy Grove",
+      "url": "https://openlibrary.org/books/OL8858209M"
+    },
+    {
+      "title": "Angle of Attack",
+      "url": "https://openlibrary.org/works/OL3335447W"
+    },
+    {
+      "title": "Antifragile",
+      "url": "https://openlibrary.org/books/OL25393828M"
+    },
+    {
+      "title": "Apple Inside Macintosh, Volumes I, II, and III",
+      "url": "https://openlibrary.org/books/OL21181285M"
+    },
+    {
+      "title": "Are Prisons Obsolete",
+      "url": "https://openlibrary.org/books/OL8789611M"
+    },
+    {
+      "title": "Arguably",
+      "url": "https://openlibrary.org/books/OL29651365M"
+    },
+    {
+      "title": "Artful Sentences",
+      "url": "https://openlibrary.org/books/OL23241212M"
+    },
+    {
+      "title": "Artificial Intelligence",
+      "url": "https://openlibrary.org/books/OL3702561M"
+    },
+    {
+      "title": "Asimov's New Guide to Science",
+      "url": "https://openlibrary.org/books/OL7349295M"
+    },
+    {
+      "title": "Asimov",
+      "url": "https://openlibrary.org/books/OL22469005M"
+    },
+    {
+      "title": "Ask Me Anything",
+      "url": "https://openlibrary.org/works/OL6030883W"
+    },
+    {
+      "title": "BSD Hacks",
+      "url": "https://openlibrary.org/books/OL3327682M"
+    },
+    {
+      "title": "Back to Barbary Lane",
+      "url": "https://openlibrary.org/books/OL1891107M"
+    },
+    {
+      "title": "Backpacking California",
+      "url": "https://archive.org/details/backpackingcalif0000unse_m8a2"
+    },
+    {
+      "title": "Battle Cry of Freedom",
+      "url": "https://openlibrary.org/books/OL18355236M"
+    },
+    {
+      "title": "Battle Royale",
+      "url": "https://openlibrary.org/works/OL8897717W"
+    },
+    {
+      "title": "Beautiful Evidence",
+      "url": "https://openlibrary.org/books/OL23240698M"
+    },
+    {
+      "title": "Before the Storm",
+      "url": "https://openlibrary.org/works/OL2571772W"
+    },
+    {
+      "title": "Beyond The Checkride",
+      "url": "https://archive.org/details/beyondcheckride0000frie"
+    },
+    {
+      "title": "Bicycle Design",
+      "url": "https://archive.org/details/bicycledesignill0000hadl"
+    },
+    {
+      "title": "Bicycling Science",
+      "url": "https://archive.org/details/isbn_9780262731546"
+    },
+    {
+      "title": "Biohazard",
+      "url": "https://openlibrary.org/books/OL16943305M"
+    },
+    {
+      "title": "Biology, 8th Edition",
+      "url": "https://openlibrary.org/books/OL11277691M"
+    },
+    {
+      "title": "Blade Runner",
+      "url": "https://archive.org/details/bladerunner0000unse"
+    },
+    {
+      "title": "Blown to Bits",
+      "url": "https://openlibrary.org/books/OL16490683M"
+    },
+    {
+      "title": "Book from the Ground",
+      "url": "https://archive.org/details/bookfromgroundfr0000xubi"
+    },
+    {
+      "title": "Bootstrapping",
+      "url": "https://openlibrary.org/books/OL7929333M"
+    },
+    {
+      "title": "Borges",
+      "url": "https://openlibrary.org/books/OL7352335M"
+    },
+    {
+      "title": "Bradbury Stories",
+      "url": "https://openlibrary.org/books/OL7278366M"
+    },
+    {
+      "title": "Branding Terror",
+      "url": "https://openlibrary.org/books/OL27232891M"
+    },
+    {
+      "title": "Brrm Brrm",
+      "url": "https://archive.org/details/brrmbrrmormanfro0000jame_k5z6"
+    },
+    {
+      "title": "Bruno Munari",
+      "url": "https://openlibrary.org/books/OL21378377M"
+    },
+    {
+      "title": "Buckminster Fuller's Universe",
+      "url": "https://openlibrary.org/books/OL18520755M"
+    },
+    {
+      "title": "Bunreacht na hEireann (English and Irish Edition) Constitution of Ireland",
+      "url": "https://openlibrary.org/books/OL6854178M"
+    },
+    {
+      "title": "Business Adventures",
+      "url": "https://openlibrary.org/books/OL26534242M"
+    },
+    {
+      "title": "Cairo",
+      "url": "https://openlibrary.org/books/OL45858285M"
+    },
+    {
+      "title": "Calculus On Manifolds",
+      "url": "https://openlibrary.org/books/OL20327344M"
+    },
+    {
+      "title": "Chasing the Flame",
+      "url": "https://openlibrary.org/books/OL28111237M"
+    },
+    {
+      "title": "China Takes Off",
+      "url": "https://archive.org/details/chinatakesofftec0000baue"
+    },
+    {
+      "title": "Chinese Lessons",
+      "url": "https://openlibrary.org/books/OL7933318M"
+    },
+    {
+      "title": "Chronicles of Wasted Time An Autobiography",
+      "url": "https://openlibrary.org/books/OL2059448M"
+    },
+    {
+      "title": "Citizen Sim",
+      "url": "https://archive.org/details/citizensimcradle0000sola"
+    },
+    {
+      "title": "City of Thieves",
+      "url": "https://openlibrary.org/books/OL26339169M"
+    },
+    {
+      "title": "Code",
+      "url": "https://openlibrary.org/books/OL48596347M"
+    },
+    {
+      "title": "Coders at Work",
+      "url": "https://openlibrary.org/books/OL25111541M"
+    },
+    {
+      "title": "Codex Seraphinianus",
+      "url": "https://openlibrary.org/books/OL37845919M"
+    },
+    {
+      "title": "Coding the Matrix",
+      "url": "https://openlibrary.org/books/OL37866328M"
+    },
+    {
+      "title": "Collective Electrodynamics",
+      "url": "https://openlibrary.org/books/OL9821278M"
+    },
+    {
+      "title": "Common LISP. The Language.",
+      "url": "https://openlibrary.org/books/OL2204175M"
+    },
+    {
+      "title": "Communicating Design",
+      "url": "https://openlibrary.org/books/OL15616773M"
+    },
+    {
+      "title": "Complications",
+      "url": "https://openlibrary.org/books/OL24962886M"
+    },
+    {
+      "title": "Computer Applications in Aircraft Design and Operation",
+      "url": "https://archive.org/details/computerapplicat0000unse_r3w3"
+    },
+    {
+      "title": "Computer Lib",
+      "url": "https://openlibrary.org/books/OL8235285M"
+    },
+    {
+      "title": "Computer LibDream Machines",
+      "url": "https://archive.org/details/computerlibdream0000nels"
+    },
+    {
+      "title": "Computers and Society",
+      "url": "https://openlibrary.org/books/OL43375100M"
+    },
+    {
+      "title": "Computers and the World of the Future",
+      "url": "https://archive.org/details/computersworldof0000mart"
+    },
+    {
+      "title": "Concepts, Techniques, and Models of Computer Programming",
+      "url": "https://openlibrary.org/books/OL9451338M"
+    },
+    {
+      "title": "Conjectures and Refutations",
+      "url": "https://openlibrary.org/books/OL3568077M"
+    },
+    {
+      "title": "Connections",
+      "url": "https://openlibrary.org/books/OL21546162M"
+    },
+    {
+      "title": "Cooking as Courtship (Under Structure)",
+      "url": "https://archive.org/details/cookingascourtsh0000wieg"
+    },
+    {
+      "title": "Creative Capital",
+      "url": "https://openlibrary.org/books/OL11831038M"
+    },
+    {
+      "title": "Crystal Fire",
+      "url": "https://openlibrary.org/books/OL1007546M"
+    },
+    {
+      "title": "Cypherpunks",
+      "url": "https://openlibrary.org/works/OL20037452W"
+    },
+    {
+      "title": "Daily Rituals How Artists Work",
+      "url": "https://openlibrary.org/books/OL25427769M"
+    },
+    {
+      "title": "Dealers of Lightning",
+      "url": "https://openlibrary.org/books/OL384482M"
+    },
+    {
+      "title": "Death in the Clouds",
+      "url": "https://openlibrary.org/books/OL26137013M"
+    },
+    {
+      "title": "Debt",
+      "url": "https://openlibrary.org/books/OL24088724M"
+    },
+    {
+      "title": "Designing Data Visualizations",
+      "url": "https://openlibrary.org/books/OL25564717M"
+    },
+    {
+      "title": "Designing Walkable Urban Thoroughfares A Context Sensitive Approach",
+      "url": "https://openlibrary.org/books/OL24523698M"
+    },
+    {
+      "title": "Designing for People",
+      "url": "https://openlibrary.org/books/OL8782513M"
+    },
+    {
+      "title": "Dictator (Cicero Trilogy)",
+      "url": "https://openlibrary.org/books/OL28293843M"
+    },
+    {
+      "title": "Dracula",
+      "url": "https://openlibrary.org/works/OL85892W"
+    },
+    {
+      "title": "Dreaming in Chinese",
+      "url": "https://openlibrary.org/books/OL24983387M"
+    },
+    {
+      "title": "Dune",
+      "url": "https://openlibrary.org/works/OL893415W"
+    },
+    {
+      "title": "Engineers' Dreams",
+      "url": "https://openlibrary.org/books/OL44581255M"
+    },
+    {
+      "title": "Engines of Logic",
+      "url": "https://openlibrary.org/books/OL7453837M"
+    },
+    {
+      "title": "English Society in the Early Middle Ages (1066-1307) Vol. 3",
+      "url": "https://archive.org/details/englishsocietyin00dori"
+    },
+    {
+      "title": "Enlightenment 2.0",
+      "url": "https://openlibrary.org/books/OL27164333M"
+    },
+    {
+      "title": "Envisioning Information",
+      "url": "https://openlibrary.org/books/OL39470942M"
+    },
+    {
+      "title": "Epic Measures",
+      "url": "https://openlibrary.org/books/OL27180910M"
+    },
+    {
+      "title": "Essays of E. B. White",
+      "url": "https://openlibrary.org/books/OL390289M"
+    },
+    {
+      "title": "Evolution Of Cooperation",
+      "url": "https://openlibrary.org/books/OL21456050M"
+    },
+    {
+      "title": "Existential America",
+      "url": "https://openlibrary.org/books/OL26814407M"
+    },
+    {
+      "title": "Expert Political Judgment",
+      "url": "https://openlibrary.org/books/OL3311005M"
+    },
+    {
+      "title": "Extrapolation, Interpolation, and Smoothing of Stationary Time Series",
+      "url": "https://openlibrary.org/books/OL22131199M"
+    },
+    {
+      "title": "Extremely Loud and Incredibly Close",
+      "url": "https://archive.org/details/extremelyloudinc00foer_0"
+    },
+    {
+      "title": "FAA Multiengine Flying",
+      "url": "https://openlibrary.org/books/OL3322358M"
+    },
+    {
+      "title": "FARAIM 2013",
+      "url": "https://archive.org/details/faraim2013federa0000unse"
+    },
+    {
+      "title": "Fall of Giants",
+      "url": "https://openlibrary.org/books/OL35067326M"
+    },
+    {
+      "title": "Fate Is the Hunter",
+      "url": "https://openlibrary.org/books/OL2726497M"
+    },
+    {
+      "title": "Fate, Time, and Language",
+      "url": "https://openlibrary.org/books/OL24453029M"
+    },
+    {
+      "title": "Fear No Evil",
+      "url": "https://openlibrary.org/books/OL372209M"
+    },
+    {
+      "title": "Feynman Lectures On Gravitation",
+      "url": "https://openlibrary.org/books/OL8024096M"
+    },
+    {
+      "title": "Feynman Lectures on Computation",
+      "url": "https://openlibrary.org/books/OL987022M"
+    },
+    {
+      "title": "First, Break All the Rules",
+      "url": "https://archive.org/details/firstbreakallrul0000buck_u8a0"
+    },
+    {
+      "title": "Fluid Concepts And Creative Analogies",
+      "url": "https://openlibrary.org/books/OL1432732M"
+    },
+    {
+      "title": "Fly and the Fly-Bottle",
+      "url": "https://openlibrary.org/works/OL28352858W"
+    },
+    {
+      "title": "Flying IFR",
+      "url": "https://openlibrary.org/books/OL8615712M"
+    },
+    {
+      "title": "Flying the Alaska Wild",
+      "url": "https://archive.org/details/flyingalaskawild0000maso"
+    },
+    {
+      "title": "Foundation's Edge",
+      "url": "https://openlibrary.org/works/OL46302W"
+    },
+    {
+      "title": "From Counterculture to Cyberculture",
+      "url": "https://openlibrary.org/books/OL3417830M"
+    },
+    {
+      "title": "From Satori to Silicon Valley",
+      "url": "https://archive.org/details/fromsatoritosili00rosz"
+    },
+    {
+      "title": "From Third World to First",
+      "url": "https://openlibrary.org/books/OL25663687M"
+    },
+    {
+      "title": "Functional Differential Geometry",
+      "url": "https://openlibrary.org/books/OL28355472M"
+    },
+    {
+      "title": "Future Perfect",
+      "url": "https://openlibrary.org/books/OL25372378M"
+    },
+    {
+      "title": "Future Shop",
+      "url": "https://archive.org/details/futureshophownew00snid"
+    },
+    {
+      "title": "GDP",
+      "url": "https://openlibrary.org/books/OL26822482M"
+    },
+    {
+      "title": "Garbage Collection",
+      "url": "https://openlibrary.org/books/OL977411M"
+    },
+    {
+      "title": "General Knowledge",
+      "url": "https://openlibrary.org/works/OL4346383W"
+    },
+    {
+      "title": "Genghis Khan",
+      "url": "https://openlibrary.org/books/OL26888226M"
+    },
+    {
+      "title": "Ghetto at the Center of the World",
+      "url": "https://openlibrary.org/books/OL24478994M"
+    },
+    {
+      "title": "Global Catastrophic Risks",
+      "url": "https://openlibrary.org/books/OL28468680M"
+    },
+    {
+      "title": "Go Set a Watchman",
+      "url": "https://openlibrary.org/books/OL26435353M"
+    },
+    {
+      "title": "Go To",
+      "url": "https://openlibrary.org/books/OL22148389M"
+    },
+    {
+      "title": "Good Hunting",
+      "url": "https://openlibrary.org/books/OL27160023M"
+    },
+    {
+      "title": "Governing the Commons",
+      "url": "https://openlibrary.org/books/OL1850361M"
+    },
+    {
+      "title": "Grid Systems in Graphic Design",
+      "url": "https://openlibrary.org/books/OL48565626M"
+    },
+    {
+      "title": "Hacking the Xbox",
+      "url": "https://openlibrary.org/books/OL9690551M"
+    },
+    {
+      "title": "Hamlet",
+      "url": "https://openlibrary.org/books/OL3673295M"
+    },
+    {
+      "title": "Hard Drive",
+      "url": "https://openlibrary.org/books/OL1745407M"
+    },
+    {
+      "title": "Hard Landing",
+      "url": "https://openlibrary.org/books/OL290248M"
+    },
+    {
+      "title": "Hard Times",
+      "url": "https://openlibrary.org/works/OL8193387W"
+    },
+    {
+      "title": "Has Globalization Gone Too Far",
+      "url": "https://openlibrary.org/books/OL969949M"
+    },
+    {
+      "title": "Has Man A Future",
+      "url": "https://openlibrary.org/books/OL7646882M"
+    },
+    {
+      "title": "Head to Head",
+      "url": "https://openlibrary.org/books/OL1553302M"
+    },
+    {
+      "title": "Hire With Your Head",
+      "url": "https://openlibrary.org/books/OL17856398M"
+    },
+    {
+      "title": "Historic San Francisco",
+      "url": "https://openlibrary.org/works/OL3494371W"
+    },
+    {
+      "title": "History of Engineering Drawing",
+      "url": "https://openlibrary.org/books/OL18739593M"
+    },
+    {
+      "title": "Hitch 22",
+      "url": "https://archive.org/details/hitch22confessio0000hitc"
+    },
+    {
+      "title": "Hooligan",
+      "url": "https://openlibrary.org/books/OL3177141M"
+    },
+    {
+      "title": "How Judges Think",
+      "url": "https://openlibrary.org/books/OL11125223M"
+    },
+    {
+      "title": "How Not to Network a Nation",
+      "url": "https://archive.org/details/hownottonetworkn0000pete"
+    },
+    {
+      "title": "How Will You Measure Your Life",
+      "url": "https://openlibrary.org/books/OL27135298M"
+    },
+    {
+      "title": "How the Internet Became Commercial",
+      "url": "https://openlibrary.org/books/OL27200956M"
+    },
+    {
+      "title": "How to Abandon Ship",
+      "url": "https://openlibrary.org/books/OL2042205M"
+    },
+    {
+      "title": "How to Be Alone",
+      "url": "https://openlibrary.org/books/OL3383663M"
+    },
+    {
+      "title": "How to Be a Carioca",
+      "url": "https://archive.org/details/howtobecariocaal0000unse"
+    },
+    {
+      "title": "How to Lie with Statistics",
+      "url": "https://openlibrary.org/books/OL1418542M"
+    },
+    {
+      "title": "How to Live",
+      "url": "https://openlibrary.org/books/OL24377256M"
+    },
+    {
+      "title": "How to Repair Your Motorcycle (Motorbooks Workshop)",
+      "url": "https://openlibrary.org/books/OL10900792M"
+    },
+    {
+      "title": "How to Solve It",
+      "url": "https://openlibrary.org/books/OL16328158M"
+    },
+    {
+      "title": "How to Study Public Life",
+      "url": "https://archive.org/details/howtostudypublic0000gehl"
+    },
+    {
+      "title": "How to Survive in Your Native Land",
+      "url": "https://archive.org/details/howtosurviveinyo0000hern"
+    },
+    {
+      "title": "Human Enhancement",
+      "url": "https://openlibrary.org/books/OL17008084M"
+    },
+    {
+      "title": "Human Society in Ethics and Politics",
+      "url": "https://openlibrary.org/books/OL25285736M"
+    },
+    {
+      "title": "I Contain Multitudes",
+      "url": "https://openlibrary.org/works/OL17801058W"
+    },
+    {
+      "title": "I Didn't Do It for You",
+      "url": "https://openlibrary.org/books/OL24929355M"
+    },
+    {
+      "title": "If the Universe Is Teeming with Aliens ... WHERE IS EVERYBODY",
+      "url": "https://archive.org/details/ifuniverseisteem0000webb"
+    },
+    {
+      "title": "Impro",
+      "url": "https://openlibrary.org/books/OL18397341M"
+    },
+    {
+      "title": "In Praise of Idleness",
+      "url": "https://openlibrary.org/books/OL3288315M"
+    },
+    {
+      "title": "In Search of Schrödinger's Cat",
+      "url": "https://openlibrary.org/books/OL7825715M"
+    },
+    {
+      "title": "In the Company of Giants",
+      "url": "https://openlibrary.org/books/OL7295279M"
+    },
+    {
+      "title": "In the Footsteps of Mr. Kurtz",
+      "url": "https://openlibrary.org/books/OL6790684M"
+    },
+    {
+      "title": "Incompleteness",
+      "url": "https://openlibrary.org/books/OL7451835M"
+    },
+    {
+      "title": "India Becoming",
+      "url": "https://openlibrary.org/books/OL25139228M"
+    },
+    {
+      "title": "Influence",
+      "url": "https://openlibrary.org/books/OL7726679M"
+    },
+    {
+      "title": "Innovation and Entrepreneurship",
+      "url": "https://openlibrary.org/books/OL7283054M"
+    },
+    {
+      "title": "Inside the Painter's Studio",
+      "url": "https://archive.org/details/insidepaintersst0000figj"
+    },
+    {
+      "title": "Inside the Peloton",
+      "url": "https://openlibrary.org/books/OL28477017M"
+    },
+    {
+      "title": "Instrument Flight Training Manual As Developed by Professional Instrument Courses, Inc. 3rd Ed.",
+      "url": "https://openlibrary.org/books/OL11434784M"
+    },
+    {
+      "title": "Instrument Flying",
+      "url": "https://openlibrary.org/books/OL673315M"
+    },
+    {
+      "title": "Instrument Oral Exam Guide",
+      "url": "https://archive.org/details/instrumentoralex0000mich"
+    },
+    {
+      "title": "Instrument Procedures Handbook",
+      "url": "https://openlibrary.org/works/OL21054807W"
+    },
+    {
+      "title": "Introduction to Algorithms, Second Edition",
+      "url": "https://openlibrary.org/books/OL9801324M"
+    },
+    {
+      "title": "Introduction to Common Lisp",
+      "url": "https://openlibrary.org/books/OL21126763M"
+    },
+    {
+      "title": "Intuition Pumps And Other Tools for Thinking",
+      "url": "https://openlibrary.org/books/OL25442968M"
+    },
+    {
+      "title": "Inventing Freedom",
+      "url": "https://openlibrary.org/works/OL19974353W"
+    },
+    {
+      "title": "Invisible Cities",
+      "url": "https://openlibrary.org/books/OL16827152M"
+    },
+    {
+      "title": "Isn't it Well for Ye",
+      "url": "https://openlibrary.org/books/OL26100837M"
+    },
+    {
+      "title": "It's Our Turn to Eat",
+      "url": "https://openlibrary.org/books/OL22849842M"
+    },
+    {
+      "title": "J. Robert Oppenheimer",
+      "url": "https://archive.org/details/jrobertoppenheim00pais_0"
+    },
+    {
+      "title": "JavaScript",
+      "url": "https://openlibrary.org/books/OL10781042M"
+    },
+    {
+      "title": "Jeppesen Instrument Commercial",
+      "url": "https://openlibrary.org/books/OL9617569M"
+    },
+    {
+      "title": "Jeppesen",
+      "url": "https://openlibrary.org/books/OL47796625M"
+    },
+    {
+      "title": "John Maynard Keynes",
+      "url": "https://archive.org/details/johnmaynardkeyne0000skid_q4f4"
+    },
+    {
+      "title": "Justice as Fairness",
+      "url": "https://openlibrary.org/books/OL15978166M"
+    },
+    {
+      "title": "K2",
+      "url": "https://openlibrary.org/books/OL23208366M"
+    },
+    {
+      "title": "Kawasaki Klr650 1987-2006",
+      "url": "https://archive.org/details/clymerkawasakikl0000boga"
+    },
+    {
+      "title": "King Instrument Rating Knowledge Test Course",
+      "url": "https://openlibrary.org/works/OL35386385W"
+    },
+    {
+      "title": "Kissinger",
+      "url": "https://openlibrary.org/books/OL26887098M"
+    },
+    {
+      "title": "LISP 1.5 Programmer's Manual",
+      "url": "https://openlibrary.org/books/OL26204134M"
+    },
+    {
+      "title": "Lady Icarus the Life of Irish Aviator Lady Mary Heath",
+      "url": "https://openlibrary.org/books/OL18488952M"
+    },
+    {
+      "title": "Land of Lisp",
+      "url": "https://openlibrary.org/books/OL25431152M"
+    },
+    {
+      "title": "Lapham's Quarterly",
+      "url": "https://openlibrary.org/works/OL24277402W"
+    },
+    {
+      "title": "Last and First Men",
+      "url": "https://openlibrary.org/works/OL3290731W"
+    },
+    {
+      "title": "Le Ton Beau De Marot",
+      "url": "https://openlibrary.org/books/OL7594100M"
+    },
+    {
+      "title": "Learn to Play Go",
+      "url": "https://openlibrary.org/books/OL30281979M"
+    },
+    {
+      "title": "Legacy",
+      "url": "https://openlibrary.org/books/OL25115827M"
+    },
+    {
+      "title": "Less and More",
+      "url": "https://openlibrary.org/books/OL27944542M"
+    },
+    {
+      "title": "Let My People Go Surfing",
+      "url": "https://openlibrary.org/books/OL24931646M"
+    },
+    {
+      "title": "Letters to a Young Contrarian (Art of Mentoring)",
+      "url": "https://openlibrary.org/books/OL7593508M"
+    },
+    {
+      "title": "Libraries of the Future",
+      "url": "https://openlibrary.org/works/OL10471033W"
+    },
+    {
+      "title": "Life Stories",
+      "url": "https://openlibrary.org/books/OL18480915M"
+    },
+    {
+      "title": "Life in Moving Fluids",
+      "url": "https://openlibrary.org/books/OL7756739M"
+    },
+    {
+      "title": "Lincoln Speeches and Writings 1859-1865",
+      "url": "https://archive.org/details/speecheswritings0000linc"
+    },
+    {
+      "title": "Lincoln",
+      "url": "https://openlibrary.org/books/OL24086577M"
+    },
+    {
+      "title": "Lonely Planet Brazil (Country Guide)",
+      "url": "https://archive.org/details/lonelyplanetbraz00regi"
+    },
+    {
+      "title": "Lore of Running",
+      "url": "https://openlibrary.org/books/OL3552783M"
+    },
+    {
+      "title": "MCAT Biology (Examkrackers)",
+      "url": "https://archive.org/details/examkrackersmcat0000orsa_l2s3"
+    },
+    {
+      "title": "Machine Learning for Hackers",
+      "url": "https://openlibrary.org/books/OL25537172M"
+    },
+    {
+      "title": "Machine Learning",
+      "url": "https://openlibrary.org/books/OL11817047M"
+    },
+    {
+      "title": "Make Better Landings",
+      "url": "https://openlibrary.org/books/OL3483323M"
+    },
+    {
+      "title": "Making Silicon Valley",
+      "url": "https://openlibrary.org/books/OL9621499M"
+    },
+    {
+      "title": "Manhattan Project",
+      "url": "https://openlibrary.org/books/OL43250271M"
+    },
+    {
+      "title": "Manifestoes",
+      "url": "https://openlibrary.org/books/OL374688M"
+    },
+    {
+      "title": "Mapping the Airways",
+      "url": "https://openlibrary.org/books/OL28839312M"
+    },
+    {
+      "title": "Marshall McLuhan",
+      "url": "https://archive.org/details/marshallmcluhany0000coup"
+    },
+    {
+      "title": "Mass Flourishing",
+      "url": "https://openlibrary.org/books/OL26141942M"
+    },
+    {
+      "title": "Master and Commander (Vol. Book 1) (AubreyMaturin Novels)",
+      "url": "https://openlibrary.org/books/OL7451407M"
+    },
+    {
+      "title": "Mathematics and Plausible Reasoning",
+      "url": "https://openlibrary.org/books/OL36646650M"
+    },
+    {
+      "title": "Matterhorn",
+      "url": "https://openlibrary.org/works/OL15727102W"
+    },
+    {
+      "title": "Maui Revealed",
+      "url": "https://archive.org/details/isbn_9780981461038"
+    },
+    {
+      "title": "Memorial",
+      "url": "https://openlibrary.org/books/OL25179916M"
+    },
+    {
+      "title": "Memory Machines",
+      "url": "https://openlibrary.org/books/OL26181494M"
+    },
+    {
+      "title": "Men, Machines, and Modern Times",
+      "url": "https://openlibrary.org/books/OL27726561M"
+    },
+    {
+      "title": "Metamagical Themas",
+      "url": "https://openlibrary.org/books/OL21577344M"
+    },
+    {
+      "title": "Midnight's Children",
+      "url": "https://openlibrary.org/books/OL32380667M"
+    },
+    {
+      "title": "Mind-Body Problem",
+      "url": "https://archive.org/details/mindbodyproblem0000gold"
+    },
+    {
+      "title": "Mindstorms",
+      "url": "https://openlibrary.org/books/OL21521001M"
+    },
+    {
+      "title": "Miracle in the Andes",
+      "url": "https://openlibrary.org/books/OL40289284M"
+    },
+    {
+      "title": "Mirror Worlds",
+      "url": "https://openlibrary.org/works/OL937468W"
+    },
+    {
+      "title": "Money Game",
+      "url": "https://openlibrary.org/books/OL18915113M"
+    },
+    {
+      "title": "Montaigne Complete Essays",
+      "url": "https://openlibrary.org/books/OL15319718M"
+    },
+    {
+      "title": "Moon Lander",
+      "url": "https://openlibrary.org/books/OL24083552M"
+    },
+    {
+      "title": "Moral Mazes",
+      "url": "https://openlibrary.org/books/OL23988517M"
+    },
+    {
+      "title": "Mr. Penumbra's 24-Hour Bookstore",
+      "url": "https://openlibrary.org/books/OL26318357M"
+    },
+    {
+      "title": "Murder Trials",
+      "url": "https://openlibrary.org/books/OL8133227M"
+    },
+    {
+      "title": "My Best Mathematical and Logic Puzzles (Dover Recreational Math)",
+      "url": "https://openlibrary.org/books/OL1100813M"
+    },
+    {
+      "title": "My First Trip to China",
+      "url": "https://archive.org/details/myfirsttriptochi0000unse"
+    },
+    {
+      "title": "My Years with General Motors",
+      "url": "https://openlibrary.org/books/OL1851610M"
+    },
+    {
+      "title": "Myth of the Machine",
+      "url": "https://openlibrary.org/books/OL7366100M"
+    },
+    {
+      "title": "Nations and Nationalism since 1780",
+      "url": "https://openlibrary.org/books/OL1712838M"
+    },
+    {
+      "title": "Network Security Hacks",
+      "url": "https://openlibrary.org/books/OL3327683M"
+    },
+    {
+      "title": "Neuroscience",
+      "url": "https://openlibrary.org/books/OL27278766M"
+    },
+    {
+      "title": "New Atlantis",
+      "url": "https://openlibrary.org/works/OL69415W"
+    },
+    {
+      "title": "Nixon Agonistes",
+      "url": "https://openlibrary.org/books/OL3578746M"
+    },
+    {
+      "title": "Nixonland",
+      "url": "https://openlibrary.org/books/OL10723368M"
+    },
+    {
+      "title": "Nmap Network Scanning",
+      "url": "https://openlibrary.org/books/OL26090324M"
+    },
+    {
+      "title": "No Future for You",
+      "url": "https://archive.org/details/nofutureforyousa0000unse"
+    },
+    {
+      "title": "No One a Neutral",
+      "url": "https://openlibrary.org/books/OL1891407M"
+    },
+    {
+      "title": "North Star over My Shoulder",
+      "url": "https://openlibrary.org/books/OL7947986M"
+    },
+    {
+      "title": "Notes on the Synthesis of Form",
+      "url": "https://openlibrary.org/books/OL22145356M"
+    },
+    {
+      "title": "Ocean Flying",
+      "url": "https://archive.org/details/oceanflying0000sacc"
+    },
+    {
+      "title": "Oliver Byrne",
+      "url": "https://openlibrary.org/books/OL27936588M"
+    },
+    {
+      "title": "On Inequality",
+      "url": "https://openlibrary.org/books/OL27190194M"
+    },
+    {
+      "title": "On Intelligence",
+      "url": "https://openlibrary.org/books/OL23272913M"
+    },
+    {
+      "title": "On Lisp",
+      "url": "https://openlibrary.org/books/OL7331030M"
+    },
+    {
+      "title": "On Ugliness",
+      "url": "https://archive.org/details/onugliness0000unse"
+    },
+    {
+      "title": "On the Shortness of Life",
+      "url": "https://openlibrary.org/books/OL3424522M"
+    },
+    {
+      "title": "Once An Eagle",
+      "url": "https://archive.org/details/onceeaglenovel0000myre"
+    },
+    {
+      "title": "Only the Paranoid Survive",
+      "url": "https://openlibrary.org/books/OL7440209M"
+    },
+    {
+      "title": "Open City",
+      "url": "https://openlibrary.org/books/OL32022983M"
+    },
+    {
+      "title": "Operating Systems",
+      "url": "https://openlibrary.org/works/OL1970688W"
+    },
+    {
+      "title": "Orality and Literacy 30th Anniversary Edition (New Accents)",
+      "url": "https://openlibrary.org/books/OL25206717M"
+    },
+    {
+      "title": "Organizing Genius",
+      "url": "https://openlibrary.org/books/OL7407173M"
+    },
+    {
+      "title": "Origins of Genius",
+      "url": "https://openlibrary.org/books/OL382634M"
+    },
+    {
+      "title": "Our Knowledge of the External World (Routledge Classics)",
+      "url": "https://openlibrary.org/books/OL23161482M"
+    },
+    {
+      "title": "Out of the Crisis",
+      "url": "https://openlibrary.org/books/OL2875698M"
+    },
+    {
+      "title": "Out of their Minds",
+      "url": "https://openlibrary.org/books/OL357031M"
+    },
+    {
+      "title": "PARC",
+      "url": "https://openlibrary.org/works/OL10264731W"
+    },
+    {
+      "title": "Paradigms of Artificial Intelligence Programming",
+      "url": "https://openlibrary.org/books/OL1558274M"
+    },
+    {
+      "title": "Paradise Lost",
+      "url": "https://openlibrary.org/books/OL3702622M"
+    },
+    {
+      "title": "Parallel and Concurrent Programming in Haskell",
+      "url": "https://openlibrary.org/books/OL26184440M"
+    },
+    {
+      "title": "Payments Systems in the U.S. - Second Edition",
+      "url": "https://openlibrary.org/books/OL60346675M"
+    },
+    {
+      "title": "Perfidia A novel",
+      "url": "https://openlibrary.org/books/OL26309195M"
+    },
+    {
+      "title": "Photography",
+      "url": "https://openlibrary.org/books/OL22604101M"
+    },
+    {
+      "title": "Photoviz Visualizing Information through Photography",
+      "url": "https://openlibrary.org/books/OL34531465M"
+    },
+    {
+      "title": "Pigeon",
+      "url": "https://openlibrary.org/books/OL7347731M"
+    },
+    {
+      "title": "Pilot's Handbook of Aeronautical Knowledge",
+      "url": "https://openlibrary.org/books/OL26003503M"
+    },
+    {
+      "title": "Pioneer Aviators of the World",
+      "url": "https://openlibrary.org/books/OL28445560M"
+    },
+    {
+      "title": "Pioneering Portfolio Management",
+      "url": "https://openlibrary.org/books/OL7722630M"
+    },
+    {
+      "title": "Plagues and Peoples",
+      "url": "https://openlibrary.org/books/OL17884881M"
+    },
+    {
+      "title": "Plato at the Googleplex",
+      "url": "https://openlibrary.org/books/OL26178484M"
+    },
+    {
+      "title": "Polemics",
+      "url": "https://openlibrary.org/books/OL17902097M"
+    },
+    {
+      "title": "Pompeii",
+      "url": "https://openlibrary.org/books/OL22860209M"
+    },
+    {
+      "title": "Poor Charlie's Almanack",
+      "url": "https://openlibrary.org/works/OL8928012W"
+    },
+    {
+      "title": "Poorly Made in China",
+      "url": "https://openlibrary.org/books/OL22971950M"
+    },
+    {
+      "title": "Pop Internationalism",
+      "url": "https://archive.org/details/popinternational00paul"
+    },
+    {
+      "title": "Popper Selections",
+      "url": "https://openlibrary.org/books/OL3185778M"
+    },
+    {
+      "title": "Positioning",
+      "url": "https://openlibrary.org/books/OL7298818M"
+    },
+    {
+      "title": "Possiplex",
+      "url": "https://openlibrary.org/works/OL42994472W"
+    },
+    {
+      "title": "Postcards from Tomorrow Square",
+      "url": "https://openlibrary.org/books/OL19890284M"
+    },
+    {
+      "title": "Practical Common Lisp",
+      "url": "https://openlibrary.org/books/OL8848618M"
+    },
+    {
+      "title": "Priceless",
+      "url": "https://openlibrary.org/books/OL25367740M"
+    },
+    {
+      "title": "Principles of Quantum Mechanics",
+      "url": "https://openlibrary.org/books/OL1101918M"
+    },
+    {
+      "title": "Private Pilot and Recreational Pilot FAA Knowledge Test 2010",
+      "url": "https://archive.org/details/privatepilotrecr0000glei_j3r7"
+    },
+    {
+      "title": "Process and Reality",
+      "url": "https://openlibrary.org/books/OL4570566M"
+    },
+    {
+      "title": "Proficient Motorcycling",
+      "url": "https://openlibrary.org/books/OL8712865M"
+    },
+    {
+      "title": "Programmers at Work",
+      "url": "https://openlibrary.org/books/OL2186582M"
+    },
+    {
+      "title": "Programming Collective Intelligence",
+      "url": "https://openlibrary.org/books/OL7581514M"
+    },
+    {
+      "title": "Programs and Manifestoes on 20th-Century Architecture",
+      "url": "https://openlibrary.org/books/OL17934128M"
+    },
+    {
+      "title": "Purely Functional Data Structures",
+      "url": "https://openlibrary.org/books/OL25311129M"
+    },
+    {
+      "title": "Pyongyang",
+      "url": "https://openlibrary.org/books/OL23115332M"
+    },
+    {
+      "title": "Quantum Computation and Quantum Information",
+      "url": "https://openlibrary.org/books/OL26405624M"
+    },
+    {
+      "title": "Quantum Computing since Democritus",
+      "url": "https://openlibrary.org/books/OL25429115M"
+    },
+    {
+      "title": "Quantum Electrodynamics",
+      "url": "https://openlibrary.org/books/OL343821M"
+    },
+    {
+      "title": "Quantum Field Theory and the Standard Model",
+      "url": "https://openlibrary.org/books/OL26182095M"
+    },
+    {
+      "title": "Quantum Field Theory in a Nutshell",
+      "url": "https://openlibrary.org/books/OL7756217M"
+    },
+    {
+      "title": "Quantum Mechanics",
+      "url": "https://openlibrary.org/books/OL25745850M"
+    },
+    {
+      "title": "Quantum Physics of Atoms, Molecules, Solids, Nuclei, and Particles",
+      "url": "https://openlibrary.org/works/OL5360163W"
+    },
+    {
+      "title": "Racing Weight",
+      "url": "https://openlibrary.org/books/OL23725340M"
+    },
+    {
+      "title": "Ragtime",
+      "url": "https://openlibrary.org/works/OL55239W"
+    },
+    {
+      "title": "Real Analysis",
+      "url": "https://openlibrary.org/books/OL371197M"
+    },
+    {
+      "title": "Reamde",
+      "url": "https://openlibrary.org/books/OL32760954M"
+    },
+    {
+      "title": "Recent economic changes, and their effect on the production and distribution of wealth and the well-being of society",
+      "url": "https://openlibrary.org/works/OL28505848W"
+    },
+    {
+      "title": "Reckless Disregard",
+      "url": "https://archive.org/details/recklessdisregar00adle"
+    },
+    {
+      "title": "Red Plenty",
+      "url": "https://openlibrary.org/books/OL24825920M"
+    },
+    {
+      "title": "Reflections on the Revolution In Europe",
+      "url": "https://openlibrary.org/books/OL23153563M"
+    },
+    {
+      "title": "Regional Advantage",
+      "url": "https://openlibrary.org/books/OL7693399M"
+    },
+    {
+      "title": "Reinventing the Automobile",
+      "url": "https://openlibrary.org/books/OL24476294M"
+    },
+    {
+      "title": "Republic",
+      "url": "https://openlibrary.org/books/OL1718781M"
+    },
+    {
+      "title": "Return to the Little Kingdom",
+      "url": "https://archive.org/details/returntolittleki0000mori_u2z0"
+    },
+    {
+      "title": "River Town",
+      "url": "https://openlibrary.org/books/OL7283173M"
+    },
+    {
+      "title": "Roskam's Airplane War Stories",
+      "url": "https://openlibrary.org/books/OL12171460M"
+    },
+    {
+      "title": "Saint-Exupery",
+      "url": "https://openlibrary.org/books/OL1080518M"
+    },
+    {
+      "title": "Sands of Mars",
+      "url": "https://openlibrary.org/books/OL26855285M"
+    },
+    {
+      "title": "Sapiens",
+      "url": "https://openlibrary.org/books/OL28440487M"
+    },
+    {
+      "title": "Say Again, Please",
+      "url": "https://openlibrary.org/works/OL2932160W"
+    },
+    {
+      "title": "Science in History",
+      "url": "https://openlibrary.org/works/OL1320050W"
+    },
+    {
+      "title": "Science",
+      "url": "https://openlibrary.org/books/OL7352693M"
+    },
+    {
+      "title": "Selections from Science and Sanity, Second Edition",
+      "url": "https://openlibrary.org/books/OL47273641M"
+    },
+    {
+      "title": "Semiology of Graphics",
+      "url": "https://openlibrary.org/books/OL24524277M"
+    },
+    {
+      "title": "Setting the Table",
+      "url": "https://openlibrary.org/books/OL24846346M"
+    },
+    {
+      "title": "Seven Pillars of Wisdom",
+      "url": "https://openlibrary.org/books/OL47271054M"
+    },
+    {
+      "title": "Shark Bait",
+      "url": "https://openlibrary.org/books/OL40267463M"
+    },
+    {
+      "title": "Simulation and Its Discontents",
+      "url": "https://openlibrary.org/books/OL17075610M"
+    },
+    {
+      "title": "Singularity Rising",
+      "url": "https://openlibrary.org/books/OL26111960M"
+    },
+    {
+      "title": "Skeletons on the Zahara",
+      "url": "https://openlibrary.org/books/OL3690306M"
+    },
+    {
+      "title": "Skunk Works",
+      "url": "https://openlibrary.org/books/OL1084890M"
+    },
+    {
+      "title": "Small Wars, Faraway Places",
+      "url": "https://openlibrary.org/books/OL25438606M"
+    },
+    {
+      "title": "Smalltalk-80",
+      "url": "https://archive.org/details/smalltalk80langu00gold"
+    },
+    {
+      "title": "Snow Falling on Cedars",
+      "url": "https://openlibrary.org/works/OL8036957W"
+    },
+    {
+      "title": "Snowdrops",
+      "url": "https://openlibrary.org/books/OL30136039M"
+    },
+    {
+      "title": "Something Incredibly Wonderful Happens",
+      "url": "https://openlibrary.org/books/OL22796569M"
+    },
+    {
+      "title": "Spacetime and Geometry",
+      "url": "https://openlibrary.org/books/OL3323443M"
+    },
+    {
+      "title": "Special Relativity",
+      "url": "https://openlibrary.org/books/OL7964796M"
+    },
+    {
+      "title": "St. Augustine Confessions",
+      "url": "https://openlibrary.org/books/OL7384019M"
+    },
+    {
+      "title": "Stairway Walks in San Francisco",
+      "url": "https://archive.org/details/stairwaywalksins0000baka_q7v1"
+    },
+    {
+      "title": "Starting Strength",
+      "url": "https://openlibrary.org/books/OL27089045M"
+    },
+    {
+      "title": "Statistics As Principled Argument",
+      "url": "https://openlibrary.org/books/OL1109349M"
+    },
+    {
+      "title": "Steve Jobs",
+      "url": "https://openlibrary.org/works/OL16085155W"
+    },
+    {
+      "title": "Stories of Your Life and Others",
+      "url": "https://openlibrary.org/works/OL6216050W"
+    },
+    {
+      "title": "Strangers Drowning",
+      "url": "https://openlibrary.org/books/OL26882090M"
+    },
+    {
+      "title": "Straw Dogs",
+      "url": "https://openlibrary.org/books/OL8632486M"
+    },
+    {
+      "title": "Streetfight",
+      "url": "https://openlibrary.org/books/OL25906683M"
+    },
+    {
+      "title": "Structure and Interpretation of Classical Mechanics",
+      "url": "https://openlibrary.org/books/OL9701825M"
+    },
+    {
+      "title": "Structure and Interpretation of Computer Programs",
+      "url": "https://openlibrary.org/works/OL3267304W"
+    },
+    {
+      "title": "Stuff Matters",
+      "url": "https://archive.org/details/stuffmattersexpl0000miod"
+    },
+    {
+      "title": "Suck",
+      "url": "https://openlibrary.org/books/OL683020M"
+    },
+    {
+      "title": "Sum",
+      "url": "https://openlibrary.org/books/OL24405883M"
+    },
+    {
+      "title": "Super Sad True Love Story",
+      "url": "https://openlibrary.org/books/OL24419289M"
+    },
+    {
+      "title": "Superforecasting",
+      "url": "https://openlibrary.org/books/OL26682260M"
+    },
+    {
+      "title": "Superintelligence",
+      "url": "https://openlibrary.org/books/OL26411066M"
+    },
+    {
+      "title": "Swimming Across",
+      "url": "https://openlibrary.org/books/OL3940980M"
+    },
+    {
+      "title": "Swiss Graphic Design",
+      "url": "https://openlibrary.org/works/OL3963534W"
+    },
+    {
+      "title": "Tap Dancing to Work",
+      "url": "https://openlibrary.org/books/OL26089404M"
+    },
+    {
+      "title": "Team of Teams",
+      "url": "https://openlibrary.org/books/OL27181036M"
+    },
+    {
+      "title": "Technics and Civilization",
+      "url": "https://openlibrary.org/books/OL27285070M"
+    },
+    {
+      "title": "Technological Nature",
+      "url": "https://openlibrary.org/books/OL24383914M"
+    },
+    {
+      "title": "Technological Revolutions and Financial Capital",
+      "url": "https://archive.org/details/technologicalrev00carl"
+    },
+    {
+      "title": "Technology, Management, and Society",
+      "url": "https://openlibrary.org/books/OL24539218M"
+    },
+    {
+      "title": "Technopoly",
+      "url": "https://openlibrary.org/books/OL1567557M"
+    },
+    {
+      "title": "Tender Is the Night",
+      "url": "https://openlibrary.org/books/OL978005M"
+    },
+    {
+      "title": "Tenth of December",
+      "url": "https://openlibrary.org/books/OL26297747M"
+    },
+    {
+      "title": "The 40s The Story of a Decade",
+      "url": "https://openlibrary.org/books/OL25618133M"
+    },
+    {
+      "title": "The 60s The Story of a Decade",
+      "url": "https://openlibrary.org/books/OL27222909M"
+    },
+    {
+      "title": "The A. B. C. Murders",
+      "url": "https://openlibrary.org/books/OL28760044M"
+    },
+    {
+      "title": "The Accidental Theorist",
+      "url": "https://openlibrary.org/books/OL702705M"
+    },
+    {
+      "title": "The Adventures of Hajji Baba of Ispahan",
+      "url": "https://openlibrary.org/books/OL34878687M"
+    },
+    {
+      "title": "The Aeneid",
+      "url": "https://openlibrary.org/books/OL1568671M"
+    },
+    {
+      "title": "The Age of Em",
+      "url": "https://openlibrary.org/books/OL27210980M"
+    },
+    {
+      "title": "The Alexiad",
+      "url": "https://openlibrary.org/books/OL25618070M"
+    },
+    {
+      "title": "The Amber Spyglass",
+      "url": "https://openlibrary.org/books/OL23244828M"
+    },
+    {
+      "title": "The American Challenge",
+      "url": "https://openlibrary.org/books/OL46915830M"
+    },
+    {
+      "title": "The Ancestor's Tale",
+      "url": "https://archive.org/details/ancestorstalepil0000dawk"
+    },
+    {
+      "title": "The Andromeda Strain",
+      "url": "https://openlibrary.org/books/OL28134369M"
+    },
+    {
+      "title": "The Antarctic Book of Cooking and Cleaning",
+      "url": "https://openlibrary.org/books/OL35788324M"
+    },
+    {
+      "title": "The Arrival",
+      "url": "https://openlibrary.org/books/OL7516166M"
+    },
+    {
+      "title": "The Art and Craft of Problem Solving 1st Edition",
+      "url": "https://openlibrary.org/books/OL7612390M"
+    },
+    {
+      "title": "The Art of Computer Programming, Vol. 1",
+      "url": "https://openlibrary.org/books/OL657041M"
+    },
+    {
+      "title": "The Art of Doing Science and Engineering",
+      "url": "https://openlibrary.org/books/OL19020228M"
+    },
+    {
+      "title": "The Art of the Metaobject Protocol",
+      "url": "https://openlibrary.org/books/OL1538331M"
+    },
+    {
+      "title": "The Baffler (No. 12)",
+      "url": "https://archive.org/details/isbn_9781888984255"
+    },
+    {
+      "title": "The Beginning of Infinity",
+      "url": "https://openlibrary.org/books/OL24822868M"
+    },
+    {
+      "title": "The Bell System Technical Journal",
+      "url": "https://openlibrary.org/works/OL14940534W"
+    },
+    {
+      "title": "The Best Software Writing I",
+      "url": "https://openlibrary.org/books/OL18237893M"
+    },
+    {
+      "title": "The Big Score",
+      "url": "https://archive.org/details/bigscorebilli00malo"
+    },
+    {
+      "title": "The Biology of Cancer, 2nd Edition",
+      "url": "https://openlibrary.org/books/OL28439929M"
+    },
+    {
+      "title": "The Black Jacobins",
+      "url": "https://openlibrary.org/books/OL48118658M"
+    },
+    {
+      "title": "The Blind Watchmaker",
+      "url": "https://openlibrary.org/books/OL22737164M"
+    },
+    {
+      "title": "The Blue Bottle Craft of Coffee",
+      "url": "https://openlibrary.org/books/OL25435891M"
+    },
+    {
+      "title": "The Book of Disquiet (Serpent's Tail Classics)",
+      "url": "https://openlibrary.org/books/OL27135062M"
+    },
+    {
+      "title": "The Case for Mars",
+      "url": "https://openlibrary.org/books/OL24827075M"
+    },
+    {
+      "title": "The Casual Vacancy",
+      "url": "https://openlibrary.org/books/OL28124646M"
+    },
+    {
+      "title": "The Character of Physical Law",
+      "url": "https://openlibrary.org/books/OL25979640M"
+    },
+    {
+      "title": "The Charisma Myth",
+      "url": "https://openlibrary.org/books/OL25087352M"
+    },
+    {
+      "title": "The Checklist Manifesto",
+      "url": "https://openlibrary.org/books/OL26307417M"
+    },
+    {
+      "title": "The Chicken from Minsk",
+      "url": "https://openlibrary.org/books/OL1270679M"
+    },
+    {
+      "title": "The Children's Machine",
+      "url": "https://openlibrary.org/books/OL1568915M"
+    },
+    {
+      "title": "The Chosen Instrument",
+      "url": "https://archive.org/details/choseninstrument0000bend"
+    },
+    {
+      "title": "The City in History",
+      "url": "https://openlibrary.org/books/OL20253507M"
+    },
+    {
+      "title": "The Clash Of Civilizations",
+      "url": "https://openlibrary.org/works/OL3289930W"
+    },
+    {
+      "title": "The Clockwork Rocket (Orthogonal)",
+      "url": "https://openlibrary.org/books/OL27328215M"
+    },
+    {
+      "title": "The Closed World",
+      "url": "https://openlibrary.org/books/OL9854155M"
+    },
+    {
+      "title": "The Company of Strangers",
+      "url": "https://openlibrary.org/books/OL7758837M"
+    },
+    {
+      "title": "The Complacent Class",
+      "url": "https://openlibrary.org/books/OL26425400M"
+    },
+    {
+      "title": "The Computer and the Brain",
+      "url": "https://openlibrary.org/books/OL28371680M"
+    },
+    {
+      "title": "The Copernican Revolution",
+      "url": "https://openlibrary.org/books/OL21560122M"
+    },
+    {
+      "title": "The Corporation That Changed the World",
+      "url": "https://openlibrary.org/books/OL29088603M"
+    },
+    {
+      "title": "The Count of Monte Cristo",
+      "url": "https://openlibrary.org/books/OL23648707M"
+    },
+    {
+      "title": "The Cowshed",
+      "url": "https://openlibrary.org/books/OL27200058M"
+    },
+    {
+      "title": "The Culture of Education",
+      "url": "https://openlibrary.org/books/OL27957369M"
+    },
+    {
+      "title": "The Dawn of Innovation",
+      "url": "https://openlibrary.org/books/OL25299929M"
+    },
+    {
+      "title": "The Deep",
+      "url": "https://archive.org/details/deep0000unse_i1z9"
+    },
+    {
+      "title": "The Diary of John Evelyn Volume 2",
+      "url": "https://openlibrary.org/works/OL35362890W"
+    },
+    {
+      "title": "The Disappearance of Childhood",
+      "url": "https://openlibrary.org/books/OL1092073M"
+    },
+    {
+      "title": "The Dream Machine",
+      "url": "https://archive.org/details/dreammachinejcrl00wald"
+    },
+    {
+      "title": "The Drunkard's Walk",
+      "url": "https://openlibrary.org/books/OL23399925M"
+    },
+    {
+      "title": "The Dutch Republic",
+      "url": "https://openlibrary.org/books/OL22571248M"
+    },
+    {
+      "title": "The Dynamics of Creation",
+      "url": "https://openlibrary.org/books/OL1754570M"
+    },
+    {
+      "title": "The Early Asimov",
+      "url": "https://openlibrary.org/works/OL46191W"
+    },
+    {
+      "title": "The Educated Mind",
+      "url": "https://openlibrary.org/books/OL9668126M"
+    },
+    {
+      "title": "The Elements of Typographic Style",
+      "url": "https://openlibrary.org/books/OL3307819M"
+    },
+    {
+      "title": "The End of Error",
+      "url": "https://openlibrary.org/books/OL34611882M"
+    },
+    {
+      "title": "The Entrepreneur's Manual",
+      "url": "https://archive.org/details/entrepreneursman00whit"
+    },
+    {
+      "title": "The Essays",
+      "url": "https://openlibrary.org/works/OL44842W"
+    },
+    {
+      "title": "The Feynman Lectures on Physics, The Definitive Edition Volume 3 (2nd Edition)",
+      "url": "https://openlibrary.org/books/OL3436360M"
+    },
+    {
+      "title": "The Feynman Lectures on Physics, Vol. 1",
+      "url": "https://openlibrary.org/books/OL3436360M"
+    },
+    {
+      "title": "The Feynman Lectures on Physics, Vol. 2.",
+      "url": "https://openlibrary.org/books/OL3436360M"
+    },
+    {
+      "title": "The Fifth Generation",
+      "url": "https://archive.org/details/fifthgenerationa00feigrich"
+    },
+    {
+      "title": "The Flavor Bible",
+      "url": "https://openlibrary.org/books/OL18495826M"
+    },
+    {
+      "title": "The Founder's Dilemmas",
+      "url": "https://openlibrary.org/books/OL25033454M"
+    },
+    {
+      "title": "The Fringes of Power",
+      "url": "https://openlibrary.org/books/OL3029911M"
+    },
+    {
+      "title": "The Future and Its Enemies",
+      "url": "https://openlibrary.org/books/OL372450M"
+    },
+    {
+      "title": "The Futurists",
+      "url": "https://archive.org/details/futurists00toff"
+    },
+    {
+      "title": "The German Generals Talk",
+      "url": "https://openlibrary.org/books/OL19606705M"
+    },
+    {
+      "title": "The Goal",
+      "url": "https://openlibrary.org/books/OL27153187M"
+    },
+    {
+      "title": "The Golden Compass",
+      "url": "https://openlibrary.org/books/OL37035442M"
+    },
+    {
+      "title": "The Good Old Days--They Were Terrible!",
+      "url": "https://archive.org/details/goodolddaysthey00bett"
+    },
+    {
+      "title": "The Great A&P and the Struggle for Small Business in America",
+      "url": "https://openlibrary.org/books/OL24988752M"
+    },
+    {
+      "title": "The Great Escape",
+      "url": "https://openlibrary.org/works/OL3241392W"
+    },
+    {
+      "title": "The Great Fire",
+      "url": "https://openlibrary.org/books/OL7423343M"
+    },
+    {
+      "title": "The Great Gatsby",
+      "url": "https://openlibrary.org/books/OL46773254M"
+    },
+    {
+      "title": "The Gutenberg Galaxy",
+      "url": "https://openlibrary.org/works/OL871786W"
+    },
+    {
+      "title": "The Hand",
+      "url": "https://openlibrary.org/books/OL698697M"
+    },
+    {
+      "title": "The Handmaid's Tale",
+      "url": "https://openlibrary.org/works/OL675783W"
+    },
+    {
+      "title": "The Heavenly City of the Eighteenth-Century Philosophers",
+      "url": "https://archive.org/details/heavenlycityofei00carl_0"
+    },
+    {
+      "title": "The Human Use Of Human Beings",
+      "url": "https://openlibrary.org/books/OL2405963M"
+    },
+    {
+      "title": "The Humane Interface",
+      "url": "https://archive.org/details/humaneinterfacen0000rask"
+    },
+    {
+      "title": "The Hunters",
+      "url": "https://openlibrary.org/books/OL28482518M"
+    },
+    {
+      "title": "The Idea Factory",
+      "url": "https://openlibrary.org/books/OL25061212M"
+    },
+    {
+      "title": "The Inevitable",
+      "url": "https://openlibrary.org/books/OL26194955M"
+    },
+    {
+      "title": "The Inmates Are Running the Asylum",
+      "url": "https://openlibrary.org/books/OL52849M"
+    },
+    {
+      "title": "The Intelligent Investor",
+      "url": "https://openlibrary.org/books/OL59144618M"
+    },
+    {
+      "title": "The Internet of Elsewhere",
+      "url": "https://openlibrary.org/books/OL24538572M"
+    },
+    {
+      "title": "The Irony of American History",
+      "url": "https://openlibrary.org/books/OL10192629M"
+    },
+    {
+      "title": "The Journalist And The Murderer",
+      "url": "https://openlibrary.org/books/OL24753064M"
+    },
+    {
+      "title": "The Knowledge",
+      "url": "https://openlibrary.org/books/OL27487429M"
+    },
+    {
+      "title": "The Kraus Project",
+      "url": "https://openlibrary.org/books/OL28160446M"
+    },
+    {
+      "title": "The Language Instinct",
+      "url": "https://openlibrary.org/books/OL1421636M"
+    },
+    {
+      "title": "The Letters of Anton Chekhov",
+      "url": "https://openlibrary.org/books/OL8491375M"
+    },
+    {
+      "title": "The Life-Changing Magic of Tidying Up",
+      "url": "https://openlibrary.org/books/OL25651081M"
+    },
+    {
+      "title": "The Lives of the Poets",
+      "url": "https://openlibrary.org/books/OL25543157M"
+    },
+    {
+      "title": "The Loneliness of the Long-Distance Runner",
+      "url": "https://openlibrary.org/books/OL24424764M"
+    },
+    {
+      "title": "The Long Way",
+      "url": "https://archive.org/details/longway0000moit"
+    },
+    {
+      "title": "The Lost Daughter",
+      "url": "https://openlibrary.org/books/OL12338002M"
+    },
+    {
+      "title": "The Lunar Men",
+      "url": "https://openlibrary.org/books/OL15520431M"
+    },
+    {
+      "title": "The Machinery of Life",
+      "url": "https://openlibrary.org/books/OL26391251M"
+    },
+    {
+      "title": "The Master Switch",
+      "url": "https://openlibrary.org/books/OL57439579M"
+    },
+    {
+      "title": "The Master and Margarita",
+      "url": "https://openlibrary.org/books/OL27910148M"
+    },
+    {
+      "title": "The Mathematical Experience",
+      "url": "https://openlibrary.org/books/OL788508M"
+    },
+    {
+      "title": "The Mechanical Bride",
+      "url": "https://openlibrary.org/books/OL8792788M"
+    },
+    {
+      "title": "The Metaphysical Foundations of Modern Science",
+      "url": "https://openlibrary.org/books/OL3564413M"
+    },
+    {
+      "title": "The Millennium Whole Earth Catalog",
+      "url": "https://openlibrary.org/books/OL1077894M"
+    },
+    {
+      "title": "The Missing Risk Premium",
+      "url": "https://openlibrary.org/books/OL51172048M"
+    },
+    {
+      "title": "The Monk and the Riddle",
+      "url": "https://archive.org/details/monkriddleeducat00komi_0"
+    },
+    {
+      "title": "The Monkey Wrench Gang",
+      "url": "https://openlibrary.org/books/OL7288394M"
+    },
+    {
+      "title": "The Moon",
+      "url": "https://openlibrary.org/books/OL24620138M"
+    },
+    {
+      "title": "The Moral Consequences of Economic Growth",
+      "url": "https://openlibrary.org/books/OL22718857M"
+    },
+    {
+      "title": "The Move beyond Form",
+      "url": "https://openlibrary.org/books/OL26182954M"
+    },
+    {
+      "title": "The Murder of Roger Ackroyd",
+      "url": "https://openlibrary.org/books/OL25558484M"
+    },
+    {
+      "title": "The Myth of the Rational Voter",
+      "url": "https://openlibrary.org/books/OL22752495M"
+    },
+    {
+      "title": "The National Parks",
+      "url": "https://openlibrary.org/books/OL23392202M"
+    },
+    {
+      "title": "The Nature of Mathematical Modeling",
+      "url": "https://openlibrary.org/books/OL361867M"
+    },
+    {
+      "title": "The New Drawing on the Right Side of the Brain",
+      "url": "https://openlibrary.org/books/OL24346158M"
+    },
+    {
+      "title": "The New Turing Omnibus",
+      "url": "https://openlibrary.org/books/OL7932848M"
+    },
+    {
+      "title": "The New Typography",
+      "url": "https://openlibrary.org/books/OL1096211M"
+    },
+    {
+      "title": "The Next Whole Earth Catalog",
+      "url": "https://archive.org/details/nextwholeearthca0000unse"
+    },
+    {
+      "title": "The Non-Runner's Marathon Trainer",
+      "url": "https://openlibrary.org/books/OL700974M"
+    },
+    {
+      "title": "The Nude",
+      "url": "https://openlibrary.org/books/OL5092549M"
+    },
+    {
+      "title": "The Odyssey",
+      "url": "https://openlibrary.org/books/OL1336663M"
+    },
+    {
+      "title": "The Ohlone Way",
+      "url": "https://openlibrary.org/books/OL18703054M"
+    },
+    {
+      "title": "The Old Way",
+      "url": "https://openlibrary.org/books/OL22743092M"
+    },
+    {
+      "title": "The Oregon Experiment (Center for Environmental Structure)",
+      "url": "https://openlibrary.org/books/OL5070602M"
+    },
+    {
+      "title": "The Origin of Species",
+      "url": "https://openlibrary.org/books/OL8978948M"
+    },
+    {
+      "title": "The Outbreak of the Peloponnesian War",
+      "url": "https://openlibrary.org/books/OL5686248M"
+    },
+    {
+      "title": "The Outsider",
+      "url": "https://openlibrary.org/books/OL27189165M"
+    },
+    {
+      "title": "The Outsiders",
+      "url": "https://openlibrary.org/books/OL25283027M"
+    },
+    {
+      "title": "The Paris Review Interviews, I",
+      "url": "https://openlibrary.org/books/OL17909467M"
+    },
+    {
+      "title": "The Paris Review Interviews, II",
+      "url": "https://openlibrary.org/books/OL9609150M"
+    },
+    {
+      "title": "The Paris Review Interviews, IV",
+      "url": "https://openlibrary.org/books/OL26072483M"
+    },
+    {
+      "title": "The Party",
+      "url": "https://openlibrary.org/books/OL24393773M"
+    },
+    {
+      "title": "The Pea and the Sun",
+      "url": "https://openlibrary.org/books/OL8690793M"
+    },
+    {
+      "title": "The Periodic Table",
+      "url": "https://openlibrary.org/books/OL27080247M"
+    },
+    {
+      "title": "The Pillars of the Earth",
+      "url": "https://openlibrary.org/works/OL1914022W"
+    },
+    {
+      "title": "The Planet Remade",
+      "url": "https://openlibrary.org/books/OL26061476M"
+    },
+    {
+      "title": "The Portable Medieval Reader",
+      "url": "https://openlibrary.org/books/OL15101805M"
+    },
+    {
+      "title": "The Power Broker",
+      "url": "https://openlibrary.org/books/OL5189501M"
+    },
+    {
+      "title": "The Power of Productivity",
+      "url": "https://openlibrary.org/books/OL9564923M"
+    },
+    {
+      "title": "The Princeton Companion to Applied Mathematics",
+      "url": "https://openlibrary.org/books/OL27521340M"
+    },
+    {
+      "title": "The Princeton Companion to Mathematics",
+      "url": "https://openlibrary.org/books/OL11182845M"
+    },
+    {
+      "title": "The Printing Press as an Agent of Change",
+      "url": "https://openlibrary.org/books/OL17604594M"
+    },
+    {
+      "title": "The Problem of Political Authority",
+      "url": "https://openlibrary.org/books/OL49377588M"
+    },
+    {
+      "title": "The Quest for Consciousness",
+      "url": "https://archive.org/details/questforconsciou0000koch"
+    },
+    {
+      "title": "The Rain Forests of Home",
+      "url": "https://openlibrary.org/books/OL8611566M"
+    },
+    {
+      "title": "The Really Hard Problem",
+      "url": "https://openlibrary.org/works/OL11668592W"
+    },
+    {
+      "title": "The Revolt of the Masses",
+      "url": "https://openlibrary.org/books/OL1419313M"
+    },
+    {
+      "title": "The Rise and Fall of American Growth",
+      "url": "https://openlibrary.org/books/OL25920967M"
+    },
+    {
+      "title": "The Rise and Fall of Nations",
+      "url": "https://openlibrary.org/books/OL27209978M"
+    },
+    {
+      "title": "The Road to Reality",
+      "url": "https://openlibrary.org/books/OL23396250M"
+    },
+    {
+      "title": "The Road",
+      "url": "https://mystudentvoices.com/compassion-vs-cruelty-why-you-should-read-the-road-by-cormac-mccarthy-e57ec099f4f2"
+    },
+    {
+      "title": "The Scientist as Rebel",
+      "url": "https://openlibrary.org/works/OL8203203W"
+    },
+    {
+      "title": "The Scramble for Africa",
+      "url": "https://archive.org/details/scrambleforafric00pake"
+    },
+    {
+      "title": "The Sea Ranch",
+      "url": "https://openlibrary.org/books/OL27156348M"
+    },
+    {
+      "title": "The Seasons of Thomas Tebo",
+      "url": "https://archive.org/details/seasonsofthomast0000nage"
+    },
+    {
+      "title": "The Second Machine Age",
+      "url": "https://openlibrary.org/books/OL25616247M"
+    },
+    {
+      "title": "The Simple Science of Flight",
+      "url": "https://openlibrary.org/books/OL25882394M"
+    },
+    {
+      "title": "The Singapore Story",
+      "url": "https://archive.org/details/singaporestoryme00leek"
+    },
+    {
+      "title": "The Singularity Is Near",
+      "url": "https://openlibrary.org/books/OL23050172M"
+    },
+    {
+      "title": "The Social Conquest of Earth",
+      "url": "https://openlibrary.org/books/OL26326055M"
+    },
+    {
+      "title": "The Society of Mind",
+      "url": "https://openlibrary.org/books/OL15530911M"
+    },
+    {
+      "title": "The Soul of A New Machine",
+      "url": "https://openlibrary.org/books/OL25759921M"
+    },
+    {
+      "title": "The Sovereign Individual",
+      "url": "https://openlibrary.org/books/OL7721520M"
+    },
+    {
+      "title": "The Startup Owner's Manual",
+      "url": "https://openlibrary.org/books/OL25414180M"
+    },
+    {
+      "title": "The Structure of Scientific Revolutions",
+      "url": "https://openlibrary.org/books/OL976099M"
+    },
+    {
+      "title": "The Subtle Knife",
+      "url": "https://openlibrary.org/works/OL28993W"
+    },
+    {
+      "title": "The Sun Also Rises (Scribner Classics)",
+      "url": "https://openlibrary.org/books/OL23243612M"
+    },
+    {
+      "title": "The Tangled Web",
+      "url": "https://openlibrary.org/books/OL56966508M"
+    },
+    {
+      "title": "The Theoretical Minimum",
+      "url": "https://openlibrary.org/books/OL26389733M"
+    },
+    {
+      "title": "The Times Comprehensive Atlas of the World, 13th Edition",
+      "url": "https://openlibrary.org/books/OL24991496M"
+    },
+    {
+      "title": "The Transit of Venus",
+      "url": "https://archive.org/details/transitofvenus000hazz"
+    },
+    {
+      "title": "The Upside of Stress",
+      "url": "https://openlibrary.org/books/OL27182758M"
+    },
+    {
+      "title": "The Visual Display of Quantitative Information",
+      "url": "https://openlibrary.org/books/OL23782293M"
+    },
+    {
+      "title": "The Vital Question",
+      "url": "https://openlibrary.org/books/OL26882634M"
+    },
+    {
+      "title": "The Wealth of Nations",
+      "url": "https://openlibrary.org/books/OL26343720M"
+    },
+    {
+      "title": "The Wealth of Networks",
+      "url": "https://openlibrary.org/books/OL3412222M"
+    },
+    {
+      "title": "The Well-Tempered City",
+      "url": "https://openlibrary.org/books/OL27221030M"
+    },
+    {
+      "title": "The Winged Gospel",
+      "url": "https://openlibrary.org/books/OL17768412M"
+    },
+    {
+      "title": "The World Without Us",
+      "url": "https://archive.org/details/worldwithoutus0000unse"
+    },
+    {
+      "title": "Things Hidden Since the Foundation of the World",
+      "url": "https://openlibrary.org/books/OL35655325M"
+    },
+    {
+      "title": "Thinking in Time",
+      "url": "https://openlibrary.org/books/OL7270128M"
+    },
+    {
+      "title": "Thinking with Type",
+      "url": "https://openlibrary.org/books/OL24080483M"
+    },
+    {
+      "title": "This Explains Everything",
+      "url": "https://openlibrary.org/books/OL25427044M"
+    },
+    {
+      "title": "This Town",
+      "url": "https://openlibrary.org/books/OL26252907M"
+    },
+    {
+      "title": "This Will Change Everything",
+      "url": "https://openlibrary.org/books/OL25969961M"
+    },
+    {
+      "title": "Three Famous Short Novels",
+      "url": "https://openlibrary.org/books/OL25407497M"
+    },
+    {
+      "title": "Topology",
+      "url": "https://openlibrary.org/books/OL37013273M"
+    },
+    {
+      "title": "Toward a Theory of Instruction",
+      "url": "https://openlibrary.org/books/OL40222877M"
+    },
+    {
+      "title": "Toward a radical middle",
+      "url": "https://openlibrary.org/works/OL31225281W"
+    },
+    {
+      "title": "Trading Places",
+      "url": "https://archive.org/details/tradingplacesho000pres"
+    },
+    {
+      "title": "Trees of Golden Gate Park and San Francisco, The",
+      "url": "https://archive.org/details/treesofgoldengat0000mccl"
+    },
+    {
+      "title": "Trout Fishing in America",
+      "url": "https://openlibrary.org/books/OL24562427M"
+    },
+    {
+      "title": "Two Lucky People",
+      "url": "https://archive.org/details/twoluckypeopleme00frie"
+    },
+    {
+      "title": "Types and Programming Languages 1st Edition",
+      "url": "https://openlibrary.org/books/OL9468435M"
+    },
+    {
+      "title": "Ulysses",
+      "url": "https://openlibrary.org/books/OL45634634M"
+    },
+    {
+      "title": "Understanding Comics",
+      "url": "https://openlibrary.org/works/OL276032W"
+    },
+    {
+      "title": "Understanding Media",
+      "url": "https://openlibrary.org/books/OL1102761M"
+    },
+    {
+      "title": "Underworld",
+      "url": "https://openlibrary.org/books/OL22077646M"
+    },
+    {
+      "title": "Upstart",
+      "url": "https://openlibrary.org/books/OL31164993M"
+    },
+    {
+      "title": "Urban Street Design Guide",
+      "url": "https://openlibrary.org/books/OL26185784M"
+    },
+    {
+      "title": "Venture Deals",
+      "url": "https://openlibrary.org/books/OL25018296M"
+    },
+    {
+      "title": "Visual Explanations",
+      "url": "https://archive.org/details/visualexplanatio0000tuft"
+    },
+    {
+      "title": "Wandering Significance",
+      "url": "https://openlibrary.org/books/OL9623512M"
+    },
+    {
+      "title": "War and Peace",
+      "url": "https://openlibrary.org/books/OL33989246M"
+    },
+    {
+      "title": "Warped Passages",
+      "url": "https://openlibrary.org/books/OL20651680M"
+    },
+    {
+      "title": "Watchmen",
+      "url": "https://openlibrary.org/books/OL26993623M"
+    },
+    {
+      "title": "We Wish to Inform You that Tomorrow We Will Be Killed with Our Families",
+      "url": "https://openlibrary.org/books/OL361963M"
+    },
+    {
+      "title": "Weather Whys",
+      "url": "https://openlibrary.org/books/OL24488016M"
+    },
+    {
+      "title": "Weather of the San Francisco Bay Region",
+      "url": "https://openlibrary.org/books/OL3944742M"
+    },
+    {
+      "title": "What It Takes",
+      "url": "https://archive.org/details/whatittakeswayt00cram"
+    },
+    {
+      "title": "What Technology Wants",
+      "url": "https://openlibrary.org/books/OL30281918M"
+    },
+    {
+      "title": "What the Dormouse Said",
+      "url": "https://openlibrary.org/books/OL17921851M"
+    },
+    {
+      "title": "Where Wizards Stay Up Late",
+      "url": "https://openlibrary.org/books/OL7721518M"
+    },
+    {
+      "title": "Whisky Classified",
+      "url": "https://archive.org/details/whiskyclassified0000wish_n1s5"
+    },
+    {
+      "title": "Whole Earth Discipline",
+      "url": "https://openlibrary.org/books/OL23197874M"
+    },
+    {
+      "title": "Whole Earth Epilog",
+      "url": "https://archive.org/details/wholeearthepilog0000unse"
+    },
+    {
+      "title": "Why Does the World Exist",
+      "url": "https://openlibrary.org/books/OL32935878M"
+    },
+    {
+      "title": "William Blake and the Age of Revolution",
+      "url": "https://openlibrary.org/books/OL26991928M"
+    },
+    {
+      "title": "Wind, Sand and Stars",
+      "url": "https://openlibrary.org/books/OL7365545M"
+    },
+    {
+      "title": "Wings",
+      "url": "https://openlibrary.org/books/OL22568580M"
+    },
+    {
+      "title": "Winning the Story Wars",
+      "url": "https://openlibrary.org/books/OL25163081M"
+    },
+    {
+      "title": "Wireshark Network Analysis",
+      "url": "https://archive.org/details/wiresharknetwork0000laur"
+    },
+    {
+      "title": "Wooden on Leadership",
+      "url": "https://openlibrary.org/books/OL7301006M"
+    },
+    {
+      "title": "Wooden",
+      "url": "https://openlibrary.org/books/OL655526M"
+    },
+    {
+      "title": "Writing to the Moment",
+      "url": "https://openlibrary.org/books/OL627369M"
+    },
+    {
+      "title": "Yamaha XJ600 SECA II 92-98 (Clymer Motorcycle Repair)",
+      "url": "https://openlibrary.org/books/OL56630M"
+    },
+    {
+      "title": "Zen Mind, Beginner's Mind",
+      "url": "https://openlibrary.org/works/OL464662W"
+    },
+    {
+      "title": "e",
+      "url": "https://openlibrary.org/books/OL25986532M"
+    },
+    {
+      "title": "n+1 Number Thirteen",
+      "url": "https://openlibrary.org/books/OL48569538M"
+    }
+  ],
+  "standard_ebooks": []
+}

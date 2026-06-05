@@ -1,0 +1,181 @@
+title,author,year,isbn,rating,my_rating,pages,cover_url,goodreads_url,shelf
+Hydrogen,H,,1,1,1,1,,https://en.wikipedia.org/wiki/Hydrogen,Nonmetal
+,,,,2,1,,,,spacer
+,,,,3,1,,,,spacer
+,,,,4,1,,,,spacer
+,,,,5,1,,,,spacer
+,,,,6,1,,,,spacer
+,,,,7,1,,,,spacer
+,,,,8,1,,,,spacer
+,,,,9,1,,,,spacer
+,,,,10,1,,,,spacer
+,,,,11,1,,,,spacer
+,,,,12,1,,,,spacer
+,,,,13,1,,,,spacer
+,,,,14,1,,,,spacer
+,,,,15,1,,,,spacer
+,,,,16,1,,,,spacer
+,,,,17,1,,,,spacer
+Helium,He,,2,18,1,4,,https://en.wikipedia.org/wiki/Helium,Noble Gas
+Lithium,Li,,3,1,2,7,,https://en.wikipedia.org/wiki/Lithium,Alkali Metal
+Beryllium,Be,,4,2,2,9,,https://en.wikipedia.org/wiki/Beryllium,Alkaline Earth Metal
+,,,,3,2,,,,spacer
+,,,,4,2,,,,spacer
+,,,,5,2,,,,spacer
+,,,,6,2,,,,spacer
+,,,,7,2,,,,spacer
+,,,,8,2,,,,spacer
+,,,,9,2,,,,spacer
+,,,,10,2,,,,spacer
+,,,,11,2,,,,spacer
+,,,,12,2,,,,spacer
+Boron,B,,5,13,2,11,,https://en.wikipedia.org/wiki/Boron,Metalloid
+Carbon,C,,6,14,2,12,,https://en.wikipedia.org/wiki/Carbon,Nonmetal
+Nitrogen,N,,7,15,2,14,,https://en.wikipedia.org/wiki/Nitrogen,Nonmetal
+Oxygen,O,,8,16,2,16,,https://en.wikipedia.org/wiki/Oxygen,Nonmetal
+Fluorine,F,,9,17,2,19,,https://en.wikipedia.org/wiki/Fluorine,Nonmetal
+Neon,Ne,,10,18,2,20,,https://en.wikipedia.org/wiki/Neon,Noble Gas
+Sodium,Na,,11,1,3,23,,https://en.wikipedia.org/wiki/Sodium,Alkali Metal
+Magnesium,Mg,,12,2,3,24,,https://en.wikipedia.org/wiki/Magnesium,Alkaline Earth Metal
+,,,,3,3,,,,spacer
+,,,,4,3,,,,spacer
+,,,,5,3,,,,spacer
+,,,,6,3,,,,spacer
+,,,,7,3,,,,spacer
+,,,,8,3,,,,spacer
+,,,,9,3,,,,spacer
+,,,,10,3,,,,spacer
+,,,,11,3,,,,spacer
+,,,,12,3,,,,spacer
+Aluminium,Al,,13,13,3,27,,https://en.wikipedia.org/wiki/Aluminium,Post-Transition Metal
+Silicon,Si,,14,14,3,28,,https://en.wikipedia.org/wiki/Silicon,Metalloid
+Phosphorus,P,,15,15,3,31,,https://en.wikipedia.org/wiki/Phosphorus,Nonmetal
+Sulfur,S,,16,16,3,32,,https://en.wikipedia.org/wiki/Sulfur,Nonmetal
+Chlorine,Cl,,17,17,3,35,,https://en.wikipedia.org/wiki/Chlorine,Nonmetal
+Argon,Ar,,18,18,3,40,,https://en.wikipedia.org/wiki/Argon,Noble Gas
+Potassium,K,,19,1,4,39,,https://en.wikipedia.org/wiki/Potassium,Alkali Metal
+Calcium,Ca,,20,2,4,40,,https://en.wikipedia.org/wiki/Calcium,Alkaline Earth Metal
+Scandium,Sc,,21,3,4,45,,https://en.wikipedia.org/wiki/Scandium,Transition Metal
+Titanium,Ti,,22,4,4,48,,https://en.wikipedia.org/wiki/Titanium,Transition Metal
+Vanadium,V,,23,5,4,51,,https://en.wikipedia.org/wiki/Vanadium,Transition Metal
+Chromium,Cr,,24,6,4,52,,https://en.wikipedia.org/wiki/Chromium,Transition Metal
+Manganese,Mn,,25,7,4,55,,https://en.wikipedia.org/wiki/Manganese,Transition Metal
+Iron,Fe,,26,8,4,56,,https://en.wikipedia.org/wiki/Iron,Transition Metal
+Cobalt,Co,,27,9,4,59,,https://en.wikipedia.org/wiki/Cobalt,Transition Metal
+Nickel,Ni,,28,10,4,59,,https://en.wikipedia.org/wiki/Nickel,Transition Metal
+Copper,Cu,,29,11,4,64,,https://en.wikipedia.org/wiki/Copper,Transition Metal
+Zinc,Zn,,30,12,4,65,,https://en.wikipedia.org/wiki/Zinc,Transition Metal
+Gallium,Ga,,31,13,4,70,,https://en.wikipedia.org/wiki/Gallium,Post-Transition Metal
+Germanium,Ge,,32,14,4,73,,https://en.wikipedia.org/wiki/Germanium,Metalloid
+Arsenic,As,,33,15,4,75,,https://en.wikipedia.org/wiki/Arsenic,Metalloid
+Selenium,Se,,34,16,4,79,,https://en.wikipedia.org/wiki/Selenium,Nonmetal
+Bromine,Br,,35,17,4,80,,https://en.wikipedia.org/wiki/Bromine,Nonmetal
+Krypton,Kr,,36,18,4,84,,https://en.wikipedia.org/wiki/Krypton,Noble Gas
+Rubidium,Rb,,37,1,5,85,,https://en.wikipedia.org/wiki/Rubidium,Alkali Metal
+Strontium,Sr,,38,2,5,88,,https://en.wikipedia.org/wiki/Strontium,Alkaline Earth Metal
+Yttrium,Y,,39,3,5,89,,https://en.wikipedia.org/wiki/Yttrium,Transition Metal
+Zirconium,Zr,,40,4,5,91,,https://en.wikipedia.org/wiki/Zirconium,Transition Metal
+Niobium,Nb,,41,5,5,93,,https://en.wikipedia.org/wiki/Niobium,Transition Metal
+Molybdenum,Mo,,42,6,5,96,,https://en.wikipedia.org/wiki/Molybdenum,Transition Metal
+Technetium,Tc,,43,7,5,98,,https://en.wikipedia.org/wiki/Technetium,Transition Metal
+Ruthenium,Ru,,44,8,5,101,,https://en.wikipedia.org/wiki/Ruthenium,Transition Metal
+Rhodium,Rh,,45,9,5,103,,https://en.wikipedia.org/wiki/Rhodium,Transition Metal
+Palladium,Pd,,46,10,5,106,,https://en.wikipedia.org/wiki/Palladium,Transition Metal
+Silver,Ag,,47,11,5,108,,https://en.wikipedia.org/wiki/Silver,Transition Metal
+Cadmium,Cd,,48,12,5,112,,https://en.wikipedia.org/wiki/Cadmium,Transition Metal
+Indium,In,,49,13,5,115,,https://en.wikipedia.org/wiki/Indium,Post-Transition Metal
+Tin,Sn,,50,14,5,119,,https://en.wikipedia.org/wiki/Tin,Post-Transition Metal
+Antimony,Sb,,51,15,5,122,,https://en.wikipedia.org/wiki/Antimony,Metalloid
+Tellurium,Te,,52,16,5,128,,https://en.wikipedia.org/wiki/Tellurium,Metalloid
+Iodine,I,,53,17,5,127,,https://en.wikipedia.org/wiki/Iodine,Nonmetal
+Xenon,Xe,,54,18,5,131,,https://en.wikipedia.org/wiki/Xenon,Noble Gas
+Cesium,Cs,,55,1,6,133,,https://en.wikipedia.org/wiki/Cesium,Alkali Metal
+Barium,Ba,,56,2,6,137,,https://en.wikipedia.org/wiki/Barium,Alkaline Earth Metal
+,,,,3,6,,,,spacer
+Hafnium,Hf,,72,4,6,178,,https://en.wikipedia.org/wiki/Hafnium,Transition Metal
+Tantalum,Ta,,73,5,6,181,,https://en.wikipedia.org/wiki/Tantalum,Transition Metal
+Tungsten,W,,74,6,6,184,,https://en.wikipedia.org/wiki/Tungsten,Transition Metal
+Rhenium,Re,,75,7,6,186,,https://en.wikipedia.org/wiki/Rhenium,Transition Metal
+Osmium,Os,,76,8,6,190,,https://en.wikipedia.org/wiki/Osmium,Transition Metal
+Iridium,Ir,,77,9,6,192,,https://en.wikipedia.org/wiki/Iridium,Transition Metal
+Platinum,Pt,,78,10,6,195,,https://en.wikipedia.org/wiki/Platinum,Transition Metal
+Gold,Au,,79,11,6,197,,https://en.wikipedia.org/wiki/Gold,Transition Metal
+Mercury,Hg,,80,12,6,201,,https://en.wikipedia.org/wiki/Mercury,Transition Metal
+Thallium,Tl,,81,13,6,204,,https://en.wikipedia.org/wiki/Thallium,Post-Transition Metal
+Lead,Pb,,82,14,6,207,,https://en.wikipedia.org/wiki/Lead,Post-Transition Metal
+Bismuth,Bi,,83,15,6,209,,https://en.wikipedia.org/wiki/Bismuth,Post-Transition Metal
+Polonium,Po,,84,16,6,209,,https://en.wikipedia.org/wiki/Polonium,Post-Transition Metal
+Astatine,At,,85,17,6,210,,https://en.wikipedia.org/wiki/Astatine,Metalloid
+Radon,Rn,,86,18,6,222,,https://en.wikipedia.org/wiki/Radon,Noble Gas
+Francium,Fr,,87,1,7,223,,https://en.wikipedia.org/wiki/Francium,Alkali Metal
+Radium,Ra,,88,2,7,226,,https://en.wikipedia.org/wiki/Radium,Alkaline Earth Metal
+,,,,3,7,,,,spacer
+Rutherfordium,Rf,,104,4,7,267,,https://en.wikipedia.org/wiki/Rutherfordium,Transition Metal
+Dubnium,Db,,105,5,7,268,,https://en.wikipedia.org/wiki/Dubnium,Transition Metal
+Seaborgium,Sg,,106,6,7,269,,https://en.wikipedia.org/wiki/Seaborgium,Transition Metal
+Bohrium,Bh,,107,7,7,270,,https://en.wikipedia.org/wiki/Bohrium,Transition Metal
+Hassium,Hs,,108,8,7,269,,https://en.wikipedia.org/wiki/Hassium,Transition Metal
+Meitnerium,Mt,,109,9,7,278,,https://en.wikipedia.org/wiki/Meitnerium,Transition Metal
+Darmstadtium,Ds,,110,10,7,281,,https://en.wikipedia.org/wiki/Darmstadtium,Transition Metal
+Roentgenium,Rg,,111,11,7,282,,https://en.wikipedia.org/wiki/Roentgenium,Transition Metal
+Copernicium,Cn,,112,12,7,285,,https://en.wikipedia.org/wiki/Copernicium,Transition Metal
+Nihonium,Nh,,113,13,7,286,,https://en.wikipedia.org/wiki/Nihonium,Transition Metal
+Flerovium,Fl,,114,14,7,289,,https://en.wikipedia.org/wiki/Flerovium,Post-Transition Metal
+Moscovium,Mc,,115,15,7,289,,https://en.wikipedia.org/wiki/Moscovium,Post-Transition Metal
+Livermorium,Lv,,116,16,7,293,,https://en.wikipedia.org/wiki/Livermorium,Post-Transition Metal
+Tennessine,Ts,,117,17,7,294,,https://en.wikipedia.org/wiki/Tennessine,"Unknown, Probably Metalloid"
+Oganesson,Og,,118,18,7,294,,https://en.wikipedia.org/wiki/Oganesson,Noble Gas
+Ununennium,Uue,,119,1,8,315,,https://en.wikipedia.org/wiki/Ununennium,"Unknown, But Predicted To Be An Alkali Metal"
+,,,,2,8,,,,spacer
+,,,,3,8,,,,spacer
+,,,,4,8,,,,spacer
+,,,,5,8,,,,spacer
+,,,,6,8,,,,spacer
+,,,,7,8,,,,spacer
+,,,,8,8,,,,spacer
+,,,,9,8,,,,spacer
+,,,,10,8,,,,spacer
+,,,,11,8,,,,spacer
+,,,,12,8,,,,spacer
+,,,,13,8,,,,spacer
+,,,,14,8,,,,spacer
+,,,,15,8,,,,spacer
+,,,,16,8,,,,spacer
+,,,,17,8,,,,spacer
+,,,,18,8,,,,spacer
+,,,,1,9,,,,spacer
+,,,,2,9,,,,spacer
+Lanthanum,La,,57,3,9,139,,https://en.wikipedia.org/wiki/Lanthanum,Lanthanide
+Cerium,Ce,,58,4,9,140,,https://en.wikipedia.org/wiki/Cerium,Lanthanide
+Praseodymium,Pr,,59,5,9,141,,https://en.wikipedia.org/wiki/Praseodymium,Lanthanide
+Neodymium,Nd,,60,6,9,144,,https://en.wikipedia.org/wiki/Neodymium,Lanthanide
+Promethium,Pm,,61,7,9,145,,https://en.wikipedia.org/wiki/Promethium,Lanthanide
+Samarium,Sm,,62,8,9,150,,https://en.wikipedia.org/wiki/Samarium,Lanthanide
+Europium,Eu,,63,9,9,152,,https://en.wikipedia.org/wiki/Europium,Lanthanide
+Gadolinium,Gd,,64,10,9,157,,https://en.wikipedia.org/wiki/Gadolinium,Lanthanide
+Terbium,Tb,,65,11,9,159,,https://en.wikipedia.org/wiki/Terbium,Lanthanide
+Dysprosium,Dy,,66,12,9,163,,https://en.wikipedia.org/wiki/Dysprosium,Lanthanide
+Holmium,Ho,,67,13,9,165,,https://en.wikipedia.org/wiki/Holmium,Lanthanide
+Erbium,Er,,68,14,9,167,,https://en.wikipedia.org/wiki/Erbium,Lanthanide
+Thulium,Tm,,69,15,9,169,,https://en.wikipedia.org/wiki/Thulium,Lanthanide
+Ytterbium,Yb,,70,16,9,173,,https://en.wikipedia.org/wiki/Ytterbium,Lanthanide
+Lutetium,Lu,,71,17,9,175,,https://en.wikipedia.org/wiki/Lutetium,Lanthanide
+,,,,18,9,,,,spacer
+,,,,1,10,,,,spacer
+,,,,2,10,,,,spacer
+Actinium,Ac,,89,3,10,227,,https://en.wikipedia.org/wiki/Actinium,Actinide
+Thorium,Th,,90,4,10,232,,https://en.wikipedia.org/wiki/Thorium,Actinide
+Protactinium,Pa,,91,5,10,231,,https://en.wikipedia.org/wiki/Protactinium,Actinide
+Uranium,U,,92,6,10,238,,https://en.wikipedia.org/wiki/Uranium,Actinide
+Neptunium,Np,,93,7,10,237,,https://en.wikipedia.org/wiki/Neptunium,Actinide
+Plutonium,Pu,,94,8,10,244,,https://en.wikipedia.org/wiki/Plutonium,Actinide
+Americium,Am,,95,9,10,243,,https://en.wikipedia.org/wiki/Americium,Actinide
+Curium,Cm,,96,10,10,247,,https://en.wikipedia.org/wiki/Curium,Actinide
+Berkelium,Bk,,97,11,10,247,,https://en.wikipedia.org/wiki/Berkelium,Actinide
+Californium,Cf,,98,12,10,251,,https://en.wikipedia.org/wiki/Californium,Actinide
+Einsteinium,Es,,99,13,10,252,,https://en.wikipedia.org/wiki/Einsteinium,Actinide
+Fermium,Fm,,100,14,10,257,,https://en.wikipedia.org/wiki/Fermium,Actinide
+Mendelevium,Md,,101,15,10,258,,https://en.wikipedia.org/wiki/Mendelevium,Actinide
+Nobelium,No,,102,16,10,259,,https://en.wikipedia.org/wiki/Nobelium,Actinide
+Lawrencium,Lr,,103,17,10,266,,https://en.wikipedia.org/wiki/Lawrencium,Actinide
+,,,,18,10,,,,spacer

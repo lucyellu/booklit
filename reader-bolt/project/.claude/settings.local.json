@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(tasklist /FO CSV /NH)",
+      "Bash(sort -t',' -k1,1)",
+      "Bash(powershell -Command \"Get-Process | Select-Object Name, Id, CPU | Sort-Object Name | Format-Table -AutoSize\")",
+      "Bash(taskkill:*)",
+      "Bash(netstat -ano)"
+    ]
+  }
+}

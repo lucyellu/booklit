@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Compare Bookshelves</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+        <style>
+            body {
+                background-color: #0a0a14; color: #fff;
+                font-family: Helvetica, Arial, sans-serif;
+                margin: 0; overflow: hidden; touch-action: none;
+                -webkit-user-select: none; user-select: none;
+            }
+            a { color: #8af; }
+
+            /* ---- Import Overlay ---- */
+            #import-overlay {
+                position: fixed; inset: 0;
+                background: rgba(0,0,0,0.88); z-index: 9000;
+                display: flex; align-items: center; justify-content: center;
+                backdrop-filter: blur(6px);
+            }
+            #import-overlay.hidden { display: none; }
+            #import-box {
+                background: rgba(20,20,40,0.97);
+                border: 1px solid #445; border-radius: 20px;
+                padding: 26px 30px;
+                width: min(520px, 92vw); max-height: 90vh; overflow-y: auto;
+                box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+            }
+            #import-box h2 { margin: 0 0 4px; font-size: 21px; }
+            #import-box > p { margin: 0 0 18px; color: #aab; font-size: 12px; }
+
+            /* ---- Profile slots ---- */
+            #profile-slots { display: flex; flex-direction: column; gap: 10px; }
+            .profile-slot {
+                display: flex; align-items: center; gap: 8px;
+                background: rgba(255,255,255,0.04); border-radius: 12px;
+                padding: 10px 12px; border: 1px solid rgba(255,255,255,0.08);
+            }
+            .slot-dot {
+                width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+            }
+            .slot-name {
+                flex: 1; background: rgba(255,255,255,0.07); border: 1px solid #446;
+                border-radius: 8px; color: #fff; padding: 7px 10px;
+                font-size: 12px; outline: none; min-width: 0;
+            }
+            .slot-name:focus { border-color: rgba(136,170,255,0.5); }
+            .slot-file-label {
+                display: flex; align-items: center; gap: 5px;
+                padding: 7px 12px; border-radius: 8px; cursor: pointer;
+                font-size: 11px; font-weight: bold; white-space: nowrap;
+                background: rgba(30,30,60,0.7); outline: 1px solid rgba(136,170,255,0.35);
+                color: rgba(136,170,255,0.95); transition: background 0.2s; flex-shrink: 0;
+            }
+            .slot-file-label:hover { background: rgba(136,170,255,0.22); }
+            .slot-file-label input[type="file"] { display: none; }
+            .slot-status { font-size: 10px; color: #6e6; white-space: nowrap; flex-shrink: 0; min-width: 60px; }
+            .slot-status.error { color: #f88; }
+            .slot-status.pending { color: #88f; }
+            .slot-remove {
+                background: none; outline: none; border: none; color: #556;
+                font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1;
+                flex-shrink: 0;
+            }
+            .slot-remove:hover { color: #f88; }
+
+            .overlay-actions {
+                display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap;
+            }
+            #add-profile-btn {
+                background: rgba(30,30,60,0.7); outline: 1px solid rgba(136,170,255,0.3);
+                color: rgba(136,170,255,0.75); padding: 8px 14px; border: 0;
+                border-radius: 18px; font-size: 12px; cursor: pointer; font-weight: bold;
+            }
+            #add-profile-btn:hover { background: rgba(136,170,255,0.2); }
+            #compare-btn {
+                background: rgba(70,90,200,0.5); outline: 1px solid rgba(136,170,255,0.7);
+                color: #fff; padding: 10px 22px; border: 0; border-radius: 18px;
+                font-size: 13px; cursor: pointer; font-weight: bold;
+                transition: background 0.2s;
+            }
+            #compare-btn:hover { background: rgba(100,130,255,0.7); }
+            #compare-status { font-size: 11px; color: #88f; flex: 1; }
+            #compare-status.error { color: #f88; }
+            #compare-status.ok { color: #6e6; }
+
+            /* ---- Shared Buttons ---- */
+            button {
+                pointer-events: auto; color: rgba(136,170,255,0.95);
+                background: rgba(20,20,40,0.72); outline: 1px solid rgba(136,170,255,0.5);
+                border: 0; padding: 10px 18px; border-radius: 22px;
+                cursor: pointer; font-family: Helvetica, Arial, sans-serif;
+                font-weight: bold; font-size: 13px; letter-spacing: 0.3px;
+                backdrop-filter: blur(8px); transition: background 0.2s, transform 0.1s;
+            }
+            button:hover  { background: rgba(136,170,255,0.3); }
+            button:active { color: #000; background: rgba(136,170,255,0.9); transform: scale(0.95); }
+
+            /* ---- Book Cards ---- */
+            .book-card { width: 115px; height: 170px; cursor: pointer; background: transparent; }
+            .book-card.spacer { pointer-events: none; opacity: 0 !important; }
+            .book-card .card {
+                width: 100%; height: 100%; position: relative;
+                transform-style: preserve-3d; transition: transform 0.5s;
+            }
+            .book-card .face {
+                position: absolute; width: 100%; height: 100%;
+                backface-visibility: hidden; border-radius: 5px;
+                box-sizing: border-box; overflow: hidden;
+                border: 1.5px solid rgba(136,170,255,0.2);
+                transition: border-color 0.2s, box-shadow 0.2s, opacity 0.3s;
+            }
+            .book-card.dim .face { opacity: 0.07 !important; }
+            .book-card .front { position: relative; }
+            .book-card .cover-img {
+                position: absolute; inset: 0; width: 100%; height: 100%;
+                object-fit: cover; display: none;
+            }
+            .book-card .cover-fallback {
+                position: absolute; inset: 0;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                padding: 10px 8px; text-align: center;
+            }
+            .book-card .fallback-title {
+                font-size: 12px; font-weight: bold; color: rgba(255,255,255,0.95); line-height: 1.3;
+                text-shadow: 0 1px 4px rgba(0,0,0,0.7); margin-bottom: 6px;
+                display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+            }
+            .book-card .fallback-author {
+                font-size: 10px; color: rgba(255,255,255,0.7);
+                text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+            }
+            .book-card .cover-overlay {
+                position: absolute; bottom: 0; left: 0; right: 0;
+                padding: 18px 6px 5px;
+                background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.55) 60%, transparent 100%);
+                display: none;
+            }
+            .book-card .overlay-title {
+                font-size: 9px; font-weight: bold; color: #fff;
+                line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .book-card .overlay-author {
+                font-size: 8px; color: rgba(255,255,255,0.72);
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+            .book-card .back {
+                transform: rotateY(180deg); padding: 9px 8px;
+                display: flex; flex-direction: column; gap: 4px;
+                background: rgba(12,12,28,0.97); font-size: 10px;
+            }
+            .book-card .back-title {
+                font-size: 11px; font-weight: bold; color: #fff; line-height: 1.3;
+                display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+                margin-bottom: 2px;
+            }
+            .book-card .back .info-item { color: rgba(200,210,255,0.8); line-height: 1.4; }
+            .book-card .back .info-item strong { color: #fff; }
+            .book-card .back .stars { color: #ffd700; }
+            .book-card .back .gr-link { margin-top: auto; font-size: 9px; }
+            .book-card .back .gr-link a { color: #8af; }
+
+            /* ---- Reader badges ---- */
+            .reader-badges {
+                position: absolute; bottom: 4px; left: 0; right: 0;
+                display: flex; justify-content: center; gap: 3px;
+                z-index: 2; pointer-events: none;
+            }
+            .reader-badge {
+                width: 16px; height: 16px; border-radius: 50%;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 8px; font-weight: bold; color: #fff;
+                border: 1px solid rgba(255,255,255,0.4);
+                box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+                line-height: 1;
+            }
+            /* overlap glow on front face */
+            .book-card[data-overlap="shared"] .front::after {
+                content: '';
+                position: absolute; inset: 0;
+                background: linear-gradient(135deg, rgba(255,220,80,0.08) 0%, transparent 60%);
+                border-radius: inherit;
+                pointer-events: none;
+            }
+
+            /* ---- Group label zones (compare layout) ---- */
+            .zone-label {
+                position: absolute; font-size: 11px; font-weight: bold;
+                color: rgba(255,255,255,0.55); pointer-events: none;
+                white-space: nowrap; text-align: center;
+                transform: translateX(-50%);
+            }
+
+            /* ---- Sort / filter buttons ---- */
+            .sort-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+            .sort-btn {
+                flex: 1 1 auto; padding: 6px 6px; font-size: 11px; border-radius: 14px;
+                background: rgba(20,20,50,0.6); outline: 1px solid rgba(136,170,255,0.25);
+                color: rgba(136,170,255,0.7); min-width: 0; white-space: nowrap;
+            }
+            .sort-btn:hover  { background: rgba(136,170,255,0.2); color: #fff; }
+            .sort-btn.active { background: rgba(136,170,255,0.35); color: #fff; outline-color: rgba(136,170,255,0.8); }
+            .sort-btn.off    { background: rgba(60,20,20,0.5); outline-color: rgba(255,100,100,0.3); color: rgba(255,130,130,0.7); }
+
+            /* ---- Search ---- */
+            #search-input {
+                width: 100%; box-sizing: border-box;
+                background: rgba(255,255,255,0.06); border: 1px solid #446;
+                border-radius: 10px; color: #fff; padding: 7px 10px;
+                font-size: 12px; outline: none; margin: 6px 0 4px; pointer-events: auto;
+            }
+            #search-input::placeholder { color: #558; }
+            #search-input:focus { border-color: rgba(136,170,255,0.5); }
+
+            /* ---- Bottom Menu ---- */
+            #menu {
+                position: absolute; bottom: 0; width: 100%; text-align: center;
+                z-index: 10; padding: 30px 10px calc(20px + env(safe-area-inset-bottom)) 10px;
+                background: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.6) 60%, transparent 100%);
+                pointer-events: none;
+                display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+                box-sizing: border-box;
+            }
+
+            /* ---- UI Visibility ---- */
+            body.ui-hidden #menu, body.ui-hidden #side-panel,
+            body.ui-hidden #outliner-panel, body.ui-hidden .panel-toggle { display: none !important; }
+            #toggle-ui {
+                position: absolute; top: env(safe-area-inset-top, 15px);
+                left: 50%; transform: translateX(-50%);
+                z-index: 3000; padding: 8px 15px; font-size: 12px;
+            }
+
+            /* ---- Side Panel ---- */
+            #side-panel {
+                position: absolute; top: 20px; left: 20px;
+                background: rgba(14,14,30,0.88); border: 1px solid #445;
+                padding: 15px; border-radius: 16px; z-index: 2000;
+                width: 220px; max-height: calc(100vh - 40px); overflow-y: auto;
+                backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #side-panel h3 { margin: 0 0 8px; font-size: 14px; border-bottom: 1px solid #445; padding-bottom: 5px; }
+            #side-panel label { display: block; margin-top: 9px; font-size: 12px; }
+            #side-panel input[type="range"] { width: 100%; box-sizing: border-box; padding: 7px 0; }
+            #side-panel input[type="checkbox"] { margin-right: 5px; }
+            .panel-section { margin-top: 12px; border-top: 1px solid #445; padding-top: 10px; }
+            .panel-section h3 { margin: 0 0 6px; font-size: 13px; border: none; padding: 0; }
+            .layout-controls { display: none; }
+            .layout-controls label { font-size: 11px; margin-top: 6px; }
+
+            /* Profile legend chips */
+            #profile-legend { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+            .legend-chip {
+                display: flex; align-items: center; gap: 7px;
+                font-size: 12px; color: rgba(220,225,255,0.9);
+            }
+            .legend-dot {
+                width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+            }
+
+            /* Outliner ---- */
+            #outliner-panel {
+                position: absolute; top: 20px; right: 20px;
+                background: rgba(14,14,30,0.88); border: 1px solid #445;
+                padding: 15px; border-radius: 16px; z-index: 2000;
+                width: 210px; height: calc(100vh - 60px);
+                display: flex; flex-direction: column;
+                backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            }
+            #outliner-header {
+                display: flex; align-items: center; justify-content: space-between;
+                border-bottom: 1px solid #445; padding-bottom: 7px;
+            }
+            #outliner-header h3 { margin: 0; font-size: 14px; }
+            #reimport-btn { padding: 4px 8px; font-size: 11px; border-radius: 10px; outline-color: rgba(136,170,255,0.3); }
+            #outliner-list {
+                list-style: none; padding: 0; margin: 0;
+                overflow-y: auto; flex-grow: 1;
+            }
+            #outliner-list li {
+                padding: 6px 8px; cursor: pointer; font-size: 11px;
+                border-bottom: 1px solid #333;
+                color: #ccd; display: flex; align-items: center; gap: 5px;
+            }
+            #outliner-list li:hover  { background: rgba(136,170,255,0.2); border-radius: 6px; }
+            #outliner-list li.selected { background: rgba(136,170,255,0.4); font-weight: bold; border-radius: 6px; color: #fff; }
+            #outliner-list li.hidden { display: none; }
+            .li-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .li-badges { display: flex; gap: 2px; flex-shrink: 0; }
+            .li-badge {
+                width: 10px; height: 10px; border-radius: 50%;
+                display: inline-block; border: 1px solid rgba(255,255,255,0.3);
+            }
+
+            /* ---- Mobile ---- */
+            .panel-toggle {
+                display: none; position: absolute;
+                top: env(safe-area-inset-top, 15px); padding: 10px 15px; border-radius: 22px; z-index: 1001;
+            }
+            #toggle-settings { left: 15px; } #toggle-outliner { right: 15px; }
+            @media (max-width: 768px) {
+                .panel-toggle { display: block; }
+                #side-panel, #outliner-panel {
+                    display: none; position: fixed; top: 50%; left: 50%;
+                    transform: translate(-50%,-50%); width: 85vw; max-width: 340px; margin: 0;
+                }
+                #outliner-panel { height: 75vh; max-height: 75vh; }
+                #side-panel { max-height: 75vh; }
+                #side-panel.mobile-open   { display: block; }
+                #outliner-panel.mobile-open { display: flex; }
+                #menu { flex-wrap: nowrap; gap: 5px; padding-left: 5px; padding-right: 5px; }
+                #menu button { font-size: 11px; padding: 9px 4px; flex: 1; white-space: nowrap; }
+            }
+
+            /* ---- Status bar ---- */
+            #cover-status {
+                position: absolute; bottom: 86px; left: 50%; transform: translateX(-50%);
+                font-size: 11px; color: rgba(136,170,255,0.6); z-index: 100;
+                pointer-events: none; white-space: nowrap; transition: opacity 0.6s;
+            }
+            #cover-status.hidden { opacity: 0; }
+        </style>
+    </head>
+    <body>
+
+        <!-- ===== IMPORT OVERLAY ===== -->
+        <div id="import-overlay">
+            <div id="import-box">
+                <h2>📚 Compare Bookshelves</h2>
+                <p>Add 2 or more Goodreads exports to find overlapping reads.</p>
+
+                <div id="profile-slots"></div>
+
+                <div class="overlay-actions">
+                    <button id="add-profile-btn">+ Add Person</button>
+                    <button id="compare-btn">Compare →</button>
+                    <span class="status-msg" id="compare-status"></span>
+                </div>
+
+                <div style="margin-top:14px; padding-top:12px; border-top:1px solid #334; font-size:11px; color:#667; line-height:1.8">
+                    <strong style="color:#99b">How to get a Goodreads export:</strong><br>
+                    Goodreads → My Books → Import and Export → Export Library → download CSV
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MAIN UI ===== -->
+        <button id="toggle-ui">👁️ Hide UI</button>
+        <button id="toggle-settings" class="panel-toggle">⚙️</button>
+        <button id="toggle-outliner" class="panel-toggle">📚</button>
+
+        <div id="container"></div>
+        <div id="cover-status" class="hidden"></div>
+
+        <!-- Settings Panel -->
+        <div id="side-panel">
+            <h3>Profiles</h3>
+            <div id="profile-legend"></div>
+
+            <div class="panel-section">
+                <h3>Show books read by</h3>
+                <div id="reader-filter-btns" class="sort-row"></div>
+                <label style="font-size:11px;margin-top:7px">
+                    <input type="checkbox" id="filter-all-mode"> Require all selected
+                </label>
+            </div>
+
+            <div class="panel-section">
+                <h3>Appearance</h3>
+                <label>Opacity: <span id="opacity-val">85</span>%
+                    <input type="range" id="opacity-slider" min="0" max="100" value="85">
+                </label>
+            </div>
+
+            <div class="panel-section">
+                <h3>Sort</h3>
+                <div class="sort-row" id="sort-btns">
+                    <button class="sort-btn active" data-sort="overlap">Overlap</button>
+                    <button class="sort-btn" data-sort="title">Title</button>
+                    <button class="sort-btn" data-sort="author">Author</button>
+                    <button class="sort-btn" data-sort="year">Year</button>
+                </div>
+                <label id="sort-desc-label"><input type="checkbox" id="sort-desc"> Reverse</label>
+            </div>
+
+            <div class="panel-section layout-controls" id="shelf-controls">
+                <h3>Shelf Layout</h3>
+                <label>Per Row: <span id="shelf-cols-val">12</span>
+                    <input type="range" id="shelf-cols" min="3" max="60" value="12">
+                </label>
+                <label>Row Spacing: <span id="shelf-spacing-val">200</span>
+                    <input type="range" id="shelf-spacing" min="150" max="400" value="200">
+                </label>
+            </div>
+
+            <div class="panel-section layout-controls" id="helix-controls">
+                <h3>Helix Layout</h3>
+                <label>Radius: <span id="helix-radius-val">900</span>
+                    <input type="range" id="helix-radius" min="100" max="1500" value="900">
+                </label>
+                <label>Tightness: <span id="helix-tightness-val">8</span>
+                    <input type="range" id="helix-tightness" min="4" max="40" value="8">
+                </label>
+            </div>
+
+            <div class="panel-section layout-controls" id="grid-controls">
+                <h3>Grid Layout</h3>
+                <label>Columns: <span id="grid-cols-val">10</span>
+                    <input type="range" id="grid-cols" min="1" max="36" value="10">
+                </label>
+                <label>X Spacing: <span id="grid-space-x-val">150</span>
+                    <input type="range" id="grid-space-x" min="100" max="600" value="150">
+                </label>
+                <label>Y Spacing: <span id="grid-space-y-val">200</span>
+                    <input type="range" id="grid-space-y" min="100" max="600" value="200">
+                </label>
+            </div>
+        </div>
+
+        <!-- Outliner -->
+        <div id="outliner-panel">
+            <div id="outliner-header">
+                <h3 id="outliner-title">Books</h3>
+                <button id="reimport-btn" title="Re-import">📥</button>
+            </div>
+            <input type="text" id="search-input" placeholder="Search title, author…" autocomplete="off">
+            <ul id="outliner-list"></ul>
+        </div>
+
+        <!-- Bottom menu -->
+        <div id="menu">
+            <button id="shelf-btn">SHELF</button>
+            <button id="compare-layout-btn">COMPARE</button>
+            <button id="sphere-btn">SPHERE</button>
+            <button id="helix-btn">HELIX</button>
+            <button id="grid-btn">GRID</button>
+        </div>
+
+        <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+            }
+        }
+        </script>
+
+        <script type="module">
+            import * as THREE from 'three';
+            import TWEEN from 'three/addons/libs/tween.module.js';
+            import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+            import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+
+            // ---- Person colors (vivid, distinct) ----
+            const PERSON_COLORS = [
+                {r:88,  g:130, b:255},  // blue
+                {r:255, g:100, b:75},   // red-orange
+                {r:60,  g:215, b:140},  // teal-green
+                {r:210, g:90,  b:255},  // purple
+                {r:255, g:195, b:50},   // gold
+                {r:55,  g:205, b:255},  // cyan
+            ];
+            const MAX_PROFILES = 6;
+            // Gold color for fully-shared books
+            const SHARED_ALL_COLOR = {r:255, g:215, b:70};
+            const SHARED_SOME_COLOR = {r:180, g:190, b:255};
+
+            // ---- State ----
+            let profiles = [];    // [{name, color, books[]}]
+            let bookData  = [];   // merged books
+            let camera, scene, renderer, controls;
+            const objects = [];
+            let selectedObjects = [];
+            let lastSelectedObjectIndex = -1;
+            const targets = { shelf: [], compare: [], sphere: [], helix: [], grid: [] };
+            let currentLayout = 'shelf';
+            const dominantHues = {};
+            const pointerDownPos = new THREE.Vector2();
+            let pointerDownTarget = null;
+            let lastTapTime = 0, lastTappedObject = null;
+
+            let sortKey  = 'overlap', sortDesc = false;
+            let searchQuery = '';
+            let activeReaders = null;  // null = all; Set of person indices
+            let filterAllMode = false; // true = AND (book must match ALL active readers)
+
+            const COVER_W = 115, COVER_H = 170;
+
+            // ---- Book matching helpers ----
+            function normTitle(t)  { return (t||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+            function normAuthor(a) { return (a||'').split(/[\s,]/)[0].toLowerCase().replace(/[^a-z]/g,''); }
+            function bookKey(b) {
+                const isbn = (b.isbn||'').replace(/\D/g,'');
+                if (isbn.length >= 10) return 'isbn:' + isbn;
+                return 'tb:' + normTitle(b.title) + '|' + normAuthor(b.author);
+            }
+
+            // ---- Merge libraries from all profiles ----
+            function mergeLibraries() {
+                const keyMap = new Map();
+                const merged = [];
+
+                profiles.forEach((profile, pi) => {
+                    profile.books.forEach(book => {
+                        const key = bookKey(book);
+                        if (keyMap.has(key)) {
+                            const ex = merged[keyMap.get(key)];
+                            if (!ex.readers.includes(pi)) {
+                                ex.readers.push(pi);
+                                ex.readerData[pi] = {
+                                    shelf: book.shelf,
+                                    rating: book.rating,
+                                    myRating: book.myRating,
+                                };
+                                if (!ex.coverUrl && book.coverUrl) ex.coverUrl = book.coverUrl;
+                                if (!ex.goodreadsUrl && book.goodreadsUrl) ex.goodreadsUrl = book.goodreadsUrl;
+                                if (!ex.pages && book.pages) ex.pages = book.pages;
+                            }
+                        } else {
+                            keyMap.set(key, merged.length);
+                            merged.push({
+                                title:        book.title       || '',
+                                author:       book.author      || 'Unknown',
+                                year:         book.year        || null,
+                                isbn:         book.isbn        || null,
+                                pages:        book.pages       || null,
+                                coverUrl:     book.coverUrl    || null,
+                                goodreadsUrl: book.goodreadsUrl|| null,
+                                readers:      [pi],
+                                readerData:   { [pi]: { shelf: book.shelf, rating: book.rating, myRating: book.myRating } },
+                            });
+                        }
+                    });
+                });
+
+                return merged;
+            }
+
+            // ---- Book color based on readers ----
+            function bookRgb(book) {
+                if (book.readers.length === profiles.length && profiles.length > 1)
+                    return SHARED_ALL_COLOR;
+                if (book.readers.length > 1)
+                    return SHARED_SOME_COLOR;
+                return PERSON_COLORS[book.readers[0]] || {r:80,g:100,b:180};
+            }
+
+            // ---- Sort helpers ----
+            function hashStr(s) {
+                let h = 0;
+                for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h<<5)-h);
+                return Math.abs(h);
+            }
+            function bookHue(i) {
+                return dominantHues[i] !== undefined ? dominantHues[i] : hashStr(bookData[i]?.author||'')%360;
+            }
+            function getSortedRanks() {
+                const indices = bookData.map((_,i)=>i);
+                indices.sort((a,b) => {
+                    const ba = bookData[a], bb = bookData[b];
+                    let cmp = 0;
+                    if      (sortKey==='overlap') cmp = bb.readers.length - ba.readers.length;
+                    else if (sortKey==='title')   cmp = (ba.title ||'').localeCompare(bb.title||'');
+                    else if (sortKey==='author')  cmp = (ba.author||'').localeCompare(bb.author||'');
+                    else if (sortKey==='year')    cmp = (parseInt(ba.year)||9999) - (parseInt(bb.year)||9999);
+                    return sortDesc ? -cmp : cmp;
+                });
+                const ranks = new Array(bookData.length);
+                indices.forEach((bookIdx, pos) => { ranks[bookIdx] = pos; });
+                return ranks;
+            }
+            function applySort() { computeCurrentLayoutTargets(); transform(targets[currentLayout], 1200); }
+
+            // ---- Filters ----
+            function applyFilters() {
+                const q = searchQuery.toLowerCase().trim();
+                let hits = 0;
+                objects.forEach((obj, i) => {
+                    const b = bookData[i];
+                    const matchSearch = !q
+                        || (b.title ||'').toLowerCase().includes(q)
+                        || (b.author||'').toLowerCase().includes(q)
+                        || String(b.year||'').includes(q);
+                    let matchReader = true;
+                    if (activeReaders) {
+                        if (filterAllMode) {
+                            // book must be in ALL selected readers' lists
+                            matchReader = [...activeReaders].every(pi => b.readers.includes(pi));
+                        } else {
+                            // book must be in AT LEAST ONE selected reader's list
+                            matchReader = b.readers.some(pi => activeReaders.has(pi));
+                        }
+                    }
+                    const match = matchSearch && matchReader;
+                    obj.element.classList.toggle('dim', !match);
+                    if (obj.outlinerLi) obj.outlinerLi.classList.toggle('hidden', !match);
+                    if (match) hits++;
+                });
+                const total = bookData.length;
+                document.getElementById('outliner-title').textContent =
+                    (q || activeReaders) ? `${hits} / ${total}` : `${total} books`;
+            }
+
+            // ---- IndexedDB cover cache ----
+            let _idb = null;
+            async function getIDB() {
+                if (_idb) return _idb;
+                return new Promise((res, rej) => {
+                    const r = indexedDB.open('compare-covers-v1', 1);
+                    r.onupgradeneeded = e => e.target.result.createObjectStore('covers', { keyPath: 'k' });
+                    r.onsuccess = e => { _idb = e.target.result; res(_idb); };
+                    r.onerror = () => rej(r.error);
+                });
+            }
+            function idbCacheKey(book) {
+                return book.isbn ? `isbn:${book.isbn}` : `tb:${(book.title+'|'+book.author).toLowerCase()}`;
+            }
+            async function idbGet(book) {
+                try {
+                    const db = await getIDB();
+                    return new Promise(res => {
+                        const r = db.transaction('covers').objectStore('covers').get(idbCacheKey(book));
+                        r.onsuccess = () => res(r.result?.url ?? null);
+                        r.onerror   = () => res(null);
+                    });
+                } catch { return null; }
+            }
+            async function idbPut(book, url) {
+                try {
+                    const db = await getIDB();
+                    const tx = db.transaction('covers', 'readwrite');
+                    tx.objectStore('covers').put({ k: idbCacheKey(book), url });
+                } catch {}
+            }
+
+            // ---- Cover loading ----
+            let coverQueue = [], coverRunning = false;
+
+            function upgradeImgUrl(url) {
+                if (!url) return url;
+                return url.replace(/\._[A-Z0-9_,]+_(?=\.(?:jpg|jpeg|png))/i, '');
+            }
+            async function queueCoverFetch(book, el) {
+                if (!book.title) return;
+                if (book.coverUrl) { applyCoverToCard(el, upgradeImgUrl(book.coverUrl)); return; }
+                const cached = await idbGet(book);
+                if (cached) { book.coverUrl = cached; applyCoverToCard(el, cached); return; }
+                coverQueue.push({ book, el });
+                if (!coverRunning) drainCoverQueue();
+            }
+            async function drainCoverQueue() {
+                coverRunning = true;
+                const statusEl = document.getElementById('cover-status');
+                while (coverQueue.length > 0) {
+                    statusEl.textContent = `Loading covers... ${coverQueue.length} remaining`;
+                    statusEl.classList.remove('hidden');
+                    const { book, el } = coverQueue.shift();
+                    try {
+                        const url = await fetchOpenLibraryCover(book.title, book.author, book.isbn);
+                        if (url) { book.coverUrl = url; await idbPut(book, url); applyCoverToCard(el, url); }
+                    } catch {}
+                    await new Promise(r => setTimeout(r, 250));
+                }
+                coverRunning = false;
+                statusEl.classList.add('hidden');
+            }
+            async function fetchOpenLibraryCover(title, author, isbn) {
+                if (isbn && isbn.length >= 10) {
+                    const test = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+                    try {
+                        const r = await fetch(test, { method: 'HEAD' });
+                        if (r.ok) return `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+                    } catch {}
+                }
+                const q = encodeURIComponent(`${title} ${author}`);
+                const resp = await fetch(`https://openlibrary.org/search.json?q=${q}&limit=1&fields=cover_i`);
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                if (data.docs?.[0]?.cover_i)
+                    return `https://covers.openlibrary.org/b/id/${data.docs[0].cover_i}-L.jpg`;
+                return null;
+            }
+            function applyCoverToCard(el, url) {
+                const img = el.querySelector('.cover-img');
+                if (img && !img.src) {
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => {
+                        img.style.display = 'block';
+                        const fb = el.querySelector('.cover-fallback');
+                        const ov = el.querySelector('.cover-overlay');
+                        if (fb) fb.style.display = 'none';
+                        if (ov) ov.style.display = 'block';
+                        try {
+                            const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+                            cv.getContext('2d').drawImage(img, 0, 0, 1, 1);
+                            const [r, g, b] = cv.getContext('2d').getImageData(0, 0, 1, 1).data;
+                            const idx = objects.findIndex(o => o.element === el);
+                            if (idx !== -1) {
+                                const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max-min;
+                                if (d) {
+                                    let h = max===r ? ((g-b)/d)%6 : max===g ? (b-r)/d+2 : (r-g)/d+4;
+                                    dominantHues[idx] = ((h*60)+360)%360;
+                                }
+                            }
+                        } catch {}
+                    };
+                    img.src = url;
+                }
+            }
+
+            // ---- CSV parsing (supports Goodreads export + bookshelf format) ----
+            function parseCSVLine(line) {
+                const result = []; let cur = ''; let inQ = false;
+                for (const ch of line) {
+                    if (ch === '"') inQ = !inQ;
+                    else if (ch === ',' && !inQ) { result.push(cur); cur = ''; }
+                    else cur += ch;
+                }
+                result.push(cur); return result;
+            }
+            function parseBookshelfCsv(text) {
+                const lines = text.trim().split('\n');
+                const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase());
+                const idx = n => headers.indexOf(n);
+                return lines.slice(1).filter(l=>l.trim()).map(l => {
+                    const c = parseCSVLine(l).map(v => v.replace(/"/g,'').trim());
+                    const title = c[idx('title')] || '';
+                    if (!title) return null;
+                    return {
+                        title, shelf: c[idx('shelf')]||'read',
+                        author:       c[idx('author')]       || '',
+                        year:         c[idx('year')]         || null,
+                        isbn:         c[idx('isbn')]         || null,
+                        rating:       c[idx('rating')]       || null,
+                        myRating:     c[idx('my_rating')]    || null,
+                        pages:        c[idx('pages')]        || null,
+                        coverUrl:     c[idx('cover_url')]    || null,
+                        goodreadsUrl: c[idx('goodreads_url')]|| null,
+                    };
+                }).filter(Boolean);
+            }
+            function parseGoodreadsExport(text) {
+                const lines = text.trim().split('\n');
+                const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+                const idx = n => headers.indexOf(n);
+                return lines.slice(1).filter(l=>l.trim()).map(l => {
+                    const c = parseCSVLine(l).map(v => v.replace(/"/g,'').replace(/^=/,'').trim());
+                    if (!c[idx('Title')]) return null;
+                    const bookId = c[idx('Book Id')];
+                    return {
+                        title:        c[idx('Title')]   || 'Unknown',
+                        author:       c[idx('Author')]  || 'Unknown',
+                        year:         c[idx('Original Publication Year')] || c[idx('Year Published')] || null,
+                        isbn:         c[idx('ISBN13')]?.replace(/\D/g,'') || null,
+                        rating:       c[idx('Average Rating')]  || null,
+                        myRating:     c[idx('My Rating')]       || null,
+                        pages:        c[idx('Number of Pages')] || null,
+                        shelf:        c[idx('Exclusive Shelf')]  || 'read',
+                        coverUrl:     null,
+                        goodreadsUrl: bookId ? `https://www.goodreads.com/book/show/${bookId}` : null,
+                    };
+                }).filter(Boolean);
+            }
+            function parseCustomCsv(text) {
+                return text.trim().split('\n').slice(1).filter(l=>l.trim()).map(l => {
+                    const c = parseCSVLine(l);
+                    const title = c[0]?.trim();
+                    if (!title || title==='nan') return null;
+                    const author = c[1]?.trim();
+                    return {
+                        title, shelf:'read',
+                        author: (!author||author==='nan') ? 'Unknown' : author,
+                        year: c[3]?.trim()||null, goodreadsUrl: c[6]?.trim()||null,
+                        coverUrl:null, rating:null, pages:null, isbn:null, myRating:null,
+                    };
+                }).filter(Boolean);
+            }
+            function detectAndParse(text) {
+                const fl = text.split('\n')[0].toLowerCase();
+                if (fl.includes('book id') || (fl.includes('my rating') && fl.includes('title')))
+                    return parseGoodreadsExport(text);
+                if (fl.startsWith('title,') || fl.startsWith('"title"'))
+                    return parseBookshelfCsv(text);
+                return parseCustomCsv(text);
+            }
+
+            // ---- Import overlay: profile slot management ----
+            let slotCount = 0;
+            const slotData = {}; // idx -> {name, books}
+
+            function addProfileSlot() {
+                if (slotCount >= MAX_PROFILES) return;
+                const idx = slotCount++;
+                const color = PERSON_COLORS[idx] || PERSON_COLORS[0];
+                const colorCss = `rgb(${color.r},${color.g},${color.b})`;
+
+                const slot = document.createElement('div');
+                slot.className = 'profile-slot';
+                slot.dataset.idx = idx;
+                slot.innerHTML = `
+                    <div class="slot-dot" style="background:${colorCss}"></div>
+                    <input type="text" class="slot-name" placeholder="Name (e.g. Patrick Collison)" autocomplete="off">
+                    <label class="slot-file-label">📂 CSV<input type="file" class="slot-file" accept=".csv"></label>
+                    <span class="slot-status pending">—</span>
+                    <button class="slot-remove" title="Remove">✕</button>
+                `;
+
+                const fileInput = slot.querySelector('.slot-file');
+                const statusEl  = slot.querySelector('.slot-status');
+
+                fileInput.addEventListener('change', e => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    statusEl.textContent = 'Reading…'; statusEl.className = 'slot-status pending';
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                        const books = detectAndParse(ev.target.result);
+                        slotData[idx] = { books };
+                        statusEl.textContent = `${books.length} books ✓`;
+                        statusEl.className = 'slot-status';
+                    };
+                    reader.onerror = () => { statusEl.textContent = 'Error'; statusEl.className = 'slot-status error'; };
+                    reader.readAsText(file);
+                });
+
+                slot.querySelector('.slot-remove').addEventListener('click', () => {
+                    slot.remove();
+                    delete slotData[idx];
+                });
+
+                document.getElementById('profile-slots').appendChild(slot);
+
+                if (slotCount >= MAX_PROFILES)
+                    document.getElementById('add-profile-btn').style.display = 'none';
+            }
+
+            function gatherProfiles() {
+                const slots = document.querySelectorAll('.profile-slot');
+                const result = [];
+                slots.forEach(slot => {
+                    const idx = parseInt(slot.dataset.idx);
+                    const name = slot.querySelector('.slot-name').value.trim() || `Person ${result.length + 1}`;
+                    const data = slotData[idx];
+                    if (data?.books?.length) {
+                        result.push({ name, color: PERSON_COLORS[result.length] || PERSON_COLORS[0], books: data.books });
+                    }
+                });
+                return result;
+            }
+
+            // ---- Trigger comparison ----
+            document.getElementById('add-profile-btn').addEventListener('click', addProfileSlot);
+            document.getElementById('compare-btn').addEventListener('click', () => {
+                const gathered = gatherProfiles();
+                if (gathered.length < 2) {
+                    const s = document.getElementById('compare-status');
+                    s.textContent = 'Load at least 2 CSVs to compare.';
+                    s.className = 'status-msg error';
+                    return;
+                }
+                profiles = gathered;
+                bookData = mergeLibraries();
+                const s = document.getElementById('compare-status');
+                const sharedCount = bookData.filter(b => b.readers.length > 1).length;
+                s.textContent = `${bookData.length} books, ${sharedCount} shared ✓`;
+                s.className = 'status-msg ok';
+                setTimeout(() => {
+                    document.getElementById('import-overlay').classList.add('hidden');
+                    buildScene();
+                }, 600);
+            });
+
+            // Start with 2 slots
+            addProfileSlot();
+            addProfileSlot();
+
+            // ---- Build scene ----
+            function buildScene() {
+                if (scene) objects.forEach(o => scene.remove(o));
+                objects.length = 0; selectedObjects.length = 0;
+                lastSelectedObjectIndex = -1; coverQueue.length = 0;
+                Object.keys(targets).forEach(k => { targets[k] = []; });
+                Object.keys(dominantHues).forEach(k => delete dominantHues[k]);
+
+                const outlinerList = document.getElementById('outliner-list');
+                outlinerList.innerHTML = '';
+                searchQuery = ''; activeReaders = null; filterAllMode = false;
+                document.getElementById('search-input').value = '';
+                document.getElementById('filter-all-mode').checked = false;
+
+                if (!camera) {
+                    camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 1, 10000);
+                    camera.position.z = window.innerWidth < window.innerHeight ? 5000 : 3200;
+                    scene    = new THREE.Scene();
+                    renderer = new CSS3DRenderer();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    document.getElementById('container').appendChild(renderer.domElement);
+                    controls = new TrackballControls(camera, renderer.domElement);
+                    controls.minDistance = 150; controls.maxDistance = 9000;
+                    if (window.innerWidth < window.innerHeight) controls.target.set(0, -400, 0);
+                    controls.addEventListener('change', render);
+                    window.addEventListener('resize', onWindowResize);
+                    window.addEventListener('keydown', onKeyDown);
+                    document.getElementById('container').addEventListener('pointerup', onBackgroundClick, true);
+                    setupUIControls();
+                    animate();
+                }
+
+                // Build profile legend
+                buildProfileLegend();
+
+                // Create cards
+                bookData.forEach((book, i) => {
+                    const el = document.createElement('div');
+                    el.className = 'book-card';
+                    el.dataset.overlap = book.readers.length > 1 ? 'shared' : 'unique';
+
+                    const card = document.createElement('div');
+                    card.className = 'card';
+
+                    // --- Front ---
+                    const front = document.createElement('div');
+                    front.className = 'face front';
+
+                    const img = document.createElement('img');
+                    img.className = 'cover-img'; img.alt = book.title; img.style.display = 'none';
+
+                    const fallback = document.createElement('div');
+                    fallback.className = 'cover-fallback';
+                    fallback.innerHTML =
+                        `<div class="fallback-title">${esc(book.title)}</div>` +
+                        `<div class="fallback-author">${esc(book.author)}</div>`;
+
+                    const overlay = document.createElement('div');
+                    overlay.className = 'cover-overlay'; overlay.style.display = 'none';
+                    overlay.innerHTML =
+                        `<div class="overlay-title">${esc(book.title)}</div>` +
+                        `<div class="overlay-author">${esc(book.author)}</div>`;
+
+                    // Reader badges on the front
+                    const badges = document.createElement('div');
+                    badges.className = 'reader-badges';
+                    book.readers.forEach(pi => {
+                        const pc = PERSON_COLORS[pi] || {r:136,g:170,b:255};
+                        const name = profiles[pi]?.name || `P${pi+1}`;
+                        const badge = document.createElement('span');
+                        badge.className = 'reader-badge';
+                        badge.style.background = `rgb(${pc.r},${pc.g},${pc.b})`;
+                        badge.title = name;
+                        badge.textContent = name.charAt(0).toUpperCase();
+                        badges.appendChild(badge);
+                    });
+                    front.append(img, fallback, overlay, badges);
+
+                    // --- Back ---
+                    const back = document.createElement('div');
+                    back.className = 'face back';
+                    // Reader shelves info
+                    let readerInfo = '';
+                    book.readers.forEach(pi => {
+                        const rd = book.readerData[pi] || {};
+                        const pc = PERSON_COLORS[pi] || {r:136,g:170,b:255};
+                        const pname = profiles[pi]?.name || `P${pi+1}`;
+                        const shelf = rd.shelf || '';
+                        const mr = rd.myRating || '';
+                        const shelfLabel = shelf === 'read' ? 'read' : shelf === 'to-read' ? 'wants to read' : shelf || 'read';
+                        readerInfo += `<div class="info-item" style="color:rgba(${pc.r},${pc.g},${pc.b},0.9)">` +
+                            `<strong>${esc(pname)}</strong> — ${shelfLabel}` +
+                            (mr && mr !== '0' ? ` <span style="color:#ffd700">${'★'.repeat(parseInt(mr))||''}</span>` : '') +
+                            `</div>`;
+                    });
+                    const rn = parseFloat(book.readerData[book.readers[0]]?.rating);
+                    const stars = !isNaN(rn) && rn >= 0 && rn <= 5
+                        ? `<div class="info-item"><span class="stars">${'★'.repeat(Math.round(rn))}${'☆'.repeat(5-Math.round(rn))}</span> ${rn.toFixed(1)} avg</div>`
+                        : '';
+                    back.innerHTML =
+                        `<div class="back-title">${esc(book.title)}</div>` +
+                        `<div class="info-item"><strong>${esc(book.author)}</strong></div>` +
+                        (book.year  ? `<div class="info-item">📅 ${book.year}</div>` : '') +
+                        (book.pages ? `<div class="info-item">📖 ${book.pages} pg</div>` : '') +
+                        stars + readerInfo +
+                        (book.goodreadsUrl ? `<div class="gr-link"><a href="${esc(book.goodreadsUrl)}" target="_blank">Goodreads ↗</a></div>` : '');
+
+                    card.append(front, back);
+                    el.appendChild(card);
+
+                    const obj = new CSS3DObject(el);
+                    el.objectCSS = obj;
+                    el.addEventListener('dblclick', ev => { handleSelection(ev, obj); focusOnSelection(); });
+                    el.addEventListener('pointerdown', ev => onElementPointerDown(ev, obj));
+                    el.addEventListener('pointerup',   ev => onElementPointerUp(ev, obj));
+                    obj.position.set(Math.random()*4000-2000, Math.random()*4000-2000, Math.random()*4000-2000);
+                    scene.add(obj);
+                    objects.push(obj);
+
+                    // Outliner entry
+                    const li = document.createElement('li');
+                    const liTitle = document.createElement('span');
+                    liTitle.className = 'li-title';
+                    liTitle.textContent = book.title;
+                    li.title = `${book.title} — ${book.author}`;
+                    const liBadges = document.createElement('span');
+                    liBadges.className = 'li-badges';
+                    book.readers.forEach(pi => {
+                        const pc = PERSON_COLORS[pi] || {r:136,g:170,b:255};
+                        const dot = document.createElement('span');
+                        dot.className = 'li-badge';
+                        dot.style.background = `rgb(${pc.r},${pc.g},${pc.b})`;
+                        dot.title = profiles[pi]?.name || `P${pi+1}`;
+                        liBadges.appendChild(dot);
+                    });
+                    li.append(liTitle, liBadges);
+                    li.addEventListener('click', ev => handleSelection(ev, obj));
+                    li.addEventListener('dblclick', ev => { handleSelection(ev, obj); focusOnSelection(); });
+                    outlinerList.appendChild(li);
+                    obj.outlinerLi = li;
+
+                    queueCoverFetch(book, el);
+                });
+
+                const total = bookData.length;
+                const shared = bookData.filter(b=>b.readers.length>1).length;
+                document.getElementById('outliner-title').textContent = `${total} books`;
+
+                computeShelfTargets();
+                computeCompareTargets();
+                computeSphereTargets();
+                computeHelixTargets();
+                computeGridTargets();
+
+                updateCardColors();
+                updateCardOpacity();
+                buildReaderFilter();
+
+                transform(targets.shelf, 2000);
+                showLayoutControls('shelf');
+            }
+
+            // ---- Profile legend ----
+            function buildProfileLegend() {
+                const legendEl = document.getElementById('profile-legend');
+                legendEl.innerHTML = '';
+                profiles.forEach((p, pi) => {
+                    const chip = document.createElement('div');
+                    chip.className = 'legend-chip';
+                    chip.innerHTML =
+                        `<div class="legend-dot" style="background:rgb(${p.color.r},${p.color.g},${p.color.b})"></div>` +
+                        `<span>${esc(p.name)} <span style="color:#556;font-size:10px">(${p.books.length})</span></span>`;
+                    legendEl.appendChild(chip);
+                });
+                // Shared books summary
+                const sharedAll = bookData.filter(b=>b.readers.length===profiles.length).length;
+                const sharedAny = bookData.filter(b=>b.readers.length>1).length;
+                const chip = document.createElement('div');
+                chip.className = 'legend-chip';
+                chip.style.marginTop = '8px';
+                chip.innerHTML =
+                    `<div class="legend-dot" style="background:rgb(${SHARED_ALL_COLOR.r},${SHARED_ALL_COLOR.g},${SHARED_ALL_COLOR.b})"></div>` +
+                    `<span>All share: <strong style="color:#fff">${sharedAll}</strong> ` +
+                    (profiles.length > 2 ? `<span style="color:#556;font-size:10px">(any 2+: ${sharedAny})</span>` : '') +
+                    `</span>`;
+                legendEl.appendChild(chip);
+            }
+
+            // ---- Reader filter UI ----
+            function buildReaderFilter() {
+                const btnRow = document.getElementById('reader-filter-btns');
+                btnRow.innerHTML = '';
+
+                const allBtn = mkFilterBtn('__all__', 'All', true, null);
+                btnRow.appendChild(allBtn);
+
+                profiles.forEach((p, pi) => {
+                    btnRow.appendChild(mkFilterBtn(pi, p.name, false, p.color));
+                });
+
+                btnRow.addEventListener('click', e => {
+                    const btn = e.target.closest('button[data-pi]');
+                    if (!btn) return;
+                    const pi = btn.dataset.pi;
+                    if (pi === '__all__') {
+                        btnRow.querySelectorAll('button[data-pi]:not([data-pi="__all__"])').forEach(b=>b.classList.remove('active'));
+                        allBtn.classList.add('active');
+                        activeReaders = null;
+                    } else {
+                        const idx = parseInt(pi);
+                        const wasActive = btn.classList.contains('active');
+                        if (wasActive) {
+                            btn.classList.remove('active');
+                        } else {
+                            btn.classList.add('active');
+                        }
+                        allBtn.classList.remove('active');
+                        const activeBtns = [...btnRow.querySelectorAll('button[data-pi]:not([data-pi="__all__"]).active')];
+                        if (!activeBtns.length) {
+                            allBtn.classList.add('active');
+                            activeReaders = null;
+                        } else {
+                            activeReaders = new Set(activeBtns.map(b=>parseInt(b.dataset.pi)));
+                        }
+                    }
+                    applyFilters();
+                });
+            }
+            function mkFilterBtn(pi, label, active, color) {
+                const b = document.createElement('button');
+                b.className = 'sort-btn' + (active ? ' active' : '');
+                b.textContent = label;
+                b.dataset.pi = pi;
+                if (color) {
+                    b.style.outlineColor = `rgba(${color.r},${color.g},${color.b},0.6)`;
+                    if (!active) b.style.color = `rgba(${color.r},${color.g},${color.b},0.9)`;
+                }
+                return b;
+            }
+
+            // ---- Card colors ----
+            function updateCardColors() {
+                objects.forEach((obj, i) => {
+                    const book = bookData[i];
+                    const rgb = bookRgb(book);
+                    obj.element.accentRgb = rgb;
+                    const dark = { r:Math.round(rgb.r*0.35), g:Math.round(rgb.g*0.35), b:Math.round(rgb.b*0.35) };
+                    const front = obj.element.querySelector('.front');
+                    const back  = obj.element.querySelector('.back');
+                    if (front) front.style.backgroundColor = `rgba(${dark.r},${dark.g},${dark.b},0.92)`;
+                    if (back)  back.style.borderTop = `3px solid rgba(${rgb.r},${rgb.g},${rgb.b},0.65)`;
+                });
+                updateSelectionVisuals();
+            }
+            function updateCardOpacity() {
+                const v = parseFloat(document.getElementById('opacity-slider').value)/100;
+                objects.forEach(o => {
+                    if (!o.element.classList.contains('dim')) o.element.style.opacity = v;
+                });
+            }
+
+            // ---- Layout: shelf ----
+            function assignTargets(key, positionFn) {
+                const n = bookData.length;
+                const ranks = getSortedRanks();
+                const pos = Array.from({length: n}, (_, rank) => positionFn(rank, n));
+                targets[key] = objects.map((_, i) => pos[ranks[i]]);
+            }
+            function computeShelfTargets() {
+                const spacingX = COVER_W + 13;
+                const cols    = parseInt(document.getElementById('shelf-cols').value) || 12;
+                const rowGap  = parseInt(document.getElementById('shelf-spacing').value) || 200;
+                const n = bookData.length;
+                const totalW = (cols-1)*spacingX, totalH = (Math.ceil(n/cols)-1)*rowGap;
+                assignTargets('shelf', rank => {
+                    const o = new THREE.Object3D();
+                    o.position.set((rank%cols)*spacingX-totalW/2, -Math.floor(rank/cols)*rowGap+totalH/2, 0);
+                    return o;
+                });
+            }
+
+            // ---- Layout: COMPARE (group by reader combination) ----
+            function computeCompareTargets() {
+                const n = profiles.length;
+
+                // Compute positions for each unique reader combination
+                function groupPositions() {
+                    if (n === 2) {
+                        // Horizontal three-zone: A only | both | B only
+                        return {
+                            '0':   { x: -1000, y: 0 },
+                            '1':   { x:  1000, y: 0 },
+                            '0,1': { x:     0, y: 0 },
+                        };
+                    }
+                    if (n === 3) {
+                        // Triangle arrangement
+                        return {
+                            '0':     { x: -900, y:  500 },
+                            '1':     { x:  900, y:  500 },
+                            '2':     { x:    0, y: -600 },
+                            '0,1':   { x:    0, y:  600 },
+                            '0,2':   { x: -600, y: -100 },
+                            '1,2':   { x:  600, y: -100 },
+                            '0,1,2': { x:    0, y:    0 },
+                        };
+                    }
+                    // 4+ people: group by overlap count
+                    return null;
+                }
+
+                const groupPos = groupPositions();
+
+                // Group books by their reader combination
+                const groups = {};
+                bookData.forEach((book, i) => {
+                    const key = [...book.readers].sort((a,b)=>a-b).join(',');
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(i);
+                });
+
+                const spacingX = COVER_W + 16, spacingY = COVER_H + 30;
+                const posArr = new Array(bookData.length);
+
+                if (groupPos) {
+                    // Named positions for each group
+                    Object.entries(groups).forEach(([key, indices]) => {
+                        const gp = groupPos[key] || { x: 0, y: -1000 }; // fallback
+                        const cols = Math.min(indices.length, 6);
+                        const totalW = (cols-1)*spacingX;
+                        indices.forEach((bookIdx, rank) => {
+                            posArr[bookIdx] = {
+                                x: gp.x + (rank%cols)*spacingX - totalW/2,
+                                y: gp.y - Math.floor(rank/cols)*spacingY,
+                            };
+                        });
+                    });
+                } else {
+                    // 4+ people: group by overlap count (more overlap = higher y)
+                    const countGroups = {};
+                    bookData.forEach((book, i) => {
+                        const cnt = book.readers.length;
+                        if (!countGroups[cnt]) countGroups[cnt] = [];
+                        countGroups[cnt].push(i);
+                    });
+                    const counts = Object.keys(countGroups).map(Number).sort((a,b)=>b-a);
+                    const rowH = COVER_H + 80;
+                    const totalGroupH = (counts.length - 1) * rowH;
+                    counts.forEach((cnt, ri) => {
+                        const indices = countGroups[cnt];
+                        const cols = Math.min(indices.length, 14);
+                        const totalW = (cols-1)*spacingX;
+                        indices.forEach((bookIdx, rank) => {
+                            posArr[bookIdx] = {
+                                x: (rank%cols)*spacingX - totalW/2,
+                                y: -ri*rowH + totalGroupH/2 - Math.floor(rank/cols)*spacingY,
+                            };
+                        });
+                    });
+                }
+
+                targets.compare = objects.map((_, i) => {
+                    const o = new THREE.Object3D();
+                    const p = posArr[i] || {x:0,y:0};
+                    o.position.set(p.x, p.y, 0);
+                    return o;
+                });
+            }
+
+            // ---- Layouts: sphere, helix, grid ----
+            function computeSphereTargets() {
+                const v = new THREE.Vector3();
+                assignTargets('sphere', (rank, n) => {
+                    const phi = Math.acos(-1+(2*rank)/n), theta = Math.sqrt(n*Math.PI)*phi;
+                    const o = new THREE.Object3D();
+                    o.position.setFromSphericalCoords(900, phi, theta);
+                    v.copy(o.position).multiplyScalar(2); o.lookAt(v); return o;
+                });
+            }
+            function computeHelixTargets() {
+                const radius    = parseInt(document.getElementById('helix-radius').value)    || 900;
+                const tightness = parseInt(document.getElementById('helix-tightness').value) || 8;
+                const v = new THREE.Vector3();
+                assignTargets('helix', (rank, n) => {
+                    const theta = rank * 0.175 + Math.PI;
+                    const y = -(rank*tightness) + (n*tightness/2.5);
+                    const o = new THREE.Object3D();
+                    o.position.setFromCylindricalCoords(radius, theta, y);
+                    v.set(o.position.x*2, o.position.y, o.position.z*2); o.lookAt(v); return o;
+                });
+            }
+            function computeGridTargets() {
+                const cols   = parseInt(document.getElementById('grid-cols').value)    || 10;
+                const spaceX = parseInt(document.getElementById('grid-space-x').value) || 150;
+                const spaceY = parseInt(document.getElementById('grid-space-y').value) || 200;
+                const n = bookData.length;
+                const totalW = (cols-1)*spaceX, totalH = (Math.ceil(n/cols)-1)*spaceY;
+                assignTargets('grid', rank => {
+                    const o = new THREE.Object3D();
+                    o.position.set((rank%cols)*spaceX-totalW/2, -Math.floor(rank/cols)*spaceY+totalH/2, 0);
+                    return o;
+                });
+            }
+            function computeCurrentLayoutTargets() {
+                if      (currentLayout==='shelf')   computeShelfTargets();
+                else if (currentLayout==='compare') computeCompareTargets();
+                else if (currentLayout==='sphere')  computeSphereTargets();
+                else if (currentLayout==='helix')   computeHelixTargets();
+                else if (currentLayout==='grid')    computeGridTargets();
+            }
+            function showLayoutControls(name) {
+                ['shelf','helix','grid'].forEach(n => {
+                    const el = document.getElementById(`${n}-controls`);
+                    if (el) el.style.display = n===name ? 'block' : 'none';
+                });
+                currentLayout = name;
+            }
+
+            // ---- UI controls ----
+            function setupUIControls() {
+                document.getElementById('toggle-ui').addEventListener('click', e => {
+                    e.stopPropagation(); document.body.classList.toggle('ui-hidden');
+                    document.getElementById('toggle-ui').textContent =
+                        document.body.classList.contains('ui-hidden') ? '👁️ Show UI' : '👁️ Hide UI';
+                });
+                document.getElementById('toggle-settings').addEventListener('click', e => {
+                    e.stopPropagation();
+                    document.getElementById('side-panel').classList.toggle('mobile-open');
+                    document.getElementById('outliner-panel').classList.remove('mobile-open');
+                });
+                document.getElementById('toggle-outliner').addEventListener('click', e => {
+                    e.stopPropagation();
+                    document.getElementById('outliner-panel').classList.toggle('mobile-open');
+                    document.getElementById('side-panel').classList.remove('mobile-open');
+                });
+                document.getElementById('opacity-slider').addEventListener('input', function() {
+                    document.getElementById('opacity-val').textContent = this.value; updateCardOpacity();
+                });
+                document.getElementById('filter-all-mode').addEventListener('change', function() {
+                    filterAllMode = this.checked; applyFilters();
+                });
+
+                // Sort buttons
+                document.querySelectorAll('.sort-btn[data-sort]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.sort-btn[data-sort]').forEach(b=>b.classList.remove('active'));
+                        btn.classList.add('active'); sortKey = btn.dataset.sort; applySort();
+                    });
+                });
+                document.getElementById('sort-desc').addEventListener('change', function() { sortDesc=this.checked; applySort(); });
+
+                // Search
+                document.getElementById('search-input').addEventListener('input', function() { searchQuery=this.value; applyFilters(); });
+                document.getElementById('search-input').addEventListener('keydown', e => {
+                    if (e.key==='Escape') { e.target.value=''; searchQuery=''; applyFilters(); }
+                });
+
+                // Layout buttons
+                const layoutBtn = (id, key, fn, ctrl) =>
+                    document.getElementById(id).addEventListener('click', () => {
+                        TWEEN.removeAll(); fn(); transform(targets[key], 1500); showLayoutControls(ctrl);
+                    });
+                layoutBtn('shelf-btn',          'shelf',   computeShelfTargets,   'shelf');
+                layoutBtn('compare-layout-btn', 'compare', computeCompareTargets, 'none');
+                layoutBtn('sphere-btn',         'sphere',  computeSphereTargets,  'none');
+                layoutBtn('helix-btn',          'helix',   computeHelixTargets,   'helix');
+                layoutBtn('grid-btn',           'grid',    computeGridTargets,    'grid');
+
+                // Live sliders
+                const liveSlider = (id, valId, fn, key) =>
+                    document.getElementById(id).addEventListener('input', function() {
+                        if (document.getElementById(valId)) document.getElementById(valId).textContent = this.value;
+                        if (currentLayout===key) { fn(); transform(targets[key], 300); }
+                    });
+                liveSlider('shelf-cols',    'shelf-cols-val',    computeShelfTargets, 'shelf');
+                liveSlider('shelf-spacing', 'shelf-spacing-val', computeShelfTargets, 'shelf');
+                liveSlider('helix-radius',    'helix-radius-val',    computeHelixTargets, 'helix');
+                liveSlider('helix-tightness', 'helix-tightness-val', computeHelixTargets, 'helix');
+                liveSlider('grid-cols',    'grid-cols-val',    computeGridTargets, 'grid');
+                liveSlider('grid-space-x', 'grid-space-x-val', computeGridTargets, 'grid');
+                liveSlider('grid-space-y', 'grid-space-y-val', computeGridTargets, 'grid');
+
+                document.getElementById('reimport-btn').addEventListener('click', () => {
+                    document.getElementById('import-overlay').classList.remove('hidden');
+                });
+            }
+
+            // ---- Selection ----
+            function handleSelection(event, obj) {
+                const ctrl=event.ctrlKey||event.metaKey, shift=event.shiftKey;
+                const idx=objects.indexOf(obj);
+                if (shift && lastSelectedObjectIndex !== -1) {
+                    const lo=Math.min(lastSelectedObjectIndex,idx), hi=Math.max(lastSelectedObjectIndex,idx);
+                    const range=objects.slice(lo,hi+1);
+                    selectedObjects = ctrl ? [...new Set([...selectedObjects,...range])] : range;
+                } else if (ctrl) {
+                    const si=selectedObjects.indexOf(obj);
+                    if (si>-1) selectedObjects.splice(si,1); else selectedObjects.push(obj);
+                    lastSelectedObjectIndex=idx;
+                } else {
+                    selectedObjects=[obj]; lastSelectedObjectIndex=idx;
+                }
+                updateSelectionVisuals();
+            }
+            function selectAll()      { selectedObjects=[...objects]; lastSelectedObjectIndex=-1; updateSelectionVisuals(); }
+            function clearSelection() { selectedObjects=[]; lastSelectedObjectIndex=-1; updateSelectionVisuals(); }
+            function updateSelectionVisuals() {
+                objects.forEach((obj, i) => {
+                    const sel = selectedObjects.includes(obj);
+                    const rgb = obj.element.accentRgb || {r:136,g:170,b:255};
+                    const glow   = sel ? `0 0 28px rgba(${rgb.r},${rgb.g},${rgb.b},0.95),0 0 12px rgba(${rgb.r},${rgb.g},${rgb.b},0.7)` : `0 0 10px rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`;
+                    const border = sel ? `rgba(${rgb.r},${rgb.g},${rgb.b},0.9)` : `rgba(${rgb.r},${rgb.g},${rgb.b},0.22)`;
+                    obj.element.querySelectorAll('.face').forEach(f => { f.style.boxShadow=glow; f.style.borderColor=border; });
+                    if (obj.outlinerLi) obj.outlinerLi.classList.toggle('selected', sel);
+                });
+            }
+
+            // ---- Pointer events ----
+            function onElementPointerDown(ev, obj) {
+                if (ev.pointerType==='mouse'&&ev.button!==0) return;
+                pointerDownTarget=obj; pointerDownPos.set(ev.clientX, ev.clientY);
+            }
+            function onElementPointerUp(ev, obj) {
+                if (pointerDownTarget!==obj) { pointerDownTarget=null; return; }
+                if (pointerDownPos.distanceTo(new THREE.Vector2(ev.clientX,ev.clientY)) < 10) {
+                    const now=Date.now(), gap=now-lastTapTime;
+                    if (ev.pointerType!=='mouse'&&gap<400&&gap>0&&lastTappedObject===obj) { handleSelection(ev,obj); focusOnSelection(); }
+                    else handleSelection(ev,obj);
+                    lastTapTime=now; lastTappedObject=obj;
+                }
+                pointerDownTarget=null;
+            }
+            function onBackgroundClick(ev) {
+                if (ev.target.closest('.book-card')) return;
+                if (pointerDownTarget) { pointerDownTarget=null; return; }
+                if (ev.target.closest('#side-panel,#outliner-panel,#menu,.panel-toggle,#toggle-ui,#import-overlay')) return;
+                clearSelection();
+                if (window.innerWidth<=768) {
+                    document.getElementById('side-panel').classList.remove('mobile-open');
+                    document.getElementById('outliner-panel').classList.remove('mobile-open');
+                }
+            }
+
+            // ---- Keyboard ----
+            function onKeyDown(e) {
+                if (e.target.tagName==='INPUT') return;
+                switch(e.key.toLowerCase()) {
+                    case 'f': focusOnSelection(); break;
+                    case 'a': if (e.ctrlKey||e.metaKey) { e.preventDefault(); selectAll(); } break;
+                    case 'escape': clearSelection(); break;
+                }
+            }
+
+            // ---- Camera ----
+            function focusOnSelection() {
+                if (!camera) return;
+                let pos, lookAt;
+                if (!selectedObjects.length) {
+                    pos=new THREE.Vector3(0,0,camera.position.z); lookAt=new THREE.Vector3();
+                } else {
+                    const box=new THREE.Box3();
+                    selectedObjects.forEach(o=>box.expandByPoint(o.position));
+                    const center=new THREE.Vector3(); box.getCenter(center);
+                    const size=new THREE.Vector3(); box.getSize(size);
+                    let dist=Math.abs(Math.max(size.x,size.y,size.z)/1.5/Math.tan(camera.fov*Math.PI/360))*1.6;
+                    dist=Math.max(dist, selectedObjects.length===1 ? 280 : 500);
+                    lookAt=center.clone(); pos=new THREE.Vector3(center.x,center.y,center.z+dist);
+                }
+                tweenCamera(pos, lookAt);
+            }
+            function tweenCamera(pos, lookAt) {
+                TWEEN.removeAll();
+                new TWEEN.Tween(camera.position).to({x:pos.x,y:pos.y,z:pos.z},1000).easing(TWEEN.Easing.Exponential.Out).start();
+                new TWEEN.Tween(controls.target).to({x:lookAt.x,y:lookAt.y,z:lookAt.z},1000).easing(TWEEN.Easing.Exponential.Out).start();
+                new TWEEN.Tween(camera.up).to({x:0,y:1,z:0},1000).easing(TWEEN.Easing.Exponential.Out).start();
+                new TWEEN.Tween({}).to({},1000).onUpdate(render).start();
+            }
+
+            // ---- Transform / Render ----
+            function transform(tgts, duration) {
+                if (!tgts?.length) return;
+                if (duration===0) {
+                    objects.forEach((o,i)=>{ o.position.copy(tgts[i].position); o.rotation.copy(tgts[i].rotation); });
+                    render(); return;
+                }
+                objects.forEach((o,i) => {
+                    const t=tgts[i];
+                    new TWEEN.Tween(o.position).to({x:t.position.x,y:t.position.y,z:t.position.z},Math.random()*duration+duration).easing(TWEEN.Easing.Exponential.InOut).start();
+                    new TWEEN.Tween(o.rotation).to({x:t.rotation.x,y:t.rotation.y,z:t.rotation.z},Math.random()*duration+duration).easing(TWEEN.Easing.Exponential.InOut).start();
+                });
+                new TWEEN.Tween({}).to({},duration*2).onUpdate(render).start();
+            }
+            function onWindowResize() {
+                camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth,window.innerHeight); render();
+            }
+            function animate() { requestAnimationFrame(animate); TWEEN.update(); controls.update(); }
+            function render()  { if (renderer&&scene&&camera) renderer.render(scene,camera); }
+            function esc(s)    { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        </script>
+    </body>
+</html>

@@ -20,25 +20,26 @@ function matchesShelf(b: LocalBook, filter: ShelfFilter): boolean {
 }
 
 export function LibraryView() {
-  const { libraryView, openReader, shelfFilter, searchQuery } = useApp()
-  const { localBooks, openBook, bookLoadingId, bookError, clearBookError } = useBook()
+  const { libraryView, openReader, shelfFilter, searchQuery, readableOnly } = useApp()
+  const { localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable } = useBook()
   const [page, setPage] = useState(0)
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     let list = localBooks.filter(b => matchesShelf(b, shelfFilter))
+    if (readableOnly) list = list.filter(isReadable)
     if (q) list = list.filter(b =>
       b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q))
     if (shelfFilter === 'recent') {
       list = [...list].sort((a, b) => (b.lastRead || '').localeCompare(a.lastRead || '')).slice(0, 80)
     }
     return list
-  }, [localBooks, shelfFilter, searchQuery])
+  }, [localBooks, shelfFilter, searchQuery, readableOnly, isReadable])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
   // Reset to the first page whenever the result set changes.
-  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery])
+  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly])
   useEffect(() => { if (page > totalPages - 1) setPage(0) }, [page, totalPages])
 
   const pageItems = useMemo(
@@ -139,6 +140,26 @@ export function LibraryView() {
   )
 }
 
+function BookCover({ coverUrl, title }: { coverUrl?: string; title: string }) {
+  const [errored, setErrored] = useState(false)
+  if (!coverUrl || errored) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-bg-surface to-bg-elevated">
+        <span className="font-display text-3xl text-text-muted">{title.charAt(0)}</span>
+      </div>
+    )
+  }
+  return (
+    <img
+      src={coverUrl}
+      alt={title}
+      className="w-full h-full object-cover"
+      loading="lazy"
+      onError={() => setErrored(true)}
+    />
+  )
+}
+
 function FlatGrid({
   localBooks, onOpen, loadingId,
 }: {
@@ -159,13 +180,7 @@ function FlatGrid({
           className="group text-left hover:scale-[1.03] transition-transform disabled:opacity-60"
         >
           <div className="aspect-[2/3] rounded-lg overflow-hidden mb-2 bg-bg-glass-active shadow-lg relative">
-            {lb.coverUrl ? (
-              <img src={lb.coverUrl} alt={lb.title} className="w-full h-full object-cover" loading="lazy" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-bg-surface to-bg-elevated">
-                <span className="font-display text-3xl text-text-muted">{lb.title.charAt(0)}</span>
-              </div>
-            )}
+            <BookCover coverUrl={lb.coverUrl} title={lb.title} />
             {lb.format && lb.format !== 'epub' && (
               <span className="absolute top-1 right-1 text-[8px] font-mono uppercase px-1 py-0.5 rounded bg-black/60 text-text-dim">
                 {lb.format}

@@ -18,6 +18,9 @@ public/data/goodreads_*.csv
 # but keep the curated shelf CSV tracked:
 !public/data/patrick_collison_bookshelf.csv
 
+# Embedded reader build artifact (regenerate with: npm run build:reader)
+public/reader/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import {
   Library, BookOpen, BookMarked, Clock, Star,
-  Upload, Settings, Grid3x3, Box, Circle, Dna, BookCopy, HardDrive,
+  Upload, Settings, Grid3x3, Box, Circle, Dna, BookCopy, HardDrive, Check,
 } from 'lucide-react'
 import type { ShelfFilter } from '../../context/AppContext'
 
@@ -24,7 +24,11 @@ const LAYOUT_ITEMS = [
 ]
 
 export function Sidebar() {
-  const { layout, setLayout, libraryView, setLibraryView, shelfFilter, setShelfFilter, setSettingsOpen } = useApp()
+  const {
+    layout, setLayout, libraryView, setLibraryView,
+    shelfFilter, setShelfFilter, setSettingsOpen,
+    readableOnly, setReadableOnly,
+  } = useApp()
   const { uploadFile, importGoodreads, importLocalLibrary } = useBook()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -95,6 +99,19 @@ export function Sidebar() {
             <span>{label}</span>
           </button>
         ))}
+
+        {/* Readable-only toggle */}
+        <button
+          onClick={() => setReadableOnly(!readableOnly)}
+          className="w-full flex items-center gap-3 px-5 py-2 mt-1 text-[12.5px] text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors"
+        >
+          <span className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center ${
+            readableOnly ? 'bg-accent border-accent' : 'border-border-hover'
+          }`}>
+            {readableOnly && <Check className="w-3 h-3 text-bg" />}
+          </span>
+          <span>Readable only</span>
+        </button>
       </div>
 
       {/* View mode */}

@@ -18,6 +18,8 @@ interface AppState {
   /** Global animation speed multiplier for the liquid-gradient background (0–1). */
   gradientSpeed: number
   settingsOpen: boolean
+  /** When true, only show books that can be opened in the in-app reader. */
+  readableOnly: boolean
 }
 
 interface AppContextValue extends AppState {
@@ -33,6 +35,7 @@ interface AppContextValue extends AppState {
   setSearchQuery: (q: string) => void
   setGradientSpeed: (s: number) => void
   setSettingsOpen: (open: boolean) => void
+  setReadableOnly: (v: boolean) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -49,6 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     searchQuery: '',
     gradientSpeed: 0.1,
     settingsOpen: false,
+    readableOnly: false,
   })
 
   const setView = useCallback((view: ViewMode) =>
@@ -75,13 +79,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, gradientSpeed })), [])
   const setSettingsOpen = useCallback((settingsOpen: boolean) =>
     setState(s => ({ ...s, settingsOpen })), [])
+  const setReadableOnly = useCallback((readableOnly: boolean) =>
+    setState(s => ({ ...s, readableOnly })), [])
 
   return (
     <AppContext.Provider value={{
       ...state,
       setView, setLibraryView, setLayout, setColorScheme,
       toggleSidebar, toggleUI, openReader, closeReader,
-      setShelfFilter, setSearchQuery, setGradientSpeed, setSettingsOpen,
+      setShelfFilter, setSearchQuery, setGradientSpeed, setSettingsOpen, setReadableOnly,
     }}>
       {children}
     </AppContext.Provider>

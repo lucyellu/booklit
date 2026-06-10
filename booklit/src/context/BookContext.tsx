@@ -94,6 +94,8 @@ interface BookContextType {
   /** Open a library book — fetches & parses its EPUB on demand if not already loaded. */
   openBook: (lb: LocalBook) => Promise<boolean>
   clearBookError: () => void
+  /** True if this book can actually be opened in-app (local file, loaded, or bundled EPUB). */
+  isReadable: (lb: LocalBook) => boolean
   setCurrentChapter: (index: number) => void
   setCurrentPage: (page: number) => void
   goToNextPage: () => void
@@ -463,6 +465,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
             title: b.title,
             author: b.author || '',
             format: b.format,
+            coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
             srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
             shelf: 'local',
             lastRead: new Date().toISOString(),
@@ -598,6 +601,12 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, [activateBook])
 
   const clearBookError = useCallback(() => setBookError(null), [])
+
+  const isReadable = useCallback((lb: LocalBook): boolean => {
+    if (lb.srcUrl || lb.bookData) return true            // local file or already parsed
+    const src = findEpubForBook(lb, manifestRef.current)
+    return src?.type === 'file'                            // bundled EPUB we can parse
+  }, [])
 
   const setCurrentChapter = useCallback((index: number) => {
     if (!book || index < 0 || index >= book.chapters.length) return
@@ -819,6 +828,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       title: b.title,
       author: b.author || '',
       format: b.format,
+      coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
       srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
       shelf: 'local',
       lastRead: new Date().toISOString(),
@@ -863,7 +873,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       sentenceSpacing, wordSpacing, fontFamily, highlightColor, autoPlayNext,
       bookmarks, textHighlights, localBooks,
       bookLoadingId, bookError,
-      setBook, openBook, clearBookError, setCurrentChapter, setCurrentPage,
+      setBook, openBook, clearBookError, isReadable, setCurrentChapter, setCurrentPage,
       goToNextPage, goToPreviousPage, goToNextChapter, goToPreviousChapter,
       togglePlayback, stopPlayback,
       setPlaybackSpeed, setVolume, setFontSize, setSelectedVoice,

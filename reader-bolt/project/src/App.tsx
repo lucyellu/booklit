@@ -52,9 +52,10 @@ function AppContent() {
   const [uiVisible, setUiVisible] = useState(true);
   const [currentView, setCurrentView] = useState<'reader' | 'library'>('reader');
   const [readingMode, setReadingMode] = useState<ReadingMode>('page-flip');
-  const { backgroundImage } = useBook();
+  const { backgroundImage, setBook } = useBook();
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const isEmbed = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('embed');
 
   useEffect(() => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -81,6 +82,21 @@ function AppContent() {
       window.removeEventListener('hideControls', handleHideControls);
     };
   }, []);
+
+  // Embedded mode: accept a book pushed from the host (Booklit) via postMessage.
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data;
+      if (d && d.type === 'booklit:load-book' && d.book && Array.isArray(d.book.chapters)) {
+        setBook(d.book);
+        setCurrentView('reader');
+      }
+    };
+    window.addEventListener('message', onMsg);
+    // Tell the host we're ready to receive a book.
+    try { window.parent?.postMessage({ type: 'booklit:ready' }, '*'); } catch { /* not embedded */ }
+    return () => window.removeEventListener('message', onMsg);
+  }, [setBook]);
 
   const currentTheme = themes[selectedTheme];
 
@@ -110,7 +126,8 @@ function AppContent() {
 
       {/* Top Controls */}
       <div className="fixed top-4 left-4 right-4 z-[60] flex justify-between items-center">
-        {/* Library Button */}
+        {/* Library Button (hidden when embedded in Booklit) */}
+        {!isEmbed && (
         <button
           onClick={() => setCurrentView(currentView === 'library' ? 'reader' : 'library')}
           className={`p-3 rounded-2xl transition-all duration-200 hover:scale-105 border backdrop-blur-xl ${
@@ -129,10 +146,12 @@ function AppContent() {
         >
           <Library className="w-5 h-5" />
         </button>
+        )}
+        {isEmbed && <div />}
 
         <div className="flex items-center gap-3">
-          {/* Auth/Profile Button */}
-          {user ? (
+          {/* Auth/Profile Button (hidden when embedded) */}
+          {!isEmbed && (user ? (
             <UserProfile user={user} isDarkMode={isDarkMode} />
           ) : (
             <button
@@ -149,7 +168,7 @@ function AppContent() {
             >
               <LogIn className="w-5 h-5" />
             </button>
-          )}
+          ))}
 
           {/* UI Toggle Button */}
           <button

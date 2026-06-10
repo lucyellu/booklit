@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
+import JSZip from 'jszip'
 
 const PORT = process.env.GOODREADS_PORT ? Number(process.env.GOODREADS_PORT) : 8765
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -29,6 +30,7 @@ const MIME = {
   '.md': 'text/markdown; charset=utf-8',
 }
 let localCatalog = null   // cached [{id,title,author,format,relpath,size}]
+const coverCache = new Map()  // id → { buffer, mime }  (extracted EPUB covers)
 
 const CSV_FIELDS = [
   'title', 'author', 'year', 'isbn', 'rating', 'my_rating',
@@ -176,6 +178,61 @@ async function scanLocalBooks() {
   return out
 }
 
+function detectImageMime(buf) {
+  if (buf.length < 4) return 'application/octet-stream'
+  if (buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg'
+  if (buf[0] === 0x89 && buf[1] === 0x50) return 'image/png'
+  if (buf[0] === 0x47 && buf[1] === 0x49) return 'image/gif'
+  if (buf[0] === 0x52 && buf[1] === 0x49) return 'image/webp'
+  return 'image/jpeg'
+}
+
+// Extract a cover image from an EPUB (best-effort across the common conventions).
+async function extractEpubCover(absPath) {
+  const zip = await JSZip.loadAsync(await fs.readFile(absPath))
+
+  let opfPath = null
+  const container = zip.file('META-INF/container.xml')
+  if (container) {
+    const m = (await container.async('text')).match(/full-path="([^"]+)"/)
+    if (m) opfPath = m[1]
+  }
+  if (!opfPath) opfPath = Object.keys(zip.files).find(f => f.toLowerCase().endsWith('.opf')) || null
+  if (!opfPath) return null
+
+  const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : ''
+  const opf = await zip.file(opfPath).async('text')
+
+  let href = null
+  // 1) <meta name="cover" content="ID"> → matching manifest item
+  const meta = opf.match(/<meta[^>]*name="cover"[^>]*content="([^"]+)"/i)
+            || opf.match(/<meta[^>]*content="([^"]+)"[^>]*name="cover"/i)
+  if (meta) {
+    const id = meta[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const item = opf.match(new RegExp(`<item[^>]*id="${id}"[^>]*href="([^"]+)"`, 'i'))
+              || opf.match(new RegExp(`<item[^>]*href="([^"]+)"[^>]*id="${id}"`, 'i'))
+    if (item) href = item[1]
+  }
+  // 2) EPUB3 properties="cover-image"
+  if (!href) {
+    const m = opf.match(/<item[^>]*properties="[^"]*cover-image[^"]*"[^>]*href="([^"]+)"/i)
+           || opf.match(/<item[^>]*href="([^"]+)"[^>]*properties="[^"]*cover-image[^"]*"/i)
+    if (m) href = m[1]
+  }
+  // 3) guess by filename
+  if (!href) {
+    const guess = Object.keys(zip.files).find(f => /cover[^/]*\.(jpe?g|png|gif|webp)$/i.test(f))
+    if (guess) href = guess.startsWith(opfDir) ? guess.slice(opfDir.length) : guess
+  }
+  if (!href) return null
+
+  const decoded = decodeURIComponent(href)
+  const file = zip.file(opfDir + decoded) || zip.file(decoded)
+  if (!file) return null
+  const buffer = await file.async('nodebuffer')
+  return { buffer, mime: detectImageMime(buffer) }
+}
+
 // Resolve a /files/<relpath> request to a safe absolute path inside BOOKS_DIR.
 function resolveLocalFile(relpath) {
   let decoded
@@ -217,6 +274,34 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: e.message || 'scan failed' }))
+    }
+    return
+  }
+
+  // --- extracted EPUB cover image (memory-cached) ---
+  if (u.pathname === '/api/cover') {
+    const id = u.searchParams.get('id') || ''
+    try {
+      if (!localCatalog) localCatalog = await scanLocalBooks()
+      const book = localCatalog.find(b => b.id === id)
+      if (!book || book.format !== 'epub') { res.writeHead(404); res.end('no cover'); return }
+
+      let entry = coverCache.get(id)
+      if (!entry) {
+        const abs = path.resolve(BOOKS_DIR, book.relpath)
+        entry = await extractEpubCover(abs)
+        if (!entry) { res.writeHead(404); res.end('no cover'); return }
+        if (coverCache.size > 800) coverCache.delete(coverCache.keys().next().value)
+        coverCache.set(id, entry)
+      }
+      res.writeHead(200, {
+        'Content-Type': entry.mime,
+        'Content-Length': entry.buffer.length,
+        'Cache-Control': 'public, max-age=604800',
+      })
+      res.end(entry.buffer)
+    } catch (e) {
+      res.writeHead(404); res.end('cover error: ' + (e.message || ''))
     }
     return
   }

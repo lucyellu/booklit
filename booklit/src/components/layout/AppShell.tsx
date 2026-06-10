@@ -2,6 +2,7 @@ import { useApp } from '../../context/AppContext'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { PlayerBar } from './PlayerBar'
+import { SettingsModal } from './SettingsModal'
 import { LiquidGradient } from '../background/LiquidGradient'
 import { LibraryView } from '../library/LibraryView'
 
@@ -36,6 +37,8 @@ export function AppShell() {
         {/* Player bar */}
         <PlayerBar />
       </div>
+
+      <SettingsModal />
     </div>
   )
 }

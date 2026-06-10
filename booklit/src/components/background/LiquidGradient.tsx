@@ -15,7 +15,9 @@ export function LiquidGradient() {
     touchTexture: TouchTexture
     animId: number
   } | null>(null)
-  const { colorScheme } = useApp()
+  const { colorScheme, gradientSpeed } = useApp()
+  const speedRef = useRef(gradientSpeed)
+  speedRef.current = gradientSpeed
 
   useEffect(() => {
     const container = containerRef.current
@@ -41,15 +43,15 @@ export function LiquidGradient() {
       uColor4: { value: new THREE.Vector3(...scheme.colors[3]) },
       uColor5: { value: new THREE.Vector3(...scheme.colors[4]) },
       uColor6: { value: new THREE.Vector3(...scheme.colors[5]) },
-      uSpeed: { value: 1.2 },
+      uSpeed: { value: scheme.speed },
       uIntensity: { value: 1.8 },
       uTouchTexture: { value: touchTexture.texture },
       uGrainIntensity: { value: 0.06 },
-      uDarkNavy: { value: new THREE.Vector3(scheme.colors[1][0], scheme.colors[1][1], scheme.colors[1][2]) },
-      uGradientSize: { value: 1.0 },
-      uGradientCount: { value: 6.0 },
-      uColor1Weight: { value: 1.0 },
-      uColor2Weight: { value: 1.0 },
+      uDarkNavy: { value: new THREE.Vector3(...scheme.darkNavy) },
+      uGradientSize: { value: scheme.gradientSize },
+      uGradientCount: { value: scheme.gradientCount },
+      uColor1Weight: { value: scheme.color1Weight },
+      uColor2Weight: { value: scheme.color2Weight },
     }
 
     const geometry = new THREE.PlaneGeometry(2, 2)
@@ -71,10 +73,16 @@ export function LiquidGradient() {
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('resize', onResize)
 
-    let startTime = performance.now()
+    // Accumulate *scaled* time so the speed slider changes motion smoothly
+    // without resetting the animation phase.
+    let simTime = 0
+    let lastFrame = performance.now()
     const animate = () => {
       stateRef.current!.animId = requestAnimationFrame(animate)
-      uniforms.uTime.value = (performance.now() - startTime) / 1000
+      const now = performance.now()
+      simTime += ((now - lastFrame) / 1000) * speedRef.current
+      lastFrame = now
+      uniforms.uTime.value = simTime
       touchTexture.update()
       renderer.render(scene, camera)
     }
@@ -107,9 +115,16 @@ export function LiquidGradient() {
       from.y += (to[1] - from.y) * t
       from.z += (to[2] - from.z) * t
     }
+    const lerpVal = (from: number, to: number, t: number) => from + (to - from) * t
 
     let frame: number
     let progress = 0
+    const startSpeed = u.uSpeed.value as number
+    const startGradientSize = u.uGradientSize.value as number
+    const startGradientCount = u.uGradientCount.value as number
+    const startC1Weight = u.uColor1Weight.value as number
+    const startC2Weight = u.uColor2Weight.value as number
+
     const transition = () => {
       progress = Math.min(progress + 0.02, 1)
       const t = progress
@@ -119,7 +134,12 @@ export function LiquidGradient() {
       lerp(u.uColor4.value, scheme.colors[3], t)
       lerp(u.uColor5.value, scheme.colors[4], t)
       lerp(u.uColor6.value, scheme.colors[5], t)
-      lerp(u.uDarkNavy.value, scheme.colors[1], t)
+      lerp(u.uDarkNavy.value, scheme.darkNavy, t)
+      u.uSpeed.value = lerpVal(startSpeed, scheme.speed, t)
+      u.uGradientSize.value = lerpVal(startGradientSize, scheme.gradientSize, t)
+      u.uGradientCount.value = lerpVal(startGradientCount, scheme.gradientCount, t)
+      u.uColor1Weight.value = lerpVal(startC1Weight, scheme.color1Weight, t)
+      u.uColor2Weight.value = lerpVal(startC2Weight, scheme.color2Weight, t)
       if (progress < 1) frame = requestAnimationFrame(transition)
     }
     transition()

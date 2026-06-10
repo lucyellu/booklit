@@ -9,6 +9,7 @@ export function TopBar() {
     sidebarOpen, toggleSidebar,
     uiVisible, toggleUI,
     colorScheme, setColorScheme,
+    searchQuery, setSearchQuery,
   } = useApp()
 
   return (
@@ -27,6 +28,8 @@ export function TopBar() {
           <Search className="w-3.5 h-3.5 text-text-muted" />
           <input
             type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search your library..."
             className="bg-transparent outline-none text-[12.5px] text-text placeholder:text-text-muted w-full"
           />

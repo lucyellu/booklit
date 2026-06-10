@@ -3,16 +3,18 @@ import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import {
   Library, BookOpen, BookMarked, Clock, Star,
-  Upload, Settings, Grid3x3, Box, Circle, Dna,
+  Upload, Settings, Grid3x3, Box, Circle, Dna, BookCopy, HardDrive,
 } from 'lucide-react'
+import type { ShelfFilter } from '../../context/AppContext'
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
   { id: 'all', label: 'All Books', icon: Library },
   { id: 'reading', label: 'Reading Now', icon: BookOpen },
   { id: 'want', label: 'Want to Read', icon: BookMarked },
   { id: 'read', label: 'Read', icon: Star },
   { id: 'recent', label: 'Recent', icon: Clock },
-] as const
+  { id: 'local', label: 'Local Library', icon: HardDrive },
+]
 
 const LAYOUT_ITEMS = [
   { id: 'grid' as const, label: 'Grid', icon: Grid3x3 },
@@ -22,8 +24,8 @@ const LAYOUT_ITEMS = [
 ]
 
 export function Sidebar() {
-  const { layout, setLayout, libraryView, setLibraryView } = useApp()
-  const { uploadFile } = useBook()
+  const { layout, setLayout, libraryView, setLibraryView, shelfFilter, setShelfFilter, setSettingsOpen } = useApp()
+  const { uploadFile, importGoodreads, importLocalLibrary } = useBook()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,6 +37,29 @@ export function Sidebar() {
       console.error('Upload failed:', err)
     }
     if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleGoodreads = async () => {
+    const input = window.prompt(
+      'Enter your Goodreads user id or profile URL\n(e.g. https://www.goodreads.com/user/show/12345-name or just 12345).\nYour profile must be public.'
+    )
+    if (!input) return
+    try {
+      const added = await importGoodreads(input)
+      window.alert(added > 0 ? `Added ${added} books from Goodreads.` : 'No new books found.')
+    } catch (err) {
+      window.alert(`Goodreads import failed: ${(err as Error).message}`)
+    }
+  }
+
+  const handleScanLocal = async () => {
+    try {
+      const added = await importLocalLibrary(true)
+      window.alert(added > 0 ? `Loaded ${added} books from your local folder.` : 'No new local books found.')
+      setShelfFilter('local')
+    } catch (err) {
+      window.alert(`Local scan failed: ${(err as Error).message}`)
+    }
   }
 
   return (
@@ -59,7 +84,12 @@ export function Sidebar() {
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
+            onClick={() => setShelfFilter(id)}
+            className={`w-full flex items-center gap-3 px-5 py-2 transition-colors text-[12.5px] ${
+              shelfFilter === id
+                ? 'text-text bg-bg-glass-active'
+                : 'text-text-dim hover:text-text hover:bg-bg-glass-hover'
+            }`}
           >
             <Icon className="w-4 h-4 flex-shrink-0" />
             <span>{label}</span>
@@ -126,7 +156,24 @@ export function Sidebar() {
           <Upload className="w-4 h-4" />
           <span>Import Books</span>
         </button>
-        <button className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]">
+        <button
+          onClick={handleGoodreads}
+          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
+        >
+          <BookCopy className="w-4 h-4" />
+          <span>Connect Goodreads</span>
+        </button>
+        <button
+          onClick={handleScanLocal}
+          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
+        >
+          <HardDrive className="w-4 h-4" />
+          <span>Rescan Local Folder</span>
+        </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
+        >
           <Settings className="w-4 h-4" />
           <span>Settings</span>
         </button>

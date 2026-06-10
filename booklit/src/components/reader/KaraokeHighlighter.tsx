@@ -33,7 +33,7 @@ export function KaraokeHighlighter({
   const [segments, setSegments] = useState<Segment[]>([])
 
   useEffect(() => {
-    const words = text.match(/\S+/g) || []
+    const words: string[] = text.match(/\S+/g) || []
     const parts = text.split(/(\S+)/)
     let wi = 0
     const segs = parts.map(part => {

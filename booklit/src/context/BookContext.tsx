@@ -1,5 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import JSZip from 'jszip'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 export interface Chapter {
   title: string
@@ -38,9 +42,26 @@ export interface LocalBook {
   shelf?: string
   rating?: number
   bookData?: Book
+  /** External link from a CSV (e.g. OpenLibrary / Amazon) — used as a reading fallback. */
+  epubLink?: string
+  /** File format for local-library books: 'epub' | 'pdf' | 'txt' | 'md'. */
+  format?: string
+  /** Direct fetch URL for a local-library file (served by the backend at /files/…). */
+  srcUrl?: string
   lastRead: string
   progress: number
   pages: number
+}
+
+/** Where a readable EPUB for a book can be fetched from. */
+type EpubSource =
+  | { type: 'file'; path: string }   // a bundled .epub we can fetch + parse in-app
+  | { type: 'external'; url: string } // a catalog/preview page we can only open in a new tab
+
+interface EpubManifest {
+  gutenberg?: { title: string; path: string }[]
+  standard_ebooks?: { title: string; path: string }[]
+  open_library?: { title: string; url: string }[]
 }
 
 interface BookContextType {
@@ -64,8 +85,15 @@ interface BookContextType {
   bookmarks: Bookmark[]
   textHighlights: TextHighlight[]
   localBooks: LocalBook[]
+  /** id of a shelf book whose EPUB is currently being fetched/parsed (null when idle). */
+  bookLoadingId: string | null
+  /** human-readable error from the last failed openBook(), or null. */
+  bookError: string | null
 
   setBook: (book: Book) => void
+  /** Open a library book — fetches & parses its EPUB on demand if not already loaded. */
+  openBook: (lb: LocalBook) => Promise<boolean>
+  clearBookError: () => void
   setCurrentChapter: (index: number) => void
   setCurrentPage: (page: number) => void
   goToNextPage: () => void
@@ -90,6 +118,10 @@ interface BookContextType {
   removeTextHighlight: (id: string) => void
   uploadFile: (file: File) => Promise<void>
   importCSV: (file: File) => Promise<number>
+  /** Pull a public Goodreads library by user id (via the local backend). Returns # added. */
+  importGoodreads: (userId: string) => Promise<number>
+  /** Load the local books folder (L:\Media\Text\Books) via the backend. Returns # added. */
+  importLocalLibrary: (refresh?: boolean) => Promise<number>
 }
 
 const BookContext = createContext<BookContextType | undefined>(undefined)
@@ -240,6 +272,25 @@ async function parseEPUB(file: File): Promise<Book> {
   return { title, author, chapters }
 }
 
+async function parsePDF(file: File, fallbackTitle: string, fallbackAuthor: string): Promise<Book> {
+  const data = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data }).promise
+  const parts: string[] = []
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p)
+    const tc = await page.getTextContent()
+    const line = tc.items.map(it => ('str' in it ? it.str : '')).join(' ')
+    if (line.trim()) parts.push(line)
+  }
+  const text = parts.join('\n\n').trim()
+  if (!text) throw new Error('No selectable text — this looks like a scanned PDF.')
+  return {
+    title: fallbackTitle,
+    author: fallbackAuthor || 'Unknown Author',
+    chapters: createChaptersFromText(text),
+  }
+}
+
 function parseCSVRow(line: string): string[] {
   const result: string[] = []
   let current = ''
@@ -258,6 +309,30 @@ function parseCSVRow(line: string): string[] {
   }
   result.push(current.trim())
   return result
+}
+
+function normaliseTitle(t: string): string {
+  return (t || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+/** Resolve a readable EPUB source for a book, preferring bundled files. */
+function findEpubForBook(book: LocalBook, manifest: EpubManifest | null): EpubSource | null {
+  if (manifest) {
+    const nt = normaliseTitle(book.title)
+    const files = [...(manifest.gutenberg || []), ...(manifest.standard_ebooks || [])]
+    for (const entry of files) {
+      if (normaliseTitle(entry.title) === nt) {
+        // Manifest paths are relative ("./books/..."); serve them from the web root.
+        return { type: 'file', path: entry.path.replace(/^\.?\//, '/') }
+      }
+    }
+    const ol = manifest.open_library || []
+    for (const entry of ol) {
+      if (normaliseTitle(entry.title) === nt) return { type: 'external', url: entry.url }
+    }
+  }
+  if (book.epubLink) return { type: 'external', url: book.epubLink }
+  return null
 }
 
 function parseCSVToBooks(text: string): LocalBook[] {
@@ -305,6 +380,8 @@ function parseCSVToBooks(text: string): LocalBook[] {
       coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`
     }
 
+    const epubLink = vals[col('epub_link')] || vals[col('epublink')] || ''
+
     books.push({
       id: `csv-${i}-${Date.now()}`,
       title,
@@ -313,6 +390,7 @@ function parseCSVToBooks(text: string): LocalBook[] {
       coverUrl: coverUrl || undefined,
       shelf: shelf || 'read',
       rating,
+      epubLink: epubLink || undefined,
       lastRead: new Date().toISOString(),
       progress: 0,
       pages,
@@ -340,6 +418,9 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [textHighlights, setTextHighlights] = useState<TextHighlight[]>([])
   const [localBooks, setLocalBooks] = useState<LocalBook[]>([])
+  const [bookLoadingId, setBookLoadingId] = useState<string | null>(null)
+  const [bookError, setBookError] = useState<string | null>(null)
+  const manifestRef = useRef<EpubManifest | null>(null)
 
   useEffect(() => {
     try {
@@ -348,9 +429,64 @@ export function BookProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore */ }
   }, [])
 
+  // Auto-connect to the bundled library: load the EPUB manifest + curated shelf CSV
+  // on first launch so the shelf is populated without any manual import.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await fetch('/books/patrick/epubs/manifest.json')
+        if (r.ok) manifestRef.current = await r.json()
+      } catch { /* no manifest — bundled reading just won't resolve */ }
+
+      try {
+        const r = await fetch('/data/patrick_collison_bookshelf.csv')
+        if (r.ok) {
+          const shelfBooks = parseCSVToBooks(await r.text())
+          if (!cancelled && shelfBooks.length > 0) {
+            setLocalBooks(prev => {
+              const existing = new Set(prev.map(b => normaliseTitle(b.title)))
+              const fresh = shelfBooks.filter(b => !existing.has(normaliseTitle(b.title)))
+              return [...prev, ...fresh]
+            })
+          }
+        }
+      } catch { /* offline / missing data — keep whatever's in localStorage */ }
+
+      // Local books folder (L:\Media\Text\Books) via the backend, if it's running.
+      try {
+        const r = await fetch('/api/local-books')
+        if (r.ok) {
+          const data = await r.json()
+          const localItems: LocalBook[] = (data.books || []).map((b: Record<string, string>) => ({
+            id: b.id,
+            title: b.title,
+            author: b.author || '',
+            format: b.format,
+            srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
+            shelf: 'local',
+            lastRead: new Date().toISOString(),
+            progress: 0,
+            pages: 0,
+          })).filter((b: LocalBook) => b.title)
+          if (!cancelled && localItems.length > 0) {
+            setLocalBooks(prev => {
+              const ids = new Set(prev.map(b => b.id))
+              return [...prev, ...localItems.filter(b => !ids.has(b.id))]
+            })
+          }
+        }
+      } catch { /* backend down — local library just won't appear */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   useEffect(() => {
     try {
-      const saveable = localBooks.filter(b => b.bookData)
+      // Only persist manually-uploaded books. Shelf / Goodreads / local-library
+      // books are re-fetched from their source on startup, and caching their
+      // parsed full text would blow the localStorage quota.
+      const saveable = localBooks.filter(b => b.bookData && b.id.startsWith('book-'))
       localStorage.setItem('booklit-library', JSON.stringify(saveable))
     } catch { /* quota */ }
   }, [localBooks])
@@ -358,7 +494,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const currentChapter = book?.chapters[currentChapterIndex] ?? null
   const totalPages = currentChapter?.content.length ?? 0
 
-  const setBook = useCallback((newBook: Book) => {
+  // Make a parsed book the active reading target (no library mutation).
+  const activateBook = useCallback((newBook: Book) => {
     setBookState(newBook)
     setCurrentChapterIndex(0)
     setCurrentPage(1)
@@ -367,6 +504,10 @@ export function BookProvider({ children }: { children: ReactNode }) {
     setHighlightedWordIndex(-1)
     setReadWordIndices([])
     setBookmarks([])
+  }, [])
+
+  const setBook = useCallback((newBook: Book) => {
+    activateBook(newBook)
 
     const entry: LocalBook = {
       id: `book-${Date.now()}`,
@@ -381,7 +522,82 @@ export function BookProvider({ children }: { children: ReactNode }) {
       if (prev.some(b => b.title === entry.title && b.author === entry.author)) return prev
       return [entry, ...prev]
     })
-  }, [])
+  }, [activateBook])
+
+  // Open a library book. If its content isn't loaded yet, resolve a readable EPUB
+  // (bundled file or CSV link) and parse it on demand, then cache it on the entry.
+  const openBook = useCallback(async (lb: LocalBook): Promise<boolean> => {
+    setBookError(null)
+
+    if (lb.bookData) { activateBook(lb.bookData); return true }
+
+    // Local-library files (epub / pdf / txt / md) streamed from the backend.
+    if (lb.srcUrl) {
+      setBookLoadingId(lb.id)
+      try {
+        const resp = await fetch(lb.srcUrl)
+        if (!resp.ok) throw new Error(`fetch failed (${resp.status})`)
+        const blob = await resp.blob()
+        const fmt = (lb.format || 'epub').toLowerCase()
+        let data: Book
+        if (fmt === 'pdf') {
+          data = await parsePDF(new File([blob], `${lb.title}.pdf`), lb.title, lb.author)
+        } else if (fmt === 'txt' || fmt === 'md') {
+          data = {
+            title: lb.title,
+            author: lb.author || 'Unknown Author',
+            chapters: createChaptersFromText(await blob.text()),
+          }
+        } else {
+          data = await parseEPUB(new File([blob], `${lb.title}.epub`))
+          if (lb.author && data.author === 'Unknown Author') data.author = lb.author
+        }
+        setLocalBooks(prev => prev.map(b => (b.id === lb.id ? { ...b, bookData: data } : b)))
+        activateBook(data)
+        return true
+      } catch (err) {
+        console.error('openBook (local) failed:', err)
+        setBookError(`Couldn't open "${lb.title}": ${(err as Error).message}`)
+        return false
+      } finally {
+        setBookLoadingId(null)
+      }
+    }
+
+    const source = findEpubForBook(lb, manifestRef.current)
+    if (!source) {
+      setBookError(`No readable copy of "${lb.title}" is available yet.`)
+      return false
+    }
+    if (source.type === 'external') {
+      // Catalog/preview pages can't be parsed in-app — open them in a new tab.
+      window.open(source.url, '_blank', 'noopener')
+      setBookError(`"${lb.title}" isn't bundled for in-app reading — opened its catalog page instead.`)
+      return false
+    }
+
+    setBookLoadingId(lb.id)
+    try {
+      const resp = await fetch(encodeURI(source.path))
+      if (!resp.ok) throw new Error(`fetch failed (${resp.status})`)
+      const blob = await resp.blob()
+      const file = new File([blob], `${lb.title}.epub`, { type: 'application/epub+zip' })
+      const data = await parseEPUB(file)
+      // Preserve the shelf metadata's title/author when the EPUB lacks them.
+      if (lb.author && data.author === 'Unknown Author') data.author = lb.author
+      setLocalBooks(prev => prev.map(b => (b.id === lb.id ? { ...b, bookData: data } : b)))
+      activateBook(data)
+      return true
+    } catch (err) {
+      console.error('openBook failed:', err)
+      setBookError(`Couldn't open "${lb.title}". The file may be missing or unreadable.`)
+      return false
+    } finally {
+      setBookLoadingId(null)
+    }
+  }, [activateBook])
+
+  const clearBookError = useCallback(() => setBookError(null), [])
 
   const setCurrentChapter = useCallback((index: number) => {
     if (!book || index < 0 || index >= book.chapters.length) return
@@ -563,6 +779,62 @@ export function BookProvider({ children }: { children: ReactNode }) {
     return newBooks.length
   }, [])
 
+  const importGoodreads = useCallback(async (userId: string): Promise<number> => {
+    const resp = await fetch(`/api/goodreads?userid=${encodeURIComponent(userId)}`)
+    if (!resp.ok) throw new Error(`Backend error (${resp.status}). Is the Goodreads server running?`)
+    const data = await resp.json()
+    if (data.error) throw new Error(data.error)
+
+    const books: LocalBook[] = (data.books || []).map((b: Record<string, string>, i: number) => ({
+      id: `gr-${userId}-${i}`,
+      title: b.title,
+      author: b.author || '',
+      isbn: b.isbn || undefined,
+      coverUrl: b.cover_url || (b.isbn ? `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg` : undefined),
+      shelf: b.shelf || 'read',
+      rating: parseInt(b.my_rating || '0') || 0,
+      epubLink: b.epub_link || undefined,
+      lastRead: new Date().toISOString(),
+      progress: 0,
+      pages: parseInt(b.pages || '0') || 0,
+    })).filter((b: LocalBook) => b.title)
+
+    if (books.length === 0) return 0
+    setLocalBooks(prev => {
+      const existing = new Set(prev.map(b => normaliseTitle(b.title)))
+      const fresh = books.filter(b => !existing.has(normaliseTitle(b.title)))
+      return [...prev, ...fresh]
+    })
+    return books.length
+  }, [])
+
+  const importLocalLibrary = useCallback(async (refresh = false): Promise<number> => {
+    const resp = await fetch(`/api/local-books${refresh ? '?refresh=1' : ''}`)
+    if (!resp.ok) throw new Error(`Backend error (${resp.status}). Is the Booklit server running?`)
+    const data = await resp.json()
+    if (data.error) throw new Error(data.error)
+
+    const books: LocalBook[] = (data.books || []).map((b: Record<string, string>) => ({
+      id: b.id,
+      title: b.title,
+      author: b.author || '',
+      format: b.format,
+      srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
+      shelf: 'local',
+      lastRead: new Date().toISOString(),
+      progress: 0,
+      pages: 0,
+    })).filter((b: LocalBook) => b.title)
+
+    if (books.length === 0) return 0
+    setLocalBooks(prev => {
+      const existingIds = new Set(prev.map(b => b.id))
+      const fresh = books.filter(b => !existingIds.has(b.id))
+      return [...prev, ...fresh]
+    })
+    return books.length
+  }, [])
+
   useEffect(() => {
     setHighlightedWordIndex(-1)
     setReadWordIndices([])
@@ -590,13 +862,14 @@ export function BookProvider({ children }: { children: ReactNode }) {
       playbackSpeed, volume, fontSize, selectedVoice,
       sentenceSpacing, wordSpacing, fontFamily, highlightColor, autoPlayNext,
       bookmarks, textHighlights, localBooks,
-      setBook, setCurrentChapter, setCurrentPage,
+      bookLoadingId, bookError,
+      setBook, openBook, clearBookError, setCurrentChapter, setCurrentPage,
       goToNextPage, goToPreviousPage, goToNextChapter, goToPreviousChapter,
       togglePlayback, stopPlayback,
       setPlaybackSpeed, setVolume, setFontSize, setSelectedVoice,
       setSentenceSpacing, setWordSpacing, setFontFamily, setHighlightColor, setAutoPlayNext,
       addBookmark, removeBookmark, goToBookmark,
-      addTextHighlight, removeTextHighlight, uploadFile, importCSV,
+      addTextHighlight, removeTextHighlight, uploadFile, importCSV, importGoodreads, importLocalLibrary,
     }}>
       {children}
     </BookContext.Provider>

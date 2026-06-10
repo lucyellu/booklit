@@ -8,7 +8,7 @@ import { useBook } from '../../context/BookContext'
 import { computeTargets } from './LayoutEngine'
 import type { LocalBook } from '../../context/BookContext'
 
-export function CSS3DScene() {
+export function CSS3DScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stateRef = useRef<{
     scene: THREE.Scene
@@ -20,16 +20,14 @@ export function CSS3DScene() {
   } | null>(null)
 
   const { layout, openReader } = useApp()
-  const { localBooks, setBook } = useBook()
+  const { openBook } = useBook()
+  const localBooks = books
   const booksRef = useRef(localBooks)
   booksRef.current = localBooks
 
   const handleBookClick = useCallback((book: LocalBook) => {
-    if (book.bookData) {
-      setBook(book.bookData)
-      openReader()
-    }
-  }, [setBook, openReader])
+    openBook(book).then(ok => { if (ok) openReader() })
+  }, [openBook, openReader])
 
   useEffect(() => {
     const container = containerRef.current

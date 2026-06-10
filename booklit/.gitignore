@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Bundled / generated library data (large binaries, machine-local)
+public/books/
+public/data/goodreads_*.csv
+# but keep the curated shelf CSV tracked:
+!public/data/patrick_collison_bookshelf.csv
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

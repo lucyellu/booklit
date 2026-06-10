@@ -4,7 +4,10 @@ import { useBook } from '../../context/BookContext'
 import { KaraokeHighlighter } from './KaraokeHighlighter'
 import {
   X, ChevronLeft, ChevronRight, Bookmark, List,
+  Play, Pause, Square, SkipBack, SkipForward, Volume2,
 } from 'lucide-react'
+
+const SPEEDS = [0.5, 0.75, 1.0, 1.2, 1.5, 2.0]
 
 export function ReaderPane() {
   const { view, closeReader } = useApp()
@@ -14,6 +17,8 @@ export function ReaderPane() {
     fontSize, sentenceSpacing, wordSpacing, fontFamily,
     textHighlights, addTextHighlight,
     goToNextPage, goToPreviousPage, setCurrentChapter, addBookmark,
+    isPlaying, togglePlayback, stopPlayback,
+    playbackSpeed, setPlaybackSpeed, volume, setVolume,
   } = useBook()
 
   const [showChapters, setShowChapters] = useState(false)
@@ -23,13 +28,16 @@ export function ReaderPane() {
   useEffect(() => {
     if (view !== 'reader') return
     const handleKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement
+      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goToNextPage()
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goToPreviousPage()
       else if (e.key === 'Escape') closeReader()
+      else if (e.key === ' ' && !typing) { e.preventDefault(); togglePlayback() }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [view, goToNextPage, goToPreviousPage, closeReader])
+  }, [view, goToNextPage, goToPreviousPage, closeReader, togglePlayback])
 
   if (view !== 'reader' || !book || !currentChapter) return null
 
@@ -139,6 +147,66 @@ export function ReaderPane() {
           {/* Right click zone */}
           <button onClick={goToNextPage} className="w-16 flex-shrink-0 flex items-center justify-center text-text-muted hover:text-text-dim transition-colors opacity-0 hover:opacity-100">
             <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Audio control bar — read-aloud with word-by-word karaoke highlighting */}
+      <div className="flex items-center gap-4 px-6 py-3 border-t border-border bg-bg/60 backdrop-blur-xl">
+        <button
+          onClick={goToPreviousPage}
+          className="p-1.5 text-text-dim hover:text-text transition-colors"
+          title="Previous page"
+        >
+          <SkipBack className="w-4 h-4" />
+        </button>
+        <button
+          onClick={togglePlayback}
+          className="w-10 h-10 rounded-full bg-text flex items-center justify-center hover:scale-105 transition-transform"
+          title={isPlaying ? 'Pause (space)' : 'Play (space)'}
+        >
+          {isPlaying ? <Pause className="w-4 h-4 text-bg" /> : <Play className="w-4 h-4 text-bg ml-0.5" />}
+        </button>
+        <button
+          onClick={stopPlayback}
+          className="p-1.5 text-text-dim hover:text-text transition-colors"
+          title="Stop"
+        >
+          <Square className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={goToNextPage}
+          className="p-1.5 text-text-dim hover:text-text transition-colors"
+          title="Next page"
+        >
+          <SkipForward className="w-4 h-4" />
+        </button>
+
+        <div className="flex-1" />
+
+        {/* Volume */}
+        <div className="flex items-center gap-2">
+          <Volume2 className="w-3.5 h-3.5 text-text-muted" />
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            onChange={e => setVolume(parseFloat(e.target.value))}
+            className="w-24 accent-accent"
+            title="Volume"
+          />
+        </div>
+
+        {/* Speed */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-text-muted uppercase tracking-wider">Speed</span>
+          <button
+            onClick={() => setPlaybackSpeed(SPEEDS[(SPEEDS.indexOf(playbackSpeed) + 1) % SPEEDS.length])}
+            className="text-[12px] text-text-dim font-mono bg-bg-glass rounded px-2 py-0.5 hover:bg-bg-glass-hover transition-colors"
+          >
+            {playbackSpeed}x
           </button>
         </div>
       </div>

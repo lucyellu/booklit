@@ -8,6 +8,34 @@ import { Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const PAGE_SIZE = 300
 
+// Collapse near-duplicate titles: trailing "(1)", " - copy", punctuation, case.
+function dedupeKey(b: LocalBook): string {
+  const t = b.title.toLowerCase()
+    .replace(/\((\d+)\)\s*$/, '')          // trailing "(1)", "(2)"
+    .replace(/\bcopy\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+  const a = (b.author || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  if (!t) return b.id                        // no usable title → keep unique
+  return a ? `${t}|${a}` : t
+}
+
+// Keep one entry per key, preferring readable / cover / richer format.
+function dedupe(books: LocalBook[], isReadable: (b: LocalBook) => boolean): LocalBook[] {
+  const score = (b: LocalBook) =>
+    (isReadable(b) ? 4 : 0) +
+    (b.coverUrl ? 2 : 0) +
+    (b.bookData ? 1 : 0) +
+    (b.format === 'epub' ? 1 : b.format === 'pdf' ? 0.5 : 0)
+  const map = new Map<string, LocalBook>()
+  for (const b of books) {
+    const k = dedupeKey(b)
+    const ex = map.get(k)
+    if (!ex || score(b) > score(ex)) map.set(k, b)
+  }
+  return [...map.values()]
+}
+
 function matchesShelf(b: LocalBook, filter: ShelfFilter): boolean {
   if (filter === 'all' || filter === 'recent') return true
   if (filter === 'local') return b.shelf === 'local'
@@ -24,9 +52,11 @@ export function LibraryView() {
   const { localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable } = useBook()
   const [page, setPage] = useState(0)
 
+  const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    let list = localBooks.filter(b => matchesShelf(b, shelfFilter))
+    let list = deduped.filter(b => matchesShelf(b, shelfFilter))
     if (readableOnly) list = list.filter(isReadable)
     if (q) list = list.filter(b =>
       b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q))
@@ -34,7 +64,7 @@ export function LibraryView() {
       list = [...list].sort((a, b) => (b.lastRead || '').localeCompare(a.lastRead || '')).slice(0, 80)
     }
     return list
-  }, [localBooks, shelfFilter, searchQuery, readableOnly, isReadable])
+  }, [deduped, shelfFilter, searchQuery, readableOnly, isReadable])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 

@@ -43,7 +43,7 @@ const AppContext = createContext<AppContextValue | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     view: 'library',
-    libraryView: 'css3d',
+    libraryView: 'flat',
     layout: 'grid',
     colorScheme: 0,
     sidebarOpen: true,

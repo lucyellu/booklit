@@ -14,13 +14,15 @@ if %errorlevel% == 0 (
     start /min "" cmd /c "cd /d %DIR% && node server\goodreads-server.mjs"
 )
 
-rem --- Vite dev server (port 5199) ---
+rem --- Booklit app (port 5199) — production build + preview (stable, no HMR) ---
 netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>&1
 if %errorlevel% == 0 (
     echo Server already running on port %PORT%
 ) else (
-    echo Starting Booklit dev server on port %PORT%...
-    start /min "" cmd /c "cd /d %DIR% && npx vite --port %PORT% --host"
+    echo Building Booklit...
+    call npm run build --prefix "%DIR%"
+    echo Starting Booklit on port %PORT%...
+    start /min "" cmd /c "cd /d %DIR% && npx vite preview --port %PORT% --host"
     timeout /t 3 /nobreak >nul
 )
 

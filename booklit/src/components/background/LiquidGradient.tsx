@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import * as THREE from 'three'
 import { useApp } from '../../context/AppContext'
+import { useBook } from '../../context/BookContext'
 import { COLOR_SCHEMES } from './ColorSchemes'
 import { TouchTexture } from './TouchTexture'
 import { vertexShader, fragmentShader } from './LiquidGradientShader'
@@ -16,8 +17,12 @@ export function LiquidGradient() {
     animId: number
   } | null>(null)
   const { colorScheme, gradientSpeed } = useApp()
+  const { isPlaying } = useBook()
   const speedRef = useRef(gradientSpeed)
   speedRef.current = gradientSpeed
+  // While audio plays, the gradient acts as a visualizer — push it faster.
+  const playingRef = useRef(isPlaying)
+  playingRef.current = isPlaying
 
   useEffect(() => {
     const container = containerRef.current
@@ -80,7 +85,8 @@ export function LiquidGradient() {
     const animate = () => {
       stateRef.current!.animId = requestAnimationFrame(animate)
       const now = performance.now()
-      simTime += ((now - lastFrame) / 1000) * speedRef.current
+      const boost = playingRef.current ? 4 : 1
+      simTime += ((now - lastFrame) / 1000) * speedRef.current * boost
       lastFrame = now
       uniforms.uTime.value = simTime
       touchTexture.update()

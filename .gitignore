@@ -4,3 +4,18 @@ node_modules/
 dist/
 .DS_Store
 Thumbs.db
+
+# Secrets & credentials
+**/secrets/
+
+# Goodreads personal data exports
+cards/data/goodreads_*.csv
+digital_library/data/goodreads_*.csv
+cards/goodreads/
+digital_library/goodreads/
+
+# Launcher with local paths
+_launchers/
+
+# Firebase config with live values
+reader-bolt/project/.env

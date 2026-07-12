@@ -17,5 +17,14 @@ digital_library/goodreads/
 # Launcher with local paths
 _launchers/
 
+# Stale prototype HTMLs with local API keys
+cards/bibli_005.html
+cards/bibli_006.html
+cards/bibli_007.html
+cards/bibli_008.html
+cards/bibli_009.html
+digital_library/bibli_005.html
+digital_library/bibli_006.html
+
 # Firebase config with live values
 reader-bolt/project/.env

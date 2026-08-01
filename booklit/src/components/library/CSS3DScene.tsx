@@ -5,8 +5,9 @@ import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls
 import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
-import { computeTargets } from './LayoutEngine'
-import { buildCardElement } from './cardElement'
+import { computeLayout } from './LayoutEngine'
+import { createFramer } from './frameCamera'
+import { buildCardElement, CARD_W, CARD_H } from './cardElement'
 import type { LocalBook } from '../../context/BookContext'
 
 interface Built {
@@ -58,8 +59,14 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     controls.maxDistance = 6000
     controls.addEventListener('change', render)
 
+    const framer = createFramer(camera, controls)
     const built: Built[] = []
     let current = layout
+    let spawn = 2000
+    /* CSS3DRenderer draws on demand, so something has to pump frames for as
+       long as a transition runs. Cheaper and more robust than a dummy tween:
+       render until the last one is due to have finished. */
+    let renderUntil = 0
 
     const make = (book: LocalBook): Built => {
       const el = buildCardElement(book, cardModeRef.current)
@@ -67,10 +74,11 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
       // Reads the record rather than closing over `book`, so a card that
       // survives a re-sort still opens the right thing.
       el.addEventListener('click', () => clickRef.current(entry.book))
+      // Cards fly in from somewhere off the arrangement, as in the original.
       entry.object.position.set(
-        Math.random() * 4000 - 2000,
-        Math.random() * 4000 - 2000,
-        Math.random() * 4000 - 2000,
+        (Math.random() - 0.5) * 2 * spawn,
+        (Math.random() - 0.5) * 2 * spawn,
+        (Math.random() - 0.5) * 2 * spawn,
       )
       scene.add(entry.object)
       return entry
@@ -79,14 +87,20 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     // CSS3DObject removes its own element from the DOM on 'removed'.
     const destroy = (b: Built) => scene.remove(b.object)
 
-    /* CSS3DRenderer draws on demand, so a tween needs something pumping frames
-       for as long as it runs. One pump covers the whole transform. */
     let running: { stop: () => void }[] = []
     const applyLayout = (which: typeof layout) => {
       current = which
       running.forEach(t => t.stop())
       running = []
-      const targets = computeTargets(which, built.length)
+      // Nothing to frame yet; the first sync will call straight back.
+      if (!built.length) return
+
+      const aspect = container.clientWidth / Math.max(1, container.clientHeight)
+      const { targets, extent } = computeLayout(which, built.length, {
+        cellW: CARD_W, cellH: CARD_H, aspect,
+      })
+      spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
+
       const duration = 1000
       built.forEach(({ object }, i) => {
         const target = targets[i]
@@ -105,13 +119,8 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
             .start(),
         )
       })
-      running.push(
-        new TWEEN.Tween({})
-          .to({}, duration * 2)
-          .onUpdate(render)
-          .onComplete(render)
-          .start(),
-      )
+      running.push(...framer(extent, duration * 1.4))
+      renderUntil = performance.now() + duration * 2 + 150
     }
 
     /** Reconcile the scene against a new book list, keeping what survives. */
@@ -141,18 +150,24 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     }
 
     const onResize = () => {
+      if (!container.clientWidth || !container.clientHeight) return
       camera.aspect = container.clientWidth / container.clientHeight
       camera.updateProjectionMatrix()
       renderer.setSize(container.clientWidth, container.clientHeight)
+      // The block is shaped from the window, so a resize re-lays it out.
+      applyLayout(current)
       render()
     }
     window.addEventListener('resize', onResize)
+    const ro = new ResizeObserver(onResize)
+    ro.observe(container)
 
     let animId = 0
     const animate = () => {
       animId = requestAnimationFrame(animate)
       TWEEN.update()
       controls.update()
+      if (performance.now() < renderUntil) render()
     }
     animate()
 
@@ -164,6 +179,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     return () => {
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
+      ro.disconnect()
       layoutRef.current = null
       syncRef.current = null
       rebuildRef.current = null

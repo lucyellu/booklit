@@ -6,8 +6,9 @@ import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls
 import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
-import { computeTargets } from './LayoutEngine'
-import { BOOK_H } from './bookTextures'
+import { computeLayout } from './LayoutEngine'
+import { createFramer } from './frameCamera'
+import { BOOK_W, BOOK_H } from './bookTextures'
 import { hashStr } from '../../lib/bookMeta'
 import { prepareModel, buildAtlas, cloneGltf, applyToMesh } from './modelSkin'
 import type { ModelSkin } from './modelSkin'
@@ -120,10 +121,12 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
     rim.position.set(0, -500, -800)
     scene.add(rim)
 
+    const framer = createFramer(camera, controls)
     const built: Built[] = []
     let prepared: Prepared[] = []
     let animId = 0
     let current = layout
+    let spawn = 1600
 
     /* Fly every book to its slot. Positions are indexed, so this is what makes a
        sort read as a sort: the books that moved take the scenic route to where
@@ -134,7 +137,15 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
       current = which
       running.forEach(t => t.stop())
       running = []
-      const targets = computeTargets(which, built.length)
+      // Nothing to frame yet; the first sync will call straight back.
+      if (!built.length) return
+
+      const aspect = container.clientWidth / Math.max(1, container.clientHeight)
+      const { targets, extent } = computeLayout(which, built.length, {
+        cellW: BOOK_W, cellH: BOOK_H, aspect,
+      })
+      spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
+
       const duration = 900
       built.forEach(({ group }, i) => {
         const t = targets[i]
@@ -153,6 +164,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
             .start(),
         )
       })
+      running.push(...framer(extent, duration * 1.4))
     }
 
     const make = (book: LocalBook): Built => {
@@ -179,10 +191,11 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
 
       const group = new THREE.Group()
       group.add(inner)
+      // Books fly in from somewhere off the arrangement, as in the original.
       group.position.set(
-        Math.random() * 3000 - 1500,
-        Math.random() * 3000 - 1500,
-        Math.random() * 3000 - 1500,
+        (Math.random() - 0.5) * 2 * spawn,
+        (Math.random() - 0.5) * 2 * spawn,
+        (Math.random() - 0.5) * 2 * spawn,
       )
       scene.add(group)
       return { group, book, atlas, skin: tpl.skin, inner, cover: 'none' }
@@ -367,6 +380,8 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
       camera.aspect = container.clientWidth / container.clientHeight
       camera.updateProjectionMatrix()
       renderer.setSize(container.clientWidth, container.clientHeight)
+      // The block is shaped from the window, so a resize re-lays it out.
+      applyLayout(current)
     }
     window.addEventListener('resize', onResize)
     const ro = new ResizeObserver(onResize)

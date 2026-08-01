@@ -1,9 +1,10 @@
 import { useApp } from '../../context/AppContext'
 import { useClips } from '../../context/ClipContext'
 import {
-  PLAYLISTS, clipsFor, clipDuration, playlistDuration, formatDuration, patternStyle,
+  PLAYLISTS, clipsFor, clipDuration, playlistDuration, formatDuration, tileStyle,
 } from '../../lib/clips'
 import type { Playlist } from '../../lib/clips'
+import { TintTile } from './TintTile'
 import { ChevronLeft, Play, Pause, ListMusic } from 'lucide-react'
 
 /**
@@ -38,9 +39,9 @@ export function PlaylistView() {
       <header className="flex items-end gap-6 mb-9">
         <div
           className="w-44 h-44 rounded-2xl shadow-md flex-shrink-0 flex items-end p-4"
-          style={patternStyle(pl)}
+          style={tileStyle(pl)}
         >
-          <ListMusic className="w-6 h-6 text-white/80" />
+          <ListMusic className="w-6 h-6 text-white/85" />
         </div>
         <div className="min-w-0 pb-1">
           <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-accent-warm mb-2">
@@ -121,9 +122,14 @@ function PlaylistIndex() {
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="font-display text-3xl font-extrabold text-text mb-6">Playlists</h1>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {PLAYLISTS.map(p => (
-          <PlaylistCard key={p.id} playlist={p} onOpen={() => setPlaylistId(p.id)} />
+          <PlaylistCard
+            key={p.id}
+            playlist={p}
+            className="w-full"
+            onOpen={() => setPlaylistId(p.id)}
+          />
         ))}
       </div>
     </div>
@@ -131,34 +137,32 @@ function PlaylistIndex() {
 }
 
 /**
- * The square playlist card from bibli_009: flat colour, tiled motif, title in
- * the display italic. Shared by the index above and the Home rows.
+ * A playlist card. Shared by the index above and the Home row.
+ *
+ * These used to carry bibli_009's tiled stripes and dots over the flat colour,
+ * with the title in a display italic. That is a different design from the rest
+ * of the app — the curated-list cards next to them on Home are Forest Day tiles
+ * — so both now go through the same TintTile.
  */
-export function PlaylistCard({ playlist, onOpen }: {
+export function PlaylistCard({ playlist, onOpen, className = 'w-64 flex-shrink-0' }: {
   playlist: Playlist
   onOpen: () => void
+  className?: string
 }) {
   const { playPlaylist, playlist: activePl, isClipPlaying } = useClips()
   const clips = clipsFor(playlist)
   const playingThis = activePl?.id === playlist.id && isClipPlaying
 
   return (
-    <div className="group relative w-40 flex-shrink-0">
+    <div className={`group relative ${className}`}>
       <button onClick={onOpen} className="w-full text-left">
-        <div
-          className="relative aspect-square rounded-xl shadow-sm group-hover:shadow-md transition-all group-hover:-translate-y-1 overflow-hidden flex items-end p-3"
-          style={patternStyle(playlist)}
-        >
-          <h3
-            className="font-display italic text-[15px] leading-tight"
-            style={{ color: playlist.lightColor, textShadow: '0 1px 4px rgba(0,0,0,0.45)' }}
-          >
-            {playlist.title}
-          </h3>
-        </div>
-        <p className="text-[10.5px] text-text-muted mt-1.5 font-mono">
-          {clips.length} clips · {formatDuration(playlistDuration(playlist))}
-        </p>
+        <TintTile
+          tint={playlist.color}
+          title={playlist.title}
+          meta={`${clips.length} clips · ${formatDuration(playlistDuration(playlist))}`}
+          className="h-44"
+          titleClass="text-xl"
+        />
       </button>
 
       {/* Play straight from the card. A sibling of the card button, not a child
@@ -167,7 +171,7 @@ export function PlaylistCard({ playlist, onOpen }: {
         onClick={() => playPlaylist(playlist)}
         title={`Play ${playlist.title}`}
         aria-label={`Play ${playlist.title}`}
-        className={`absolute right-2 bottom-11 w-9 h-9 rounded-full bg-accent text-on-accent shadow-lg flex items-center justify-center transition-all hover:scale-105 ${
+        className={`absolute right-3 bottom-3 w-10 h-10 rounded-full bg-accent text-on-accent shadow-lg flex items-center justify-center transition-all hover:scale-105 ${
           playingThis ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
         }`}
       >

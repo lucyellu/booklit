@@ -4,7 +4,8 @@ import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls
 import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
-import { computeTargets } from './LayoutEngine'
+import { computeLayout } from './LayoutEngine'
+import { createFramer } from './frameCamera'
 import { spineWidth } from '../../lib/bookMeta'
 import {
   BOOK_W, BOOK_H, coverTexture, spineTexture, backTexture, pagesTexture,
@@ -112,10 +113,12 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     fill.position.set(-800, -300, -900)
     scene.add(fill)
 
+    const framer = createFramer(camera, controls)
     const pages = pagesTexture()
     const built: Built[] = []
     let disposed = false
     let current = layout
+    let spawn = 2000
 
     const make = (book: LocalBook): Built => {
       const depth = spineWidth(book.pages)
@@ -139,10 +142,11 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       ]
 
       const mesh = new THREE.Mesh(geo, materials)
+      // Books fly in from somewhere off the arrangement, as in the original.
       mesh.position.set(
-        Math.random() * 4000 - 2000,
-        Math.random() * 4000 - 2000,
-        Math.random() * 4000 - 2000,
+        (Math.random() - 0.5) * 2 * spawn,
+        (Math.random() - 0.5) * 2 * spawn,
+        (Math.random() - 0.5) * 2 * spawn,
       )
       mesh.userData.bookId = book.id
       scene.add(mesh)
@@ -166,7 +170,15 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       current = which
       running.forEach(t => t.stop())
       running = []
-      const targets = computeTargets(which, built.length)
+      // Nothing to frame yet; the first sync will call straight back.
+      if (!built.length) return
+
+      const aspect = container.clientWidth / Math.max(1, container.clientHeight)
+      const { targets, extent } = computeLayout(which, built.length, {
+        cellW: BOOK_W, cellH: BOOK_H, aspect,
+      })
+      spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
+
       const duration = 900
       built.forEach(({ mesh }, i) => {
         const t = targets[i]
@@ -185,6 +197,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
             .start(),
         )
       })
+      running.push(...framer(extent, duration * 1.4))
     }
 
     /* Swap in real cover art as it arrives. Throttled, and every load is
@@ -300,6 +313,8 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       camera.aspect = container.clientWidth / container.clientHeight
       camera.updateProjectionMatrix()
       renderer.setSize(container.clientWidth, container.clientHeight)
+      // The block is shaped from the window, so a resize re-lays it out.
+      applyLayout(current)
     }
     window.addEventListener('resize', onResize)
     const ro = new ResizeObserver(onResize)

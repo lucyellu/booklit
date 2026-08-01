@@ -5,7 +5,7 @@ import type { SortKey, SortDir } from '../lib/filterBooks'
 
 export type ViewMode = 'home' | 'library' | 'reader' | 'playlist'
 export type LibraryViewMode = 'css3d' | 'webgl' | 'models' | 'flat'
-export type LayoutMode = 'shelf' | 'grid' | 'sphere' | 'helix'
+export type LayoutMode = 'shelf' | 'grid' | 'cube' | 'sphere' | 'helix'
 export type ShelfFilter =
   | 'all' | 'reading' | 'want' | 'read' | 'recent' | 'local'
   // Shelves the curated CSV actually uses, and the ones Forest Day's sidebar shows.

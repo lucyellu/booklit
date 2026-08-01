@@ -6,6 +6,7 @@ import { dedupe, matchesShelf, hasEbook } from '../../lib/filterBooks'
 import { allLists, CARD_TINTS } from '../../lib/curatedLists'
 import { PLAYLISTS } from '../../lib/clips'
 import { PlaylistCard } from './PlaylistView'
+import { TintTile } from './TintTile'
 import { Play, ChevronRight } from 'lucide-react'
 
 function greeting(hour: number): string {
@@ -39,25 +40,14 @@ function TintCard({ title, blurb, count, tint, onClick }: {
   onClick: () => void
 }) {
   return (
-    <button
-      onClick={onClick}
-      className="group relative overflow-hidden rounded-xl h-48 text-left shadow-sm hover:shadow-md transition-shadow"
-      style={{ background: tint }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-black/60 mix-blend-multiply" />
-      <div className="absolute inset-0 p-6 flex flex-col justify-end">
-        <h3 className="text-white text-2xl font-bold leading-tight mb-1 origin-bottom-left group-hover:scale-105 transition-transform duration-300">
-          {title}
-        </h3>
-        {blurb && (
-          <p className="text-white/90 text-[12.5px] leading-snug mt-1 line-clamp-2">{blurb}</p>
-        )}
-        {/* /90 not the mockup's /80: on the cyan and gold tints /80 lands at
-            4.2:1, just under AA for 14px text. */}
-        <p className="text-white/90 text-sm font-medium mt-1">
-          {count} {count === 1 ? 'book' : 'books'}
-        </p>
-      </div>
+    <button onClick={onClick} className="group text-left">
+      <TintTile
+        tint={tint}
+        title={title}
+        blurb={blurb}
+        meta={`${count} ${count === 1 ? 'book' : 'books'}`}
+        className="h-48"
+      />
     </button>
   )
 }

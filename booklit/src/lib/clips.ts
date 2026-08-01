@@ -233,31 +233,19 @@ export function findPlaylist(id: string | null): Playlist | null {
 }
 
 /**
- * The card background: the playlist's flat colour plus a tiled line/dot motif.
- * bibli_009 built an <svg> string and injected it as innerHTML; here it's a
- * background-image so nothing untrusted goes near the DOM parser, and because a
- * CSS gradient tiles without needing an element of its own.
+ * The tile background: the playlist's colour, darkened toward the bottom right
+ * so white type clears AA on all six.
+ *
+ * This replaces a tiled line/dot motif carried over from bibli_009, which was a
+ * different design from the rest of the app — the Forest Day tiles the curated
+ * lists use sit right beside these on Home. `Playlist.pattern` is still in the
+ * ported data and still says which motif each one had; nothing draws it.
+ *
+ * Compositing black over the tint is what the mockup's `mix-blend-multiply`
+ * layer amounts to, so this and TintTile's overlay div agree pixel for pixel.
  */
-export function patternStyle(pl: Playlist): CSSProperties {
-  const c = pl.lightColor
-  const line = (angle: string, size: string) => ({
-    backgroundImage: `repeating-linear-gradient(${angle}, ${c} 0 1.2px, transparent 1.2px ${size})`,
-  })
-  const base: CSSProperties = { background: pl.color }
-  const motif: CSSProperties =
-    pl.pattern === 'lines-v' ? line('90deg', '6px')
-    : pl.pattern === 'lines-h' ? line('0deg', '5px')
-    : pl.pattern === 'diagonal' ? line('45deg', '8px')
-    : pl.pattern === 'grid' ? {
-        backgroundImage:
-          `repeating-linear-gradient(90deg, ${c} 0 1px, transparent 1px 16px),` +
-          `repeating-linear-gradient(0deg, ${c} 0 1px, transparent 1px 16px)`,
-      }
-    : pl.pattern === 'cross' ? {
-        backgroundImage:
-          `repeating-linear-gradient(90deg, ${c} 0 1px, transparent 1px 10px),` +
-          `repeating-linear-gradient(0deg, ${c} 0 1px, transparent 1px 10px)`,
-      }
-    : { backgroundImage: `radial-gradient(${c} 1.2px, transparent 1.3px)`, backgroundSize: '8px 8px' }
-  return { ...base, ...motif }
+export function tileStyle(pl: Playlist): CSSProperties {
+  return {
+    background: `linear-gradient(135deg, rgba(0,0,0,0.20), rgba(0,0,0,0.60)), ${pl.color}`,
+  }
 }

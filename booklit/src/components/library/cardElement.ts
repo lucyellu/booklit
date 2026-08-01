@@ -11,11 +11,15 @@ import { authorHue, hasDistinctSpineArt, spineWidth } from '../../lib/bookMeta'
  * CSV and EPUB metadata, so a title containing markup would otherwise be
  * injected straight into the page.
  */
+/** Every card is this size, and the 3D layouts space books on it. */
+export const CARD_W = 140
+export const CARD_H = 200
+
 export function buildCardElement(book: LocalBook, mode: CardMode): HTMLDivElement {
   const el = document.createElement('div')
   el.className = 'css3d-card'
-  el.style.width = `${mode === 'spine' ? spineWidth(book.pages) : 140}px`
-  el.style.height = '200px'
+  el.style.width = `${mode === 'spine' ? spineWidth(book.pages) : CARD_W}px`
+  el.style.height = `${CARD_H}px`
   el.style.borderRadius = '8px'
   el.style.overflow = 'hidden'
   el.style.cursor = 'pointer'

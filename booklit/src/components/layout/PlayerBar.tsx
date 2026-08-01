@@ -1,7 +1,7 @@
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { useClips } from '../../context/ClipContext'
-import { clipsFor, clipDuration, formatDuration, patternStyle } from '../../lib/clips'
+import { clipsFor, clipDuration, formatDuration, tileStyle } from '../../lib/clips'
 import {
   SkipBack, Play, Pause, SkipForward, BookOpen, X, ListMusic,
 } from 'lucide-react'
@@ -51,7 +51,7 @@ export function PlayerBar() {
           className={`w-14 h-14 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ${
             onClip ? '' : 'bg-chrome-elevated'
           }`}
-          style={onClip ? patternStyle(playlist) : undefined}
+          style={onClip ? tileStyle(playlist) : undefined}
         >
           {onClip
             ? <ListMusic className="w-5 h-5 text-white/85" />

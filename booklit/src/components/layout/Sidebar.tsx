@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import {
   Library, BookOpen, BookMarked, Clock, Star, Home, Flame, Check,
-  Upload, Settings, Grid3x3, Box, Circle, Dna, BookCopy, HardDrive,
+  Upload, Settings, Grid3x3, Box, Boxes, Circle, Dna, BookCopy, HardDrive,
   Play, Smartphone, Plus, Trash2, Image, AlignJustify, Palette, BookOpenText,
 } from 'lucide-react'
 import type { ShelfFilter, AvailabilityFilter, CardMode } from '../../context/AppContext'
@@ -43,11 +43,15 @@ const CARD_MODES: { id: CardMode; label: string; icon: typeof Library }[] = [
   { id: 'book3d', label: '3D books', icon: BookOpenText },
 ]
 
+/* Grid, Shelf and Cube all run in sort order — across, then down, then back —
+   so they're the ones to reach for when the order is the point. Sphere and
+   Helix scatter it by design. */
 const LAYOUTS = [
-  { id: 'grid' as const, label: 'Grid', icon: Grid3x3 },
-  { id: 'shelf' as const, label: 'Shelf', icon: Box },
-  { id: 'sphere' as const, label: 'Sphere', icon: Circle },
-  { id: 'helix' as const, label: 'Helix', icon: Dna },
+  { id: 'grid' as const, label: 'Grid', icon: Grid3x3, hint: 'Sorted left to right, top to bottom' },
+  { id: 'shelf' as const, label: 'Shelf', icon: Box, hint: 'Long rows, as on a wall of shelves' },
+  { id: 'cube' as const, label: 'Cube', icon: Boxes, hint: 'Square slabs, nearest first' },
+  { id: 'sphere' as const, label: 'Sphere', icon: Circle, hint: 'Scattered over a globe' },
+  { id: 'helix' as const, label: 'Helix', icon: Dna, hint: 'One long spiral' },
 ]
 
 /** Avatar tints are per-source and fixed, as in the mockup — they're how you
@@ -85,7 +89,7 @@ function Group({ title, action, children }: {
  * One sidebar row. `badge` shows the count as a green pill (shelves, in the
  * mockup); otherwise it's plain muted text (availability).
  */
-function Row({ icon: Icon, label, count, active, onClick, badge, dense }: {
+function Row({ icon: Icon, label, count, active, onClick, badge, dense, hint }: {
   icon?: typeof Library
   label: string
   count?: number
@@ -93,10 +97,12 @@ function Row({ icon: Icon, label, count, active, onClick, badge, dense }: {
   onClick: () => void
   badge?: boolean
   dense?: boolean
+  hint?: string
 }) {
   return (
     <button
       onClick={onClick}
+      title={hint}
       className={`group w-full flex items-center gap-3 rounded-lg px-3 text-sm font-medium text-left transition-colors ${
         dense ? 'py-1.5' : 'py-2'
       } ${
@@ -406,8 +412,15 @@ export function Sidebar() {
         </Group>
 
         <Group title="Layout">
-          {LAYOUTS.map(({ id, label, icon }) => (
-            <Row key={id} icon={icon} label={label} active={layout === id} onClick={() => setLayout(id)} />
+          {LAYOUTS.map(({ id, label, icon, hint }) => (
+            <Row
+              key={id}
+              icon={icon}
+              label={label}
+              hint={hint}
+              active={layout === id}
+              onClick={() => setLayout(id)}
+            />
           ))}
         </Group>
 

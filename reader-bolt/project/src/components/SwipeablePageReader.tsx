@@ -35,8 +35,16 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
     textHighlights,
     currentChapterIndex,
     currentPage,
-    addTextHighlight
+    addTextHighlight,
+    columnCount
   } = useBook();
+
+  /* Layout → Double. The class for this was being computed in BookReader and
+     then never put on anything, so the setting did nothing — every page was one
+     column whichever you picked. A two-column page also needs a wider sheet
+     than the 672px single column, or each column ends up too narrow to read,
+     and the chapter title stays outside the flow so it spans both. */
+  const twoColumn = columnCount === 2 && !(showSideBySide && translationLanguage !== 'none');
 
   const [selectionPopup, setSelectionPopup] = useState<{ x: number; y: number; text: string } | null>(null);
   const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
@@ -82,11 +90,12 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
 
       {/* Content */}
       <div className="h-full overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-8 py-8">
-          <h2 className="text-xl md:text-2xl font-bold mb-6" style={{ color: accentColor }}>
+        <div className={`${twoColumn ? 'max-w-6xl' : 'max-w-2xl'} mx-auto px-8 py-8`}>
+          <h2 className="text-xl md:text-2xl font-bold mb-6" style={{ color: accentColor || 'var(--rd-title)' }}>
             {chapterTitle}
           </h2>
 
+          <div className={twoColumn ? 'md:columns-2 md:gap-10' : ''}>
           {showSideBySide && translationLanguage !== 'none' && translatedText ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -135,6 +144,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
               pageHighlights={pageHighlights}
             />
           )}
+          </div>
         </div>
       </div>
 

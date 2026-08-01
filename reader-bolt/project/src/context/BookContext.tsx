@@ -159,10 +159,19 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   const [readerWidth, setReaderWidth] = useState(92);
   const [readerHeight, setReaderHeight] = useState(88);
   const [fontFamily, setFontFamily] = useState('Georgia, serif');
-  const [accentColor, setAccentColor] = useState('#A8B5C7');
+  // '' means "follow the theme" (--rd-title), which flips with day/evening the
+  // way a colour frozen into state cannot.
+  const [accentColor, setAccentColor] = useState('');
   const [highlightColor, setHighlightColor] = useState('#A8B5C7');
   const [autoPlayNext, setAutoPlayNext] = useState(true);
-  const [backgroundImage, setBackgroundImage] = useState('/aranprime-KbytCpI1i5I-unsplash.jpg');
+  /* Embedded in Booklit the reader starts on the theme ground, so the iframe has
+     no seam against the host; standalone it keeps its photo. Either way the
+     customizer can change it, and '' means "theme ground". */
+  const [backgroundImage, setBackgroundImage] = useState(
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('embed')
+      ? ''
+      : '/aranprime-KbytCpI1i5I-unsplash.jpg'
+  );
   const [showPageNumbers, setShowPageNumbers] = useState(true);
   const [paddingSize, setPaddingSize] = useState<'small' | 'medium' | 'large' | 'extra-large'>('medium');
   const [marginSize, setMarginSize] = useState<'narrow' | 'normal' | 'wide' | 'extra-wide'>('normal');
@@ -285,15 +294,21 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     // column's py-8 (64px) and the chapter title with its margin (~64px).
     const sheetHeight = window.innerHeight * (readerHeight / 100);
     const availableHeight = Math.max(240, sheetHeight - 48 - 64 - 64);
-    // Text column: max-w-2xl (672px) minus px-8 (64px each side)
-    const availableWidth = Math.min(672, window.innerWidth * 0.9) - 64;
+    // Text sheet: max-w-2xl (672px), or max-w-6xl (1152px) for two columns,
+    // minus px-8 (64px each side) and the 40px gap between the columns.
+    const columnGap = 40;
+    const sheetWidth = Math.min(columnCount === 2 ? 1152 : 672, window.innerWidth * 0.9) - 64;
+    const availableWidth = columnCount === 2
+      ? (sheetWidth - columnGap) / 2
+      : sheetWidth;
 
     const avgCharWidth = fontSize * 0.52; // Georgia ~0.52x width ratio
     const lineHeight = fontSize * sentenceSpacing;
 
     const charsPerLine = Math.floor(availableWidth / avgCharWidth);
     const linesPerPage = Math.floor(availableHeight / lineHeight);
-    const charsPerPage = Math.max(800, charsPerLine * linesPerPage);
+    // Two columns is two of those on one sheet.
+    const charsPerPage = Math.max(800, charsPerLine * linesPerPage * columnCount);
     
     const sentences = text.split(/(?<=[.!?])\s+/);
     const pages: string[] = [];
@@ -318,7 +333,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     }
     
     return pages.filter(page => page.length > 0);
-  }, [fontSize, sentenceSpacing, readerHeight]);
+  }, [fontSize, sentenceSpacing, readerHeight, columnCount]);
 
   const repaginateCurrentChapter = useCallback(() => {
     if (currentChapter) {
@@ -346,7 +361,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     if (currentChapter) {
       repaginateCurrentChapter();
     }
-  }, [fontSize, sentenceSpacing, readerHeight]);
+  }, [fontSize, sentenceSpacing, readerHeight, columnCount]);
 
   // Repaginate on window resize
   useEffect(() => {

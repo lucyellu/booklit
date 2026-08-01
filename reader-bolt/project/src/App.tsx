@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import BookReader from './components/BookReader';
@@ -10,45 +10,25 @@ import { BookProvider, useBook } from './context/BookContext';
 import { sampleBook } from './data/sampleBook';
 import { Eye, EyeOff, Library, LogIn } from 'lucide-react';
 
-export type ThemeType = 'midnight' | 'ocean-breeze' | 'forest-dawn' | 'warm-sunset' | 'lavender-mist';
+/*
+ * One theme, the host's.
+ *
+ * There used to be five (midnight, ocean-breeze, forest-dawn, warm-sunset,
+ * lavender-mist), three of which reached for emerald/amber/orange — ramps the
+ * forest remap in tailwind.config.js deliberately leaves alone, because they
+ * carry meaning elsewhere. So picking one put a lilac or apricot wash behind a
+ * forest-green reader. Nothing ever rendered a picker for them either: both
+ * DesignCustomizer and ReadingSettings take `selectedTheme` and ignore it, so
+ * the app sat on 'midnight' forever. The two blurred blobs below are all that
+ * survived, tinted from the accent ramp so they follow the host.
+ */
+export type ThemeType = 'forest';
 export type ReadingMode = 'vertical-scroll' | 'page-flip';
 
-const themes = {
-  'midnight': {
-    light: 'bg-gradient-to-br from-gray-50 via-slate-50 to-gray-100',
-    dark: 'bg-gradient-to-br from-black via-gray-900 to-black',
-    accent1: 'from-gray-400/15',
-    accent2: 'from-slate-400/15'
-  },
-  'ocean-breeze': {
-    light: 'bg-gradient-to-br from-sky-50 via-blue-50 to-cyan-50',
-    dark: 'bg-gradient-to-br from-slate-900 via-blue-950 to-cyan-950',
-    accent1: 'from-sky-400/15',
-    accent2: 'from-cyan-400/15'
-  },
-  'forest-dawn': {
-    light: 'bg-gradient-to-br from-emerald-50 via-green-50 to-lime-50',
-    dark: 'bg-gradient-to-br from-slate-900 via-emerald-950 to-green-950',
-    accent1: 'from-emerald-400/15',
-    accent2: 'from-green-400/15'
-  },
-  'warm-sunset': {
-    light: 'bg-gradient-to-br from-amber-50 via-orange-50 to-red-50',
-    dark: 'bg-gradient-to-br from-slate-900 via-amber-950 to-orange-950',
-    accent1: 'from-amber-400/15',
-    accent2: 'from-orange-400/15'
-  },
-  'lavender-mist': {
-    light: 'bg-gradient-to-br from-purple-50 via-violet-50 to-indigo-50',
-    dark: 'bg-gradient-to-br from-slate-900 via-purple-950 to-indigo-950',
-    accent1: 'from-purple-400/15',
-    accent2: 'from-indigo-400/15'
-  }
-};
+const AMBIENT = { accent1: 'from-accent-400/15', accent2: 'from-accent-600/15' };
 
 function AppContent() {
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState<ThemeType>('midnight');
   const [uiVisible, setUiVisible] = useState(true);
   const [currentView, setCurrentView] = useState<'reader' | 'library'>('reader');
   const [readingMode, setReadingMode] = useState<ReadingMode>('page-flip');
@@ -57,10 +37,20 @@ function AppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const isEmbed = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('embed');
 
-  useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDarkMode(prefersDark);
+  /* Dark mode has to move `data-theme` with it, not just the boolean.
+     `isDarkMode` picks which end of each ramp a component reaches for, but the
+     ramps' two ends — --rd-white, --rd-black, --rd-bg — are what `data-theme`
+     selects. Flipping only the boolean left the ground pale while every piece of
+     text moved to its dark-mode colour, which is why dark mode read as "the text
+     changed and now I can't see it". One call sets both. */
+  const applyDark = useCallback((dark: boolean) => {
+    document.documentElement.dataset.theme = dark ? 'evening' : 'day';
+    setIsDarkMode(dark);
   }, []);
+
+  useEffect(() => {
+    applyDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }, [applyDark]);
 
   // Listen for authentication state changes
   useEffect(() => {
@@ -83,41 +73,40 @@ function AppContent() {
         setBook(d.book);
         setCurrentView('reader');
       }
-      // Follow the host's Forest Day / Forest Evening choice. data-theme drives
-      // the palette ramps in index.css; isDarkMode is what the components
-      // themselves branch on, so both have to move together.
+      // Follow the host's Forest Day / Forest Evening choice.
       if (d && d.type === 'booklit:theme' && (d.theme === 'day' || d.theme === 'evening')) {
-        document.documentElement.dataset.theme = d.theme;
-        setIsDarkMode(d.theme === 'evening');
+        applyDark(d.theme === 'evening');
       }
     };
     window.addEventListener('message', onMsg);
     // Tell the host we're ready to receive a book.
     try { window.parent?.postMessage({ type: 'booklit:ready' }, '*'); } catch { /* not embedded */ }
     return () => window.removeEventListener('message', onMsg);
-  }, [setBook]);
-
-  const currentTheme = themes[selectedTheme];
+  }, [setBook, applyDark]);
 
   return (
     <div
       className="min-h-screen relative overflow-hidden"
-      style={isEmbed
-        // Embedded in Booklit: the standalone reader's photo backdrop would
-        // show a hard seam against the host's flat forest ground, so use the
-        // ground colour instead. --rd-bg tracks the host's --color-bg.
-        ? { background: 'var(--rd-bg)' }
-        : {
+      /* The picture, when there is one. This used to be ignored outright when
+         embedded — the ground colour was forced, so choosing or uploading a
+         background in the customizer did nothing at all in Booklit. Now the
+         picture wins wherever it is set, and "None" (the customizer's first
+         option, and the default when embedded) falls back to the theme ground,
+         which is what keeps the iframe seamless against the host. */
+      style={backgroundImage
+        ? {
             backgroundImage: `url(${backgroundImage})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             backgroundAttachment: 'fixed'
           }
+        // --rd-bg tracks the host's --color-bg.
+        : { background: 'var(--rd-bg)' }
       }
     >
-      {/* Background overlay for better readability — only needed over the photo. */}
-      {!isEmbed && (
+      {/* Readability wash — only needed over a photo. */}
+      {backgroundImage && (
         <div className={`absolute inset-0 transition-all duration-500 ${
           isDarkMode
             ? 'bg-black/40'
@@ -125,11 +114,14 @@ function AppContent() {
         }`} />
       )}
 
-      {/* Subtle gradient overlays */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute -top-1/2 -right-1/2 w-full h-full bg-gradient-radial ${currentTheme.accent1} to-transparent rounded-full blur-3xl opacity-30`} />
-        <div className={`absolute -bottom-1/2 -left-1/2 w-full h-full bg-gradient-radial ${currentTheme.accent2} to-transparent rounded-full blur-3xl opacity-30`} />
-      </div>
+      {/* Two blurred blobs of the accent, for depth over a flat ground. Not over
+          a picture, which has plenty of its own. */}
+      {!backgroundImage && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className={`absolute -top-1/2 -right-1/2 w-full h-full bg-gradient-radial ${AMBIENT.accent1} to-transparent rounded-full blur-3xl opacity-30`} />
+          <div className={`absolute -bottom-1/2 -left-1/2 w-full h-full bg-gradient-radial ${AMBIENT.accent2} to-transparent rounded-full blur-3xl opacity-30`} />
+        </div>
+      )}
 
       {/* Top Controls */}
       <div className="fixed top-4 left-4 right-4 z-[60] flex justify-between items-center">
@@ -211,10 +203,10 @@ function AppContent() {
             />
             <ControlPanel 
               isDarkMode={isDarkMode} 
-              onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+              onToggleDarkMode={() => applyDark(!isDarkMode)}
               showControls={uiVisible}
-              selectedTheme={selectedTheme}
-              onThemeChange={setSelectedTheme}
+              selectedTheme="forest"
+              onThemeChange={() => {}}
               readingMode={readingMode}
               onReadingModeChange={setReadingMode}
             />

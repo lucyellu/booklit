@@ -53,6 +53,8 @@ export default {
         // Every interactive accent in the reader is blue; the neighbours below
         // only show up in the odd decorative gradient. Point them all at the
         // forest greens so nothing stays blue.
+        // Named directly for the few places written after the remap.
+        accent: ramp('accent'),
         blue: ramp('accent'),
         indigo: ramp('accent'),
         sky: ramp('accent'),

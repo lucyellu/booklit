@@ -52,12 +52,26 @@ function TintCard({ title, blurb, count, tint, onClick }: {
   )
 }
 
-function CoverStrip({ books, onOpen }: { books: LocalBook[]; onOpen: (b: LocalBook) => void }) {
+/** Same contract as the library: one click selects, two open the reader. */
+function CoverStrip({ books, onOpen, onSelect, selectedId }: {
+  books: LocalBook[]
+  onOpen: (b: LocalBook) => void
+  onSelect: (b: LocalBook) => void
+  selectedId: string | null
+}) {
   return (
     <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-4">
       {books.map(b => (
-        <button key={b.id} onClick={() => onOpen(b)} className="group text-left">
-          <div className="aspect-[2/3] rounded-xl overflow-hidden bg-bg-sunken shadow-sm mb-2 transition-all group-hover:-translate-y-1 group-hover:shadow-md">
+        <button
+          key={b.id}
+          onClick={() => onSelect(b)}
+          onDoubleClick={() => onOpen(b)}
+          title={`${b.title}${b.author ? ` — ${b.author}` : ''}\nClick for details · double-click to read`}
+          className="group text-left"
+        >
+          <div className={`aspect-[2/3] rounded-xl overflow-hidden bg-bg-sunken shadow-sm mb-2 transition-all group-hover:-translate-y-1 group-hover:shadow-md ${
+            selectedId === b.id ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''
+          }`}>
             {b.coverUrl ? (
               <img
                 src={b.coverUrl}
@@ -85,7 +99,10 @@ function CoverStrip({ books, onOpen }: { books: LocalBook[]; onOpen: (b: LocalBo
 }
 
 export function HomeView() {
-  const { setShelfFilter, setLibrarySource, setListId, setPlaylistId, openReader } = useApp()
+  const {
+    setShelfFilter, setLibrarySource, setListId, setPlaylistId, openReader,
+    openDetail, detailBookId,
+  } = useApp()
   const { localBooks, isReadable, openBook } = useBook()
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
@@ -232,7 +249,12 @@ export function HomeView() {
               View all <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
-          <CoverStrip books={row.books} onOpen={handleOpen} />
+          <CoverStrip
+            books={row.books}
+            onOpen={handleOpen}
+            onSelect={b => openDetail(b.id)}
+            selectedId={detailBookId}
+          />
         </section>
       ))}
 

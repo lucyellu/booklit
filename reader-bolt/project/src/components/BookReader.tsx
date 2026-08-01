@@ -144,7 +144,11 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
     'extra-wide': 'mx-8 md:mx-32'
   }[marginSize];
 
-  const columnClass = columnCount === 2 ? 'md:columns-2 md:gap-8' : 'columns-1';
+  /* Layout → Double. This was computed and then never put on an element, so the
+     setting did nothing. Page-flip applies its own in SwipeablePageReader, where
+     the sheet also has to widen; here it wraps the continuous scroll, whose
+     pages are already stacked in one flow. */
+  const columnClass = columnCount === 2 ? 'md:columns-2 md:gap-10' : '';
 
   // Calculate page dimensions in pixels for display
   const pixelsPerInch = 96;
@@ -173,7 +177,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
               >
                 <div className="h-full p-4 md:p-6 overflow-y-auto">
                   {currentPage === 1 && (
-                    <h2 className="text-xl md:text-2xl font-bold mb-4" style={{ color: accentColor }}>
+                    <h2 className="text-xl md:text-2xl font-bold mb-4" style={{ color: accentColor || 'var(--rd-title)' }}>
                       {currentChapter.title}
                     </h2>
                   )}
@@ -220,9 +224,10 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
         if (continuousScroll) {
           return (
             <div className="space-y-4">
-              <h2 className={`text-xl md:text-2xl font-bold mb-4`} style={{ color: accentColor }}>
+              <h2 className={`text-xl md:text-2xl font-bold mb-4`} style={{ color: accentColor || 'var(--rd-title)' }}>
                 {currentChapter.title}
               </h2>
+              <div className={columnClass}>
               {currentChapter.content.map((pageContent, index) => (
                 <p
                   key={index}
@@ -232,6 +237,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
                   {pageContent}
                 </p>
               ))}
+              </div>
             </div>
           );
         }
@@ -257,7 +263,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
               >
                 <div className="p-4 md:p-6">
                   {index === 0 && (
-                    <h2 className="text-xl md:text-2xl font-bold mb-4" style={{ color: accentColor }}>
+                    <h2 className="text-xl md:text-2xl font-bold mb-4" style={{ color: accentColor || 'var(--rd-title)' }}>
                       {currentChapter.title}
                     </h2>
                   )}

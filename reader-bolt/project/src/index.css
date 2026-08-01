@@ -19,9 +19,14 @@
   --rd-white: 240 235 224;   /* #f0ebe0 */
   --rd-black: 26 46 10;      /* #1a2e0a */
 
-  /* Page ground, used only when embedded — see App.tsx. Matches the host's
-     --color-bg so the iframe doesn't show a seam against the shell. */
+  /* Page ground when no background picture is set — see App.tsx. Matches the
+     host's --color-bg so the iframe doesn't show a seam against the shell. */
   --rd-bg: #e8ede4;
+
+  /* Chapter titles, when the reader is on its own accent rather than one the
+     user picked. The host's sienna section label, and it has to flip: a colour
+     baked into state can't. 4.7:1 on the day sheet. */
+  --rd-title: #a0522d;
 
   --rd-gray-50: 247 246 240;
   --rd-gray-100: 232 237 228;
@@ -57,4 +62,5 @@
   --rd-white: 216 232 200;   /* #d8e8c8 */
   --rd-black: 10 22 6;       /* #0a1606 */
   --rd-bg: #14260d;
+  --rd-title: #d08a50;       /* the host's evening accent-warm — 5.7:1 */
 }

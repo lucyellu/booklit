@@ -43,6 +43,8 @@ const DesignCustomizer: React.FC<DesignCustomizerProps> = ({
   ];
 
   const accentColors = [
+    // '' follows the theme, so the chapter title flips with day/evening.
+    { name: 'Theme', value: '' },
     { name: 'Pale Gray-Blue', value: '#A8B5C7' },
     { name: 'Soft Green', value: '#B8D6C5' },
     { name: 'Warm Peach', value: '#D6C5B8' },
@@ -128,8 +130,19 @@ const DesignCustomizer: React.FC<DesignCustomizerProps> = ({
                 </label>
               </div>
               
-              {/* Current Background */}
+              {/* Current Background. "None" first, so picking a picture is
+                  something you can undo without reloading. */}
               <div className="grid grid-cols-1 gap-2 mb-2">
+                <button
+                  onClick={() => setBackgroundImage('')}
+                  className={`p-2 rounded-lg border-2 text-sm font-medium transition-all duration-200 ${
+                    backgroundImage === ''
+                      ? 'border-blue-400 ring-2 ring-blue-400/30'
+                      : 'border-white/20 hover:border-white/40'
+                  } ${isDarkMode ? 'text-white/80' : 'text-gray-700'}`}
+                >
+                  None — theme colour
+                </button>
                 {backgroundImages.map((bg) => (
                   <button
                     key={bg.url}
@@ -196,7 +209,7 @@ const DesignCustomizer: React.FC<DesignCustomizerProps> = ({
             {/* Accent Color */}
             <div className="mb-4">
               <div className="flex items-center space-x-2 mb-2">
-                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: accentColor }} />
+                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: accentColor || 'var(--rd-title)' }} />
                 <label className={`text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-gray-600'}`}>
                   Accent Color
                 </label>
@@ -218,7 +231,7 @@ const DesignCustomizer: React.FC<DesignCustomizerProps> = ({
                   >
                     <div 
                       className="w-3 h-3 rounded-full border border-white/20" 
-                      style={{ backgroundColor: color.value }}
+                      style={{ backgroundColor: color.value || 'var(--rd-title)' }}
                     />
                     <span className={`font-medium ${isDarkMode ? 'text-white/80' : 'text-gray-700'}`}>
                       {color.name}

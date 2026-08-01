@@ -21,6 +21,13 @@ const UA = 'Mozilla/5.0 (compatible; booklit/1.0)'
 
 // Local books folder (override with BOOKS_DIR env var).
 const BOOKS_DIR = path.resolve(process.env.BOOKS_DIR || 'L:\\Media\\Text\\Books')
+/* 3D book models, served read-only for the Models view. They live in the sibling
+   `cards/` project and are ~7 MB each, so they are deliberately not copied into
+   booklit/public — that would put them in a public repo and in every build.
+   Override with MODELS_DIR. */
+const MODELS_DIR = path.resolve(
+  process.env.MODELS_DIR || path.join(__dirname, '..', '..', 'cards', 'assets', 'models'),
+)
 // Formats the in-app text+audio reader can open.
 const READABLE_EXT = new Set(['.epub', '.pdf', '.txt', '.md'])
 const MIME = {
@@ -28,6 +35,8 @@ const MIME = {
   '.pdf': 'application/pdf',
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
 }
 let localCatalog = null   // cached [{id,title,author,format,relpath,size}]
 const coverCache = new Map()  // id → { buffer, mime }  (extracted EPUB covers)
@@ -242,15 +251,17 @@ async function extractEpubCover(absPath) {
   return { buffer, mime: detectImageMime(buffer) }
 }
 
-// Resolve a /files/<relpath> request to a safe absolute path inside BOOKS_DIR.
-function resolveLocalFile(relpath) {
+// Resolve a request path to a safe absolute path inside `root`.
+function resolveUnder(root, relpath) {
   let decoded
   try { decoded = decodeURIComponent(relpath) } catch { return null }  // malformed %xx
-  const abs = path.resolve(BOOKS_DIR, decoded)
-  const root = BOOKS_DIR.endsWith(path.sep) ? BOOKS_DIR : BOOKS_DIR + path.sep
-  if (abs !== BOOKS_DIR && !abs.startsWith(root)) return null   // path traversal guard
+  const abs = path.resolve(root, decoded)
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep
+  if (abs !== root && !abs.startsWith(prefix)) return null   // path traversal guard
   return abs
 }
+
+const resolveLocalFile = relpath => resolveUnder(BOOKS_DIR, relpath)
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -270,6 +281,45 @@ const server = http.createServer(async (req, res) => {
     } catch {
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'file not found' }))
+    }
+    return
+  }
+
+  // --- 3D book models for the Models view ---
+  if (u.pathname.startsWith('/models/')) {
+    const abs = resolveUnder(MODELS_DIR, u.pathname.slice('/models/'.length))
+    // This exposes a folder outside the project, so it serves a fixed
+    // allow-list of model formats rather than whatever happens to be in there.
+    if (!abs || !['.glb', '.gltf'].includes(path.extname(abs).toLowerCase())) {
+      res.writeHead(403); res.end('forbidden'); return
+    }
+    try {
+      const stat = await fs.stat(abs)
+      res.writeHead(200, {
+        'Content-Type': MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream',
+        'Content-Length': stat.size,
+        // Immutable art assets; without this, every view switch refetches ~20 MB.
+        'Cache-Control': 'public, max-age=86400',
+      })
+      createReadStream(abs).pipe(res)
+    } catch {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'model not found' }))
+    }
+    return
+  }
+
+  // --- which models exist; the Models view falls back cleanly without them ---
+  if (u.pathname === '/api/models') {
+    try {
+      const models = (await fs.readdir(MODELS_DIR))
+        .filter(f => f.toLowerCase().endsWith('.glb'))
+        .sort()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ models, dir: MODELS_DIR }))
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ models: [], dir: MODELS_DIR, error: e.message }))
     }
     return
   }

@@ -9,6 +9,8 @@ const backendProxy = {
   // /books + /data are served statically from public/ (copied into dist).
   '/api': 'http://localhost:8765',
   '/files': 'http://localhost:8765',
+  // /models = GLB book meshes, streamed from the sibling cards/ project.
+  '/models': 'http://localhost:8765',
 }
 
 export default defineConfig({

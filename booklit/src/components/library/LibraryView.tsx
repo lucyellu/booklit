@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { CSS3DScene } from './CSS3DScene'
 import { WebGLScene } from './WebGLScene'
+import { ModelScene } from './ModelScene'
 import type { LocalBook } from '../../context/BookContext'
 import {
   dedupe, applyFilters, sortBooks, SORT_LABELS, SORT_DIR_LABELS,
@@ -150,6 +151,8 @@ export function LibraryView() {
           <CSS3DScene books={pageItems} />
         ) : libraryView === 'webgl' ? (
           <WebGLScene books={pageItems} />
+        ) : libraryView === 'models' ? (
+          <ModelScene books={pageItems} />
         ) : (
           <FlatGrid
             localBooks={pageItems}

@@ -4,13 +4,15 @@ import {
   Search, PanelLeftClose, PanelLeft, Eye, EyeOff, Sun, Moon,
 } from 'lucide-react'
 
-/* "GLB" was the old label for the WebGL mode, from a plan to load real .glb
-   models out of the CSV's 3d_mesh column. That column is empty for every row, so
-   the mode builds its own meshes and the name was only ever misleading. */
+/* The old "GLB" label came from a plan to load models out of the CSV's 3d_mesh
+   column, which is empty for every row. Real models do exist — in the sibling
+   cards/ project — and that is what "Models" loads. "Books" is the generated
+   fallback that can carry a whole page. */
 const VIEW_MODES = [
   { id: 'flat' as const, label: 'Flat', hint: 'Plain grid' },
   { id: 'css3d' as const, label: 'Cards', hint: '3D scene of flat cards' },
-  { id: 'webgl' as const, label: 'Books', hint: '3D scene of solid books' },
+  { id: 'webgl' as const, label: 'Books', hint: '3D scene of generated book shapes' },
+  { id: 'models' as const, label: 'Models', hint: 'Real 3D book models — first 40' },
 ]
 
 export function TopBar() {

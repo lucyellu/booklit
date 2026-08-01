@@ -280,8 +280,11 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
 
   // Function to repaginate text based on current viewport and font settings
   const repaginateText = useCallback((text: string): string[] => {
-    // Available reading area: full viewport minus top bar (64px), control panel (80px), content padding (py-8 = 64px), chapter title (~60px)
-    const availableHeight = window.innerHeight - 64 - 80 - 64 - 60;
+    // The sheet is readerHeight% of the viewport, not the whole of it, so size a
+    // page against that: minus the outer container's padding (~48px), the text
+    // column's py-8 (64px) and the chapter title with its margin (~64px).
+    const sheetHeight = window.innerHeight * (readerHeight / 100);
+    const availableHeight = Math.max(240, sheetHeight - 48 - 64 - 64);
     // Text column: max-w-2xl (672px) minus px-8 (64px each side)
     const availableWidth = Math.min(672, window.innerWidth * 0.9) - 64;
 
@@ -315,7 +318,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     }
     
     return pages.filter(page => page.length > 0);
-  }, [fontSize, sentenceSpacing]);
+  }, [fontSize, sentenceSpacing, readerHeight]);
 
   const repaginateCurrentChapter = useCallback(() => {
     if (currentChapter) {
@@ -343,7 +346,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     if (currentChapter) {
       repaginateCurrentChapter();
     }
-  }, [fontSize, sentenceSpacing]);
+  }, [fontSize, sentenceSpacing, readerHeight]);
 
   // Repaginate on window resize
   useEffect(() => {
@@ -355,7 +358,19 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   }, [repaginateCurrentChapter]);
 
   const setBook = useCallback((newBook: Book) => {
-    setBookState(newBook);
+    /* Pages arrive at whatever size whoever produced them chose — the Booklit
+       host splits chapters at 900 characters, about half of what a sheet holds
+       here, which is why an imported book only filled the top half of the page.
+       Repagination used to run on a font change or a resize and never on load,
+       so nothing ever corrected it. Reflow to this viewport up front. */
+    const reflowed: Book = {
+      ...newBook,
+      chapters: newBook.chapters.map(ch => {
+        const pages = repaginateText(ch.content.join(' '));
+        return pages.length ? { ...ch, content: pages } : ch;
+      }),
+    };
+    setBookState(reflowed);
     setCurrentChapterIndex(0);
     setCurrentPage(1);
     setIsPlaying(false);
@@ -363,7 +378,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     setHighlightedWordIndex(-1);
     setReadWordIndices([]);
     setBookmarks([]);
-  }, []);
+  }, [repaginateText]);
 
   const addUploadedBook = useCallback((newBook: Book) => {
     const entry: LocalBook = {

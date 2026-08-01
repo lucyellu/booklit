@@ -34,6 +34,11 @@ export function AppShell() {
                 : <LibraryView />}
             </main>
           </div>
+
+          {/* Details for whichever book is selected. Docked beside the library
+              rather than floating over it, so picking the next book is one
+              click and the 3D scene keeps its own space. */}
+          <BookDetailPanel />
         </div>
 
         {/* Player bar */}
@@ -41,7 +46,6 @@ export function AppShell() {
       </div>
 
       <SettingsModal />
-      <BookDetailPanel />
     </div>
   )
 }

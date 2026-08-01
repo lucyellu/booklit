@@ -151,10 +151,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, sidebarOpen: !s.sidebarOpen })), [])
   const toggleUI = useCallback(() =>
     setState(s => ({ ...s, uiVisible: !s.uiVisible })), [])
-  // Opening the reader always dismisses the detail panel — otherwise it stays
-  // parked over the reader, since it's portalled to <body> and outside the shell.
+  // The detail panel is docked in the shell, which the reader covers, so the
+  // selection is left alone: closing the reader puts you back on the book you
+  // were looking at.
   const openReader = useCallback(() =>
-    setState(s => ({ ...s, view: 'reader', detailBookId: null })), [])
+    setState(s => ({ ...s, view: 'reader' })), [])
   const closeReader = useCallback(() =>
     setState(s => ({ ...s, view: 'library' })), [])
   const setSearchQuery = useCallback((searchQuery: string) =>

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { useTheme } from '../../context/ThemeContext'
@@ -12,10 +11,15 @@ import {
 } from 'lucide-react'
 
 /**
- * Slide-in book detail, ported from bookify's `openDetailPanel`
- * (bibliophile.html:2535). Same content and same action set; the blurred cover
- * band and the author-tinted shelf badge are the two bits that carried the
- * original's character, so they're kept.
+ * The right-hand detail panel — what you get when you pick a book in any of the
+ * four views. Ported from bookify's `openDetailPanel` (bibliophile.html:2535):
+ * same content and same action set, and the blurred cover band and
+ * author-tinted shelf badge are the two bits that carried the original's
+ * character, so they're kept.
+ *
+ * It docks into the shell rather than floating over it behind a scrim, because
+ * picking a *different* book is the most likely next thing you'll do and a
+ * scrim would eat that click. The library keeps working with the panel open.
  */
 export function BookDetailPanel() {
   const { detailBookId, closeDetail } = useApp()
@@ -49,21 +53,16 @@ function DetailBody({ book }: { book: LocalBook }) {
   const readable = isReadable(book)
   const loading = bookLoadingId === book.id
 
+  // The panel stays on the book after the reader opens, so closing the reader
+  // puts you back where you were rather than on a blank sidebar.
   const handleRead = () => {
-    openBook(book).then(ok => { if (ok) { closeDetail(); openReader() } })
+    openBook(book).then(ok => { if (ok) openReader() })
   }
 
-  return createPortal(
-    <>
-      <div
-        className="scrim fixed inset-0 z-[80]"
-        onClick={closeDetail}
-        aria-hidden
-      />
+  return (
       <aside
-        role="dialog"
         aria-label={book.title}
-        className="fixed right-0 top-0 bottom-0 z-[81] w-full max-w-md bg-bg-surface shadow-2xl flex flex-col overflow-y-auto"
+        className="w-[360px] xl:w-[400px] flex-shrink-0 h-full overflow-y-auto bg-bg-surface border-l border-border"
       >
         {/* Blurred cover band */}
         <div className="relative h-52 flex-shrink-0 overflow-hidden">
@@ -127,18 +126,21 @@ function DetailBody({ book }: { book: LocalBook }) {
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2 mt-5">
-            {readable && (
-              <button
-                onClick={handleRead}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-accent text-on-accent text-sm font-semibold hover:brightness-110 transition disabled:opacity-60"
-              >
-                {loading
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <BookOpen className="w-4 h-4" />}
-                Read free
-              </button>
-            )}
+            {/* Always here, so the panel answers "can I read this?" rather than
+                leaving you to infer it from a missing button. */}
+            <button
+              onClick={handleRead}
+              disabled={loading || !readable}
+              title={readable
+                ? 'Open in the reader (or double-click the book)'
+                : 'No ebook file for this one yet'}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-accent text-on-accent text-sm font-semibold hover:brightness-110 transition disabled:opacity-40 disabled:hover:brightness-100"
+            >
+              {loading
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <BookOpen className="w-4 h-4" />}
+              {readable ? 'Read free' : 'No ebook'}
+            </button>
             {book.buyLink && (
               <ActionLink href={book.buyLink} icon={ShoppingCart} label="Buy" />
             )}
@@ -199,8 +201,6 @@ function DetailBody({ book }: { book: LocalBook }) {
           )}
         </div>
       </aside>
-    </>,
-    document.body,
   )
 }
 

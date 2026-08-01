@@ -69,10 +69,11 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     openBook(book).then(ok => { if (ok) openReader() })
   }, [openBook, openReader])
 
-  // Latest callbacks without re-mounting the scene.
-  const handlersRef = useRef({ open: handleOpen, detail: openDetail })
+  // Latest callbacks without re-mounting the scene. One click picks the book and
+  // fills the detail panel; two open it. Same in all four views.
+  const handlersRef = useRef({ open: handleOpen, select: openDetail })
   useEffect(() => {
-    handlersRef.current = { open: handleOpen, detail: openDetail }
+    handlersRef.current = { open: handleOpen, select: openDetail }
   }, [handleOpen, openDetail])
 
   useEffect(() => {
@@ -290,11 +291,13 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       downAt = null
       if (moved > 5) return
       const found = pick(e)
-      if (!found) return
-      // Shift-click asks about a book instead of opening it — the 3D view has no
-      // room for the grid's hover buttons.
-      if (e.shiftKey) handlersRef.current.detail(found.book.id)
-      else handlersRef.current.open(found.book)
+      if (found) handlersRef.current.select(found.book.id)
+    }
+    // A drag that ends where it began still counts as a click, so the double
+    // click is picked up here rather than by counting clicks in onUp.
+    const onDouble = (e: MouseEvent) => {
+      const found = pick(e)
+      if (found) handlersRef.current.open(found.book)
     }
     const onLeave = () => setHovered(null)
 
@@ -303,6 +306,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     el.addEventListener('pointermove', onMove)
     el.addEventListener('pointerdown', onDown)
     el.addEventListener('pointerup', onUp)
+    el.addEventListener('dblclick', onDouble)
     el.addEventListener('pointerleave', onLeave)
 
     const onResize = () => {
@@ -340,6 +344,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       el.removeEventListener('pointermove', onMove)
       el.removeEventListener('pointerdown', onDown)
       el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('dblclick', onDouble)
       el.removeEventListener('pointerleave', onLeave)
       controls.dispose()
       tweens.stopAll()
@@ -378,7 +383,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
         </div>
       )}
       <p className="absolute bottom-2 left-2 z-10 text-[10.5px] text-text-muted pointer-events-none">
-        Drag to orbit · scroll to zoom · click a book to read · shift-click for details
+        Drag to orbit · scroll to zoom · click a book for details · double-click to read
         {overflow > 0 && ` · showing the first ${MAX_MESHES} of ${books.length}`}
       </p>
     </div>

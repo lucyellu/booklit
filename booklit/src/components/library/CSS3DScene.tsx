@@ -19,7 +19,7 @@ interface Built {
 export function CSS3DScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const { layout, gridCols, gridRows, openReader, cardMode } = useApp()
+  const { layout, gridCols, gridRows, openReader, openDetail, cardMode } = useApp()
   const { openBook } = useBook()
 
   /* Built once; the book list, the layout and the card mode are pushed into the
@@ -35,12 +35,16 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
   const cardModeRef = useRef(cardMode)
   const gridRef = useRef({ cols: gridCols, rows: gridRows })
 
-  const handleBookClick = useCallback((book: LocalBook) => {
+  // One click picks the book and fills the detail panel; two open it. Same in
+  // all four views.
+  const handleOpen = useCallback((book: LocalBook) => {
     openBook(book).then(ok => { if (ok) openReader() })
   }, [openBook, openReader])
 
-  const clickRef = useRef(handleBookClick)
-  useEffect(() => { clickRef.current = handleBookClick }, [handleBookClick])
+  const handlersRef = useRef({ select: openDetail, open: handleOpen })
+  useEffect(() => {
+    handlersRef.current = { select: openDetail, open: handleOpen }
+  }, [openDetail, handleOpen])
 
   useEffect(() => {
     const container = containerRef.current
@@ -74,9 +78,10 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     const make = (book: LocalBook): Built => {
       const el = buildCardElement(book, cardModeRef.current)
       const entry: Built = { object: new CSS3DObject(el), book }
-      // Reads the record rather than closing over `book`, so a card that
-      // survives a re-sort still opens the right thing.
-      el.addEventListener('click', () => clickRef.current(entry.book))
+      // Both read the record rather than closing over `book`, so a card that
+      // survives a re-sort still points at the right thing.
+      el.addEventListener('click', () => handlersRef.current.select(entry.book.id))
+      el.addEventListener('dblclick', () => handlersRef.current.open(entry.book))
       // Cards fly in from somewhere off the arrangement, as in the original.
       entry.object.position.set(
         (Math.random() - 0.5) * 2 * spawn,

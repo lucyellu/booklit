@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef } from 'react';
 import AudioControls from './AudioControls';
 import ProgressScrubber from './ProgressScrubber';
 import ReadingSettings from './ReadingSettings';
@@ -32,49 +32,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   const { book, currentChapterIndex, currentChapter, bookmarks } = useBook();
   const panelRef = useRef<HTMLDivElement>(null);
-  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isHovering, setIsHovering] = useState(false);
 
-  // Handle clicks outside the control panel to hide it
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node) && showControls && !isHovering) {
-        // Don't hide if clicking on the UI toggle button or any modal/dropdown
-        const target = event.target as HTMLElement;
-        if (target.closest('[data-ui-toggle]') || target.closest('[role="dialog"]') || target.closest('.z-50')) {
-          return;
-        }
-        if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-        hideTimeoutRef.current = setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('hideControls'));
-        }, 800);
-      }
-    };
-
-    if (showControls) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
-    };
-  }, [showControls, isHovering]);
-
-  // Show controls on hover
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      const bottomThreshold = window.innerHeight - 100; // 100px from bottom
-      if (e.clientY > bottomThreshold) {
-        setIsHovering(true);
-      } else {
-        setIsHovering(false);
-      }
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    return () => document.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+  /* The panel used to hide itself 800ms after any click outside it and then
+     only come back while the pointer was within 100px of the bottom edge, which
+     made the transport controls feel like they weren't there. It is now
+     persistent, and the eye button in the corner is the only thing that hides
+     it — one control, in one place, that stays where you put it. */
 
   const readingModeIcons = {
     'page-flip': BookOpen,
@@ -86,7 +49,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
   return (
     <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 ${
-      showControls || isHovering ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
+      showControls ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
     }`}>
       <div 
         ref={panelRef}
@@ -99,8 +62,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           backdropFilter: 'blur(40px)',
           WebkitBackdropFilter: 'blur(40px)',
         }}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
       >
         <div className="max-w-6xl mx-auto space-y-3 md:space-y-4">
           {/* Book Info Header */}

@@ -71,17 +71,9 @@ function AppContent() {
     return () => unsubscribe();
   }, []);
 
-  // Listen for hide controls event
-  useEffect(() => {
-    const handleHideControls = () => {
-      setUiVisible(false);
-    };
-
-    window.addEventListener('hideControls', handleHideControls);
-    return () => {
-      window.removeEventListener('hideControls', handleHideControls);
-    };
-  }, []);
+  /* The control panel used to ask to be hidden shortly after any click outside
+     it. It no longer does — the eye button below is the only way it goes away.
+     See the note in ControlPanel. */
 
   // Embedded mode: accept a book pushed from the host (Booklit) via postMessage.
   useEffect(() => {

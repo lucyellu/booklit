@@ -13,7 +13,7 @@ import { authorHue, spineWidth, hasDistinctSpineArt } from '../../lib/bookMeta'
 import { findList } from '../../lib/curatedLists'
 import type { CardMode } from '../../context/AppContext'
 import {
-  Loader2, X, ChevronLeft, ChevronRight, Info, ShoppingCart,
+  Loader2, X, ChevronLeft, ChevronRight, BookOpen, ShoppingCart,
   ArrowUpDown, ChevronDown, ArrowUpNarrowWide, ArrowDownWideNarrow,
 } from 'lucide-react'
 
@@ -23,7 +23,7 @@ export function LibraryView() {
   const {
     libraryView, openReader, shelfFilter, searchQuery, readableOnly,
     availability, librarySource, collectionId, collections, listId,
-    cardMode, openDetail, sortKey, sortDir,
+    cardMode, openDetail, detailBookId, sortKey, sortDir,
   } = useApp()
   const { localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable } = useBook()
   const [page, setPage] = useState(0)
@@ -157,7 +157,8 @@ export function LibraryView() {
           <FlatGrid
             localBooks={pageItems}
             onOpen={handleOpen}
-            onInfo={lb => openDetail(lb.id)}
+            onSelect={lb => openDetail(lb.id)}
+            selectedId={detailBookId}
             loadingId={bookLoadingId}
             cardMode={cardMode}
           />
@@ -329,12 +330,19 @@ function CardFace({ book, mode }: { book: LocalBook; mode: CardMode }) {
   return <BookCover coverUrl={book.coverUrl} title={book.title} />
 }
 
+/**
+ * One click picks a book and fills the detail panel; a double click opens it in
+ * the reader. Same contract in all four views — it used to differ per view, and
+ * a plain click in the flat grid opened a book outright, which meant there was
+ * no way to look one up without committing to reading it.
+ */
 function FlatGrid({
-  localBooks, onOpen, onInfo, loadingId, cardMode,
+  localBooks, onOpen, onSelect, selectedId, loadingId, cardMode,
 }: {
   localBooks: LocalBook[]
   onOpen: (book: LocalBook) => void
-  onInfo: (book: LocalBook) => void
+  onSelect: (book: LocalBook) => void
+  selectedId: string | null
   loadingId: string | null
   cardMode: CardMode
 }) {
@@ -359,15 +367,16 @@ function FlatGrid({
             style={isSpine ? { width: spineWidth(lb.pages) } : undefined}
           >
             <button
-              onClick={() => onOpen(lb)}
+              onClick={() => onSelect(lb)}
+              onDoubleClick={() => onOpen(lb)}
               disabled={loadingId === lb.id}
-              title={isSpine ? `${lb.title}${lb.author ? ` — ${lb.author}` : ''}` : undefined}
+              title={`${lb.title}${lb.author ? ` — ${lb.author}` : ''}\nClick for details · double-click to read`}
               className="w-full text-left disabled:opacity-60"
             >
               <div
                 className={`overflow-hidden rounded-xl bg-bg-sunken shadow-sm relative transition-all group-hover:-translate-y-1 group-hover:shadow-md ${
                   isSpine ? 'h-56' : 'aspect-[2/3] mb-2.5'
-                }`}
+                } ${selectedId === lb.id ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg' : ''}`}
               >
                 <CardFace book={lb} mode={cardMode} />
                 {lb.format && lb.format !== 'epub' && !isSpine && (
@@ -398,8 +407,8 @@ function FlatGrid({
                 isSpine ? 'bottom-1.5' : 'bottom-[4.25rem]'
               }`}
             >
-              <QuickAction label="Details" onClick={() => onInfo(lb)}>
-                <Info className="w-3.5 h-3.5" />
+              <QuickAction label="Read" onClick={() => onOpen(lb)}>
+                <BookOpen className="w-3.5 h-3.5" />
               </QuickAction>
               {lb.buyLink && (
                 <QuickAction label="Buy" href={lb.buyLink}>

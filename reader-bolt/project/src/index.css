@@ -1,3 +1,60 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Forest ramps for the palette remap in tailwind.config.js.
+ *
+ * Values are bare "R G B" triplets, not colours: the config wraps them as
+ * rgb(var(--x) / <alpha-value>) so slash-opacity classes keep working.
+ *
+ * `white` and `black` are the two ends of the ramp and flip with the theme.
+ * `gray` and `accent` do *not* flip — the reader already picks the right end of
+ * each ramp itself via its `isDarkMode` flag (gray-900 text in light mode,
+ * gray-300 in dark), so flipping them here would cancel that out and give a
+ * dark-on-dark reader.
+ */
+:root {
+  /* Forest Day — light paper, dark forest ink. */
+  --rd-white: 240 235 224;   /* #f0ebe0 */
+  --rd-black: 26 46 10;      /* #1a2e0a */
+
+  /* Page ground, used only when embedded — see App.tsx. Matches the host's
+     --color-bg so the iframe doesn't show a seam against the shell. */
+  --rd-bg: #e8ede4;
+
+  --rd-gray-50: 247 246 240;
+  --rd-gray-100: 232 237 228;
+  --rd-gray-200: 213 221 204;
+  --rd-gray-300: 184 197 172;
+  --rd-gray-400: 148 168 136;
+  --rd-gray-500: 116 138 103;
+  --rd-gray-600: 85 105 74;
+  --rd-gray-700: 65 82 54;
+  --rd-gray-800: 47 61 39;
+  --rd-gray-900: 30 42 25;
+  --rd-gray-950: 18 27 14;
+
+  /* 50–400 are the bright end, used as text and icons on dark surfaces.
+     500 upwards are fills that carry light text, so they start well below
+     Tailwind blue's lightness: at the usual #4d8a26 the reader's most common
+     button (bg-blue-500 + text-white) lands at 3.3:1, under AA. Hence the
+     deliberate step between 400 and 500. */
+  --rd-accent-50: 238 246 232;
+  --rd-accent-100: 217 236 201;
+  --rd-accent-200: 184 220 158;
+  --rd-accent-300: 147 201 111;
+  --rd-accent-400: 122 184 74;   /* #7ab84a — matches the host's evening accent */
+  --rd-accent-500: 61 110 28;    /* #3d6e1c — 5.1:1 / 4.7:1 under the two whites */
+  --rd-accent-600: 52 94 25;
+  --rd-accent-700: 42 77 20;
+  --rd-accent-800: 35 64 17;
+  --rd-accent-900: 28 51 14;
+  --rd-accent-950: 20 38 13;
+}
+
+[data-theme='evening'] {
+  --rd-white: 216 232 200;   /* #d8e8c8 */
+  --rd-black: 10 22 6;       /* #0a1606 */
+  --rd-bg: #14260d;
+}

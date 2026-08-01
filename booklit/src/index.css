@@ -1,81 +1,195 @@
 @import "tailwindcss";
 
+/* ============================================================
+   FOREST — design tokens
+   ------------------------------------------------------------
+   Two themes derived from the Forest Day (shell) and Forest
+   Study (surfaces) mockups. Day is the default; Evening is the
+   same hues with the ground flipped.
+
+   Themes are switched by setting data-theme on <html>; see
+   context/ThemeContext.tsx. Tailwind reads the @theme block, so
+   every token below is available as a bg-, text- and border-
+   utility.
+   ============================================================ */
+
 @theme {
-  --font-display: "Syne", system-ui, sans-serif;
-  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: "Nunito", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
   --font-mono: "Space Grotesk", monospace;
 
-  --color-bg: #050505;
-  --color-bg-elevated: #0a0a0a;
-  --color-bg-surface: #111111;
-  --color-bg-glass: rgba(255, 255, 255, 0.04);
-  --color-bg-glass-hover: rgba(255, 255, 255, 0.07);
-  --color-bg-glass-active: rgba(255, 255, 255, 0.1);
+  /* Surfaces — light (Forest Day) */
+  --color-bg: #e8ede4;
+  --color-bg-elevated: #d8e4d0;
+  --color-bg-surface: #f0ebe0;
+  --color-bg-sunken: #c8bfb0;
 
-  --color-text: #f0ebe3;
-  --color-text-dim: rgba(240, 235, 227, 0.55);
-  --color-text-muted: rgba(240, 235, 227, 0.25);
+  /* Chrome — the dark-green sidebar + player band */
+  --color-chrome: #1a3a0a;
+  --color-chrome-elevated: #2d5016;
+  /* Selected nav row. Forest Day uses a translucent bright-green wash with
+     bright-green text, not a solid fill — keep them as their own tokens so the
+     player bar's raised surfaces can stay solid. */
+  --color-chrome-active: rgba(100, 180, 60, 0.25);
+  /* The mockup's #90d060 lands at 4.46:1 on its own wash — a hair under AA.
+     Nudged up to 4.75:1; indistinguishable side by side. */
+  --color-on-chrome-active: #96d668;
 
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-hover: rgba(255, 255, 255, 0.12);
+  /* Text on the light ground */
+  --color-text: #1a2e0a;
+  --color-text-dim: #2d5016;
+  --color-text-muted: #4f6b3a;
 
-  --color-accent: #1ed760;
-  --color-accent-dim: rgba(30, 215, 96, 0.15);
+  /* Text on the chrome */
+  --color-on-chrome: #c8e6b0;
+  --color-on-chrome-dim: rgba(200, 230, 160, 0.7);
+  --color-on-chrome-muted: rgba(200, 230, 160, 0.5);
+
+  /* Accents. --color-accent carries text and is AA on every
+     surface; --color-accent-vivid is the mockup's brighter green,
+     used only for fills nothing sits on top of. */
+  --color-accent: #41761f;
+  --color-accent-vivid: #5a9e30;
+  --color-accent-warm: #a0522d;
+  /* What sits on top of an accent fill. Flips with the theme: white reads at
+     5.5:1 on the dark day accent but only ~2.3:1 on the light evening one. */
+  --color-on-accent: #ffffff;
+
+  --color-border: rgba(45, 80, 22, 0.12);
+  --color-border-hover: rgba(45, 80, 22, 0.25);
+
+  /* Scrim behind modals — theme-independent. */
+  --color-scrim: rgba(12, 26, 6, 0.55);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Forest Evening — dark ground, same hues.
+   Overrides the raw custom properties, so every Tailwind
+   utility generated from @theme follows automatically. */
+[data-theme="evening"] {
+  --color-bg: #14260d;
+  --color-bg-elevated: #1a2f11;
+  --color-bg-surface: #1e3614;
+  --color-bg-sunken: #0e1c08;
+
+  --color-chrome: #0a1606;
+  --color-chrome-elevated: #1a2f11;
+  --color-chrome-active: rgba(122, 184, 74, 0.22);
+  --color-on-chrome-active: #a2d474;
+
+  --color-text: #d8e8c8;
+  --color-text-dim: #a8c890;
+  --color-text-muted: #84a471;
+
+  --color-on-chrome: #c8e6b0;
+  --color-on-chrome-dim: rgba(200, 230, 160, 0.7);
+  --color-on-chrome-muted: rgba(200, 230, 160, 0.5);
+
+  --color-accent: #7ab84a;
+  --color-accent-vivid: #7ab84a;
+  --color-accent-warm: #d08a50;
+  --color-on-accent: #0a1606;
+
+  --color-border: rgba(200, 230, 160, 0.1);
+  --color-border-hover: rgba(200, 230, 160, 0.22);
+
+  --color-scrim: rgba(0, 0, 0, 0.6);
 }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+/* Everything below must sit inside a @layer. Tailwind v4 puts its own rules in
+   cascade layers, and *unlayered* CSS outranks every layer regardless of
+   specificity — so a bare `* { margin: 0; padding: 0 }` here silently beats
+   every p-*, m-*, px-* utility in the app. Tailwind's preflight already zeroes
+   margin, padding and box-sizing, so that reset isn't needed at all. */
+
+@layer base {
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border-hover); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+
+  /* Scrollbars inside the chrome need the inverse treatment. */
+  .chrome ::-webkit-scrollbar-thumb { background: rgba(200, 230, 160, 0.18); }
+  .chrome ::-webkit-scrollbar-thumb:hover { background: rgba(200, 230, 160, 0.35); }
 }
 
-body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-body);
-  font-size: 13px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* ------------------------------------------------------------
+   Surfaces
+   Forest Day and Study are both flat: solid paper over a solid
+   ground, separated by a hairline and a soft shadow. These
+   replace the old white-alpha glass utilities, which only ever
+   worked on a black background.
+   ------------------------------------------------------------ */
 
-.glass {
-  background: var(--color-bg-glass);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--color-border);
-}
+@layer components {
+  .surface {
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 1px 2px rgba(26, 46, 10, 0.05);
+  }
 
-.glass-hover:hover {
-  background: var(--color-bg-glass-hover);
-  border-color: var(--color-border-hover);
-}
+  .surface-hover:hover {
+    border-color: var(--color-border-hover);
+  }
 
-.glass-panel {
-  background: rgba(10, 10, 10, 0.75);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  border: 1px solid var(--color-border);
-}
+  /* Forest Study's signature: a paper card with an accent bar down
+     the leading edge that warms to sienna on hover. */
+  .card-study {
+    background: var(--color-bg-surface);
+    border-left: 4px solid var(--color-accent);
+    box-shadow: 0 1px 2px rgba(26, 46, 10, 0.05);
+    transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  }
 
-.film-grain::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-size: 128px 128px;
-}
+  .card-study:hover {
+    border-left-color: var(--color-accent-warm);
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(26, 46, 10, 0.1);
+  }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+  /* The dark band shared by the sidebar and the player bar. */
+  .chrome {
+    background: var(--color-chrome);
+    color: var(--color-on-chrome);
+  }
+
+  /* Modal backdrop — the one place a blur still earns its keep. */
+  .scrim {
+    background: var(--color-scrim);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* Paper tooth. Subtle on the light theme, invisible on the dark. */
+  .film-grain::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-size: 128px 128px;
+    mix-blend-mode: multiply;
+  }
+
+  [data-theme="evening"] .film-grain::after {
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+  }
+}

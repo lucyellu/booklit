@@ -1,3 +1,4 @@
+import { ThemeProvider } from './context/ThemeContext'
 import { AppProvider } from './context/AppContext'
 import { BookProvider } from './context/BookContext'
 import { AppShell } from './components/layout/AppShell'
@@ -7,14 +8,16 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 export default function App() {
   return (
     <ErrorBoundary>
-      <AppProvider>
-        <BookProvider>
-          <div className="film-grain">
-            <AppShell />
-            <ReaderPane />
-          </div>
-        </BookProvider>
-      </AppProvider>
+      <ThemeProvider>
+        <AppProvider>
+          <BookProvider>
+            <div className="film-grain">
+              <AppShell />
+              <ReaderPane />
+            </div>
+          </BookProvider>
+        </AppProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

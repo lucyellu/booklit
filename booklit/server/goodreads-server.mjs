@@ -160,7 +160,15 @@ async function scanLocalBooks() {
         const ext = path.extname(e.name).toLowerCase()
         if (!READABLE_EXT.has(ext)) continue
         let size = 0
-        try { size = (await fs.stat(full)).size } catch { /* ignore */ }
+        let addedAt = 0
+        try {
+          const st = await fs.stat(full)
+          size = st.size
+          // "Date added" means when the file landed in the folder, so prefer
+          // birthtime. Some filesystems report 0 or a bogus epoch for it, in
+          // which case mtime is the closest honest answer.
+          addedAt = st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs
+        } catch { /* ignore */ }
         const { title, author } = parseBookFilename(e.name)
         out.push({
           id: `local-${id++}`,
@@ -169,6 +177,7 @@ async function scanLocalBooks() {
           format: ext.slice(1),
           relpath: path.relative(BOOKS_DIR, full).split(path.sep).join('/'),
           size,
+          addedAt,
         })
       }
     }

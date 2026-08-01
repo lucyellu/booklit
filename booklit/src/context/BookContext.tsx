@@ -33,6 +33,9 @@ export interface TextHighlight {
   timestamp: string
 }
 
+/** Where a book entered the library. Drives the Libraries switcher. */
+export type BookSource = 'curated' | 'local' | 'goodreads' | 'upload'
+
 export interface LocalBook {
   id: string
   title: string
@@ -41,6 +44,8 @@ export interface LocalBook {
   isbn?: string
   shelf?: string
   rating?: number
+  /** Ingest path this book came from. Older persisted entries may lack it. */
+  source?: BookSource
   bookData?: Book
   /** External link from a CSV (e.g. OpenLibrary / Amazon) — used as a reading fallback. */
   epubLink?: string
@@ -51,6 +56,28 @@ export interface LocalBook {
   lastRead: string
   progress: number
   pages: number
+
+  /* ---- Bibliographic detail, from the curated CSV. All optional: local-folder
+     and Goodreads books carry almost none of it, and the detail panel hides any
+     field that's missing rather than showing an empty row. ---- */
+  subtitle?: string
+  year?: number
+  publisher?: string
+  language?: string
+  edition?: string
+  /** Estimated word count — drives the reading-time estimate. */
+  wordCount?: number
+  notes?: string
+  goodreadsUrl?: string
+  buyLink?: string
+  /** Prebuilt search URL for the owner's notes about this book. */
+  notesSearchUrl?: string
+  /** Art for the 3D card modes. */
+  coverArtSpine?: string
+  coverArtBack?: string
+  mesh3d?: string
+  /** Epoch ms the file appeared in the local books folder. Local books only. */
+  addedAt?: number
 }
 
 /** Where a readable EPUB for a book can be fetched from. */
@@ -384,6 +411,18 @@ function parseCSVToBooks(text: string): LocalBook[] {
 
     const epubLink = vals[col('epub_link')] || vals[col('epublink')] || ''
 
+    // Columns the detail panel needs. `col()` returns -1 for a missing header
+    // and vals[-1] is undefined, so absent columns fall through to undefined
+    // rather than becoming empty strings the panel would render as blank rows.
+    const str = (name: string) => {
+      const v = (vals[col(name)] || '').trim()
+      return v || undefined
+    }
+    const num = (name: string) => {
+      const v = parseInt((vals[col(name)] || '').replace(/[^\d]/g, ''), 10)
+      return Number.isFinite(v) && v > 0 ? v : undefined
+    }
+
     books.push({
       id: `csv-${i}-${Date.now()}`,
       title,
@@ -392,10 +431,25 @@ function parseCSVToBooks(text: string): LocalBook[] {
       coverUrl: coverUrl || undefined,
       shelf: shelf || 'read',
       rating,
+      source: 'curated',
       epubLink: epubLink || undefined,
       lastRead: new Date().toISOString(),
       progress: 0,
       pages,
+
+      subtitle: str('subtitle'),
+      year: num('year'),
+      publisher: str('publisher'),
+      language: str('language'),
+      edition: str('edition'),
+      wordCount: num('word_count'),
+      notes: str('notes'),
+      goodreadsUrl: str('goodreads_url'),
+      buyLink: str('buy_link'),
+      notesSearchUrl: str('notes_search_url'),
+      coverArtSpine: str('cover_art_spine'),
+      coverArtBack: str('cover_art_back'),
+      mesh3d: str('3d_mesh'),
     })
   }
   return books
@@ -447,9 +501,39 @@ export function BookProvider({ children }: { children: ReactNode }) {
           const shelfBooks = parseCSVToBooks(await r.text())
           if (!cancelled && shelfBooks.length > 0) {
             setLocalBooks(prev => {
+              const fromCsv = new Map(shelfBooks.map(b => [normaliseTitle(b.title), b]))
+
+              // Backfill bibliographic detail onto books already in state —
+              // in practice the manually-uploaded ones restored from
+              // localStorage, since the merge below only ever adds *new*
+              // titles. Reading state (progress, lastRead, bookData) and
+              // anything the book already has always wins over the CSV.
+              const merged = prev.map(b => {
+                const csv = fromCsv.get(normaliseTitle(b.title))
+                if (!csv || b.source === 'local') return b
+                return {
+                  ...b,
+                  subtitle: b.subtitle ?? csv.subtitle,
+                  year: b.year ?? csv.year,
+                  publisher: b.publisher ?? csv.publisher,
+                  language: b.language ?? csv.language,
+                  edition: b.edition ?? csv.edition,
+                  wordCount: b.wordCount ?? csv.wordCount,
+                  notes: b.notes ?? csv.notes,
+                  goodreadsUrl: b.goodreadsUrl ?? csv.goodreadsUrl,
+                  buyLink: b.buyLink ?? csv.buyLink,
+                  notesSearchUrl: b.notesSearchUrl ?? csv.notesSearchUrl,
+                  coverArtSpine: b.coverArtSpine ?? csv.coverArtSpine,
+                  coverArtBack: b.coverArtBack ?? csv.coverArtBack,
+                  mesh3d: b.mesh3d ?? csv.mesh3d,
+                  pages: b.pages || csv.pages,
+                  isbn: b.isbn ?? csv.isbn,
+                }
+              })
+
               const existing = new Set(prev.map(b => normaliseTitle(b.title)))
               const fresh = shelfBooks.filter(b => !existing.has(normaliseTitle(b.title)))
-              return [...prev, ...fresh]
+              return [...merged, ...fresh]
             })
           }
         }
@@ -460,14 +544,18 @@ export function BookProvider({ children }: { children: ReactNode }) {
         const r = await fetch('/api/local-books')
         if (r.ok) {
           const data = await r.json()
-          const localItems: LocalBook[] = (data.books || []).map((b: Record<string, string>) => ({
-            id: b.id,
-            title: b.title,
-            author: b.author || '',
-            format: b.format,
+          const localItems: LocalBook[] = (data.books || []).map((b: Record<string, string | number>) => ({
+            id: String(b.id),
+            title: String(b.title),
+            author: String(b.author || ''),
+            format: String(b.format),
             coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
-            srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
+            srcUrl: `/files/${String(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
             shelf: 'local',
+            source: 'local',
+            // When the file appeared in the books folder — what "date added"
+            // sorts on. The backend reads it from the filesystem.
+            addedAt: typeof b.addedAt === 'number' && b.addedAt > 0 ? b.addedAt : undefined,
             lastRead: new Date().toISOString(),
             progress: 0,
             pages: 0,
@@ -516,6 +604,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       id: `book-${Date.now()}`,
       title: newBook.title,
       author: newBook.author,
+      source: 'upload',
       bookData: newBook,
       lastRead: new Date().toISOString(),
       progress: 0,
@@ -802,6 +891,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       coverUrl: b.cover_url || (b.isbn ? `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg` : undefined),
       shelf: b.shelf || 'read',
       rating: parseInt(b.my_rating || '0') || 0,
+      source: 'goodreads',
       epubLink: b.epub_link || undefined,
       lastRead: new Date().toISOString(),
       progress: 0,
@@ -831,6 +921,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
       srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
       shelf: 'local',
+      source: 'local',
       lastRead: new Date().toISOString(),
       progress: 0,
       pages: 0,

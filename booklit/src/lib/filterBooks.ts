@@ -1,0 +1,230 @@
+import type { LocalBook } from '../context/BookContext'
+import type { AvailabilityFilter, Collection, ShelfFilter } from '../context/AppContext'
+import type { BookSource } from '../context/BookContext'
+
+/**
+ * One filter pipeline, shared by the grid and the sidebar counts so the two can
+ * never disagree. Previously the dedupe/shelf logic lived inside LibraryView.
+ */
+
+// Collapse near-duplicate titles: trailing "(1)", " - copy", punctuation, case.
+export function dedupeKey(b: LocalBook): string {
+  const t = b.title.toLowerCase()
+    .replace(/\((\d+)\)\s*$/, '')          // trailing "(1)", "(2)"
+    .replace(/\bcopy\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+  const a = (b.author || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  if (!t) return b.id                        // no usable title → keep unique
+  return a ? `${t}|${a}` : t
+}
+
+// Keep one entry per key, preferring readable / cover / richer format.
+export function dedupe(books: LocalBook[], isReadable: (b: LocalBook) => boolean): LocalBook[] {
+  const score = (b: LocalBook) =>
+    (isReadable(b) ? 4 : 0) +
+    (b.coverUrl ? 2 : 0) +
+    (b.bookData ? 1 : 0) +
+    (b.format === 'epub' ? 1 : b.format === 'pdf' ? 0.5 : 0)
+  const map = new Map<string, LocalBook>()
+  for (const b of books) {
+    const k = dedupeKey(b)
+    const ex = map.get(k)
+    if (!ex || score(b) > score(ex)) map.set(k, b)
+  }
+  return [...map.values()]
+}
+
+export function matchesShelf(b: LocalBook, filter: ShelfFilter): boolean {
+  if (filter === 'all' || filter === 'recent') return true
+  if (filter === 'local') return b.shelf === 'local'
+  const s = (b.shelf || '').toLowerCase()
+  if (b.shelf === 'local') return false
+  if (filter === 'reading') return s.includes('currently') || s === 'reading'
+  if (filter === 'want') return s.includes('to-read') || s.includes('want')
+  if (filter === 'favorites') return s.includes('favorite')
+  if (filter === 'recommended') return s.includes('recommend')
+  // "read" is the catch-all for finished books, so it must not swallow
+  // to-read, or the recommended/favorites shelves that also contain "read"…
+  // it doesn't, but be explicit about the exclusions.
+  if (filter === 'read') {
+    return s.includes('read') && !s.includes('to-read') && !s.includes('recommend')
+  }
+  return true
+}
+
+/** Anything with an ebook file we could in principle open. */
+export function hasEbook(b: LocalBook): boolean {
+  return !!(b.bookData || b.srcUrl || b.epubLink || b.format === 'epub' || b.format === 'pdf')
+}
+
+export type SortKey = 'default' | 'title' | 'author' | 'published' | 'added' | 'rating'
+export type SortDir = 'asc' | 'desc'
+
+export const SORT_LABELS: Record<SortKey, string> = {
+  default: 'Shelf order',
+  title: 'Title',
+  author: 'Author',
+  published: 'Date published',
+  added: 'Date added',
+  rating: 'Rating',
+}
+
+/** Ascending reads differently per key — A→Z, but oldest→newest and low→high. */
+export const SORT_DIR_LABELS: Record<SortKey, { asc: string; desc: string }> = {
+  default: { asc: 'Normal', desc: 'Reversed' },
+  title: { asc: 'A → Z', desc: 'Z → A' },
+  author: { asc: 'A → Z', desc: 'Z → A' },
+  published: { asc: 'Oldest first', desc: 'Newest first' },
+  added: { asc: 'Oldest first', desc: 'Newest first' },
+  rating: { asc: 'Lowest first', desc: 'Highest first' },
+}
+
+/**
+ * Sort the filtered list. Books missing the sort field always sink to the
+ * bottom regardless of direction — reversing "date published" should flip the
+ * books that *have* a year, not float 763 unknowns to the top.
+ */
+export function sortBooks(list: LocalBook[], key: SortKey, dir: SortDir): LocalBook[] {
+  if (key === 'default') return dir === 'desc' ? [...list].reverse() : list
+
+  const sign = dir === 'asc' ? 1 : -1
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+
+  // Leading articles are noise when alphabetising titles.
+  const sortTitle = (b: LocalBook) =>
+    b.title.replace(/^(the|a|an)\s+/i, '').trim() || b.title
+
+  const value = (b: LocalBook): string | number | undefined => {
+    if (key === 'title') return sortTitle(b)
+    if (key === 'author') return b.author?.trim() || undefined
+    if (key === 'published') return b.year
+    // Local books carry a real filesystem date; everything else falls back to
+    // when it entered the library, which is the closest thing they have.
+    if (key === 'added') return b.addedAt ?? (Date.parse(b.lastRead) || undefined)
+    if (key === 'rating') return b.rating || undefined
+    return undefined
+  }
+
+  return [...list].sort((a, b) => {
+    const va = value(a)
+    const vb = value(b)
+    if (va === undefined && vb === undefined) return 0
+    if (va === undefined) return 1        // missing sinks, both directions
+    if (vb === undefined) return -1
+    const cmp = typeof va === 'string' && typeof vb === 'string'
+      ? collator.compare(va, vb)
+      : Number(va) - Number(vb)
+    if (cmp !== 0) return cmp * sign
+
+    // Ties break on title, then id. Both are signed along with the primary
+    // comparison so that reversing is a true mirror: with an unsigned
+    // tie-break, duplicate titles and books sharing a file timestamp keep
+    // their relative order and the reversed list isn't the reverse.
+    const byTitle = collator.compare(sortTitle(a), sortTitle(b))
+    if (byTitle !== 0) return byTitle * sign
+    return (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) * sign
+  })
+}
+
+export interface FilterOptions {
+  shelfFilter: ShelfFilter
+  searchQuery: string
+  readableOnly: boolean
+  availability: AvailabilityFilter[]
+  librarySource: BookSource | null
+  collectionId: string | null
+  collections: Collection[]
+}
+
+export function applyFilters(
+  deduped: LocalBook[],
+  opts: FilterOptions,
+  isReadable: (b: LocalBook) => boolean,
+): LocalBook[] {
+  const {
+    shelfFilter, searchQuery, readableOnly,
+    availability, librarySource, collectionId, collections,
+  } = opts
+
+  let list = deduped
+
+  // A collection is an explicit hand-picked set, so it replaces the shelf filter.
+  if (collectionId) {
+    const ids = new Set(collections.find(c => c.id === collectionId)?.bookIds ?? [])
+    list = list.filter(b => ids.has(b.id))
+  } else {
+    list = list.filter(b => matchesShelf(b, shelfFilter))
+  }
+
+  if (librarySource) list = list.filter(b => (b.source ?? 'curated') === librarySource)
+  if (readableOnly) list = list.filter(isReadable)
+  if (availability.includes('playable')) list = list.filter(isReadable)
+  if (availability.includes('ebook')) list = list.filter(hasEbook)
+
+  const q = searchQuery.trim().toLowerCase()
+  if (q) {
+    list = list.filter(b =>
+      b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q))
+  }
+
+  if (!collectionId && shelfFilter === 'recent') {
+    list = [...list]
+      .sort((a, b) => (b.lastRead || '').localeCompare(a.lastRead || ''))
+      .slice(0, 80)
+  }
+
+  return list
+}
+
+/**
+ * Counts for the sidebar. Each count answers "how many books would I see if I
+ * clicked this?", so it runs the same pipeline with only that facet changed.
+ */
+export function shelfCounts(
+  deduped: LocalBook[],
+  opts: FilterOptions,
+  isReadable: (b: LocalBook) => boolean,
+): Record<ShelfFilter, number> {
+  const shelves: ShelfFilter[] = [
+    'all', 'reading', 'want', 'read', 'recent', 'local', 'favorites', 'recommended',
+  ]
+  const out = {} as Record<ShelfFilter, number>
+  for (const shelf of shelves) {
+    out[shelf] = applyFilters(
+      deduped,
+      { ...opts, shelfFilter: shelf, collectionId: null },
+      isReadable,
+    ).length
+  }
+  return out
+}
+
+export function availabilityCounts(
+  deduped: LocalBook[],
+  opts: FilterOptions,
+  isReadable: (b: LocalBook) => boolean,
+): Record<AvailabilityFilter, number> {
+  const base = { ...opts, availability: [] as AvailabilityFilter[] }
+  return {
+    playable: applyFilters(deduped, { ...base, availability: ['playable'] }, isReadable).length,
+    ebook: applyFilters(deduped, { ...base, availability: ['ebook'] }, isReadable).length,
+  }
+}
+
+export function sourceCounts(
+  deduped: LocalBook[],
+  opts: FilterOptions,
+  isReadable: (b: LocalBook) => boolean,
+): Record<BookSource, number> {
+  const sources: BookSource[] = ['curated', 'local', 'goodreads', 'upload']
+  const out = {} as Record<BookSource, number>
+  for (const src of sources) {
+    out[src] = applyFilters(
+      deduped,
+      { ...opts, librarySource: src, shelfFilter: 'all', collectionId: null },
+      isReadable,
+    ).length
+  }
+  return out
+}

@@ -6,6 +6,7 @@ import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { computeTargets } from './LayoutEngine'
+import { buildCardElement } from './cardElement'
 import type { LocalBook } from '../../context/BookContext'
 
 export function CSS3DScene({ books }: { books: LocalBook[] }) {
@@ -19,11 +20,15 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     animId: number
   } | null>(null)
 
-  const { layout, openReader } = useApp()
+  const { layout, openReader, cardMode } = useApp()
   const { openBook } = useBook()
   const localBooks = books
   const booksRef = useRef(localBooks)
   booksRef.current = localBooks
+  // The mount effect runs once, so it reads the mode through a ref rather than
+  // taking it as a dependency and tearing down the whole scene on every switch.
+  const cardModeRef = useRef(cardMode)
+  cardModeRef.current = cardMode
 
   const handleBookClick = useCallback((book: LocalBook) => {
     openBook(book).then(ok => { if (ok) openReader() })
@@ -52,31 +57,8 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
       objects.forEach(o => scene.remove(o))
       objects.length = 0
 
-      booksRef.current.forEach((book, i) => {
-        const el = document.createElement('div')
-        el.className = 'css3d-card'
-        el.style.width = '140px'
-        el.style.height = '200px'
-        el.style.borderRadius = '8px'
-        el.style.overflow = 'hidden'
-        el.style.cursor = 'pointer'
-        el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'
-
-        if (book.coverUrl) {
-          const img = document.createElement('img')
-          img.src = book.coverUrl
-          img.alt = book.title
-          img.loading = 'lazy'
-          img.style.cssText = 'width:100%;height:100%;object-fit:cover;'
-          img.onerror = () => {
-            img.style.display = 'none'
-            el.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#111,#1a1a1a);"><span style="font-size:32px;color:rgba(240,235,227,0.25);font-family:Syne,sans-serif;">${book.title.charAt(0)}</span></div>`
-          }
-          el.appendChild(img)
-        } else {
-          el.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#111,#1a1a1a);"><span style="font-size:32px;color:rgba(240,235,227,0.25);font-family:Syne,sans-serif;">${book.title.charAt(0)}</span></div>`
-        }
-
+      booksRef.current.forEach((book) => {
+        const el = buildCardElement(book, cardModeRef.current)
         el.addEventListener('click', () => handleBookClick(book))
 
         const obj = new CSS3DObject(el)
@@ -153,27 +135,8 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     state.objects.forEach(o => state.scene.remove(o))
     state.objects.length = 0
 
-    booksRef.current.forEach((book, i) => {
-      const el = document.createElement('div')
-      el.className = 'css3d-card'
-      el.style.width = '140px'
-      el.style.height = '200px'
-      el.style.borderRadius = '8px'
-      el.style.overflow = 'hidden'
-      el.style.cursor = 'pointer'
-      el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)'
-
-      if (book.coverUrl) {
-        const img = document.createElement('img')
-        img.src = book.coverUrl
-        img.alt = book.title
-        img.loading = 'lazy'
-        img.style.cssText = 'width:100%;height:100%;object-fit:cover;'
-        el.appendChild(img)
-      } else {
-        el.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#111,#1a1a1a);"><span style="font-size:32px;color:rgba(240,235,227,0.25);font-family:Syne,sans-serif;">${book.title.charAt(0)}</span></div>`
-      }
-
+    booksRef.current.forEach((book) => {
+      const el = buildCardElement(book, cardMode)
       el.addEventListener('click', () => handleBookClick(book))
 
       const obj = new CSS3DObject(el)
@@ -201,7 +164,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
       .to({}, duration * 2)
       .onUpdate(() => state.renderer.render(state.scene, state.camera))
       .start()
-  }, [localBooks, layout, handleBookClick])
+  }, [localBooks, layout, cardMode, handleBookClick])
 
   return (
     <div ref={containerRef} className="w-full h-full" />

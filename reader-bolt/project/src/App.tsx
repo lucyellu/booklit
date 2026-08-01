@@ -91,6 +91,13 @@ function AppContent() {
         setBook(d.book);
         setCurrentView('reader');
       }
+      // Follow the host's Forest Day / Forest Evening choice. data-theme drives
+      // the palette ramps in index.css; isDarkMode is what the components
+      // themselves branch on, so both have to move together.
+      if (d && d.type === 'booklit:theme' && (d.theme === 'day' || d.theme === 'evening')) {
+        document.documentElement.dataset.theme = d.theme;
+        setIsDarkMode(d.theme === 'evening');
+      }
     };
     window.addEventListener('message', onMsg);
     // Tell the host we're ready to receive a book.
@@ -101,22 +108,30 @@ function AppContent() {
   const currentTheme = themes[selectedTheme];
 
   return (
-    <div 
+    <div
       className="min-h-screen relative overflow-hidden"
-      style={{
-        backgroundImage: `url(${backgroundImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
-      }}
+      style={isEmbed
+        // Embedded in Booklit: the standalone reader's photo backdrop would
+        // show a hard seam against the host's flat forest ground, so use the
+        // ground colour instead. --rd-bg tracks the host's --color-bg.
+        ? { background: 'var(--rd-bg)' }
+        : {
+            backgroundImage: `url(${backgroundImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundAttachment: 'fixed'
+          }
+      }
     >
-      {/* Background overlay for better readability */}
-      <div className={`absolute inset-0 transition-all duration-500 ${
-        isDarkMode 
-          ? 'bg-black/40' 
-          : 'bg-white/20'
-      }`} />
+      {/* Background overlay for better readability — only needed over the photo. */}
+      {!isEmbed && (
+        <div className={`absolute inset-0 transition-all duration-500 ${
+          isDarkMode
+            ? 'bg-black/40'
+            : 'bg-white/20'
+        }`} />
+      )}
 
       {/* Subtle gradient overlays */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

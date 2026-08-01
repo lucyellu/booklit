@@ -1,75 +1,50 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { CSS3DScene } from './CSS3DScene'
 import type { LocalBook } from '../../context/BookContext'
-import type { ShelfFilter } from '../../context/AppContext'
-import { Loader2, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  dedupe, applyFilters, sortBooks, SORT_LABELS, SORT_DIR_LABELS,
+} from '../../lib/filterBooks'
+import type { SortKey } from '../../lib/filterBooks'
+import { authorHue, spineWidth, hasDistinctSpineArt } from '../../lib/bookMeta'
+import type { CardMode } from '../../context/AppContext'
+import {
+  Loader2, X, ChevronLeft, ChevronRight, Info, ShoppingCart,
+  ArrowUpDown, ChevronDown, ArrowUpNarrowWide, ArrowDownWideNarrow,
+} from 'lucide-react'
 
 const PAGE_SIZE = 300
 
-// Collapse near-duplicate titles: trailing "(1)", " - copy", punctuation, case.
-function dedupeKey(b: LocalBook): string {
-  const t = b.title.toLowerCase()
-    .replace(/\((\d+)\)\s*$/, '')          // trailing "(1)", "(2)"
-    .replace(/\bcopy\b/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-  const a = (b.author || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-  if (!t) return b.id                        // no usable title → keep unique
-  return a ? `${t}|${a}` : t
-}
-
-// Keep one entry per key, preferring readable / cover / richer format.
-function dedupe(books: LocalBook[], isReadable: (b: LocalBook) => boolean): LocalBook[] {
-  const score = (b: LocalBook) =>
-    (isReadable(b) ? 4 : 0) +
-    (b.coverUrl ? 2 : 0) +
-    (b.bookData ? 1 : 0) +
-    (b.format === 'epub' ? 1 : b.format === 'pdf' ? 0.5 : 0)
-  const map = new Map<string, LocalBook>()
-  for (const b of books) {
-    const k = dedupeKey(b)
-    const ex = map.get(k)
-    if (!ex || score(b) > score(ex)) map.set(k, b)
-  }
-  return [...map.values()]
-}
-
-function matchesShelf(b: LocalBook, filter: ShelfFilter): boolean {
-  if (filter === 'all' || filter === 'recent') return true
-  if (filter === 'local') return b.shelf === 'local'
-  const s = (b.shelf || '').toLowerCase()
-  if (b.shelf === 'local') return false
-  if (filter === 'reading') return s.includes('currently') || s === 'reading'
-  if (filter === 'want') return s.includes('to-read') || s.includes('want')
-  if (filter === 'read') return s.includes('read') && !s.includes('to-read')
-  return true
-}
-
 export function LibraryView() {
-  const { libraryView, openReader, shelfFilter, searchQuery, readableOnly } = useApp()
+  const {
+    libraryView, openReader, shelfFilter, searchQuery, readableOnly,
+    availability, librarySource, collectionId, collections,
+    cardMode, openDetail, sortKey, sortDir,
+  } = useApp()
   const { localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable } = useBook()
   const [page, setPage] = useState(0)
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
 
-  const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    let list = deduped.filter(b => matchesShelf(b, shelfFilter))
-    if (readableOnly) list = list.filter(isReadable)
-    if (q) list = list.filter(b =>
-      b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q))
-    if (shelfFilter === 'recent') {
-      list = [...list].sort((a, b) => (b.lastRead || '').localeCompare(a.lastRead || '')).slice(0, 80)
-    }
-    return list
-  }, [deduped, shelfFilter, searchQuery, readableOnly, isReadable])
+  const filtered = useMemo(
+    () => sortBooks(
+      applyFilters(
+        deduped,
+        { shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections },
+        isReadable,
+      ),
+      sortKey,
+      sortDir,
+    ),
+    [deduped, shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections, isReadable, sortKey, sortDir],
+  )
 
+  const activeCollection = collections.find(c => c.id === collectionId) ?? null
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
   // Reset to the first page whenever the result set changes.
-  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly])
+  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, sortKey, sortDir])
   useEffect(() => { if (page > totalPages - 1) setPage(0) }, [page, totalPages])
 
   const pageItems = useMemo(
@@ -85,7 +60,7 @@ export function LibraryView() {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
-          <h1 className="font-display text-5xl font-bold tracking-tight mb-4">Booklit</h1>
+          <h1 className="font-display text-5xl font-extrabold tracking-tight mb-4 text-text">Booklit</h1>
           <p className="text-text-dim text-sm max-w-md">
             Connecting to your library… or import a Goodreads CSV / upload EPUBs to get started.
           </p>
@@ -100,23 +75,33 @@ export function LibraryView() {
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Header: count + pagination */}
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <div className="flex items-baseline gap-2">
-          <h2 className="font-display text-xl font-semibold capitalize">
-            {shelfFilter === 'all' ? 'Your Library' : shelfFilter}
-          </h2>
-          <span className="text-[11px] text-text-muted">
-            {filtered.length === 0
-              ? 'no books'
-              : `${rangeStart}–${rangeEnd} of ${filtered.length}`}
-          </span>
+      <div className="flex items-end justify-between mb-6 flex-shrink-0">
+        <div>
+          <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-accent-warm mb-1.5">
+            {activeCollection ? 'Collection' : 'Your Bookshelf'}
+          </div>
+          <div className="flex items-baseline gap-2.5">
+            <h2 className="font-display text-3xl font-extrabold tracking-tight text-text capitalize">
+              {activeCollection
+                ? activeCollection.name
+                : shelfFilter === 'all' ? 'Your Library' : shelfFilter}
+            </h2>
+            <span className="text-[12px] text-text-muted">
+              {filtered.length === 0
+                ? 'no books'
+                : `${rangeStart}–${rangeEnd} of ${filtered.length}`}
+            </span>
+          </div>
         </div>
-        {totalPages > 1 && (
+        <div className="flex items-center gap-2">
+          <SortControl />
+
+          {totalPages > 1 && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(p => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="p-1.5 rounded-md text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors disabled:opacity-30"
+              className="p-1.5 rounded-lg text-text-dim hover:text-text hover:bg-bg-surface transition-colors disabled:opacity-30"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -126,12 +111,13 @@ export function LibraryView() {
             <button
               onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="p-1.5 rounded-md text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors disabled:opacity-30"
+              className="p-1.5 rounded-lg text-text-dim hover:text-text hover:bg-bg-surface transition-colors disabled:opacity-30"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* View */}
@@ -143,14 +129,20 @@ export function LibraryView() {
             <p className="text-text-muted text-sm">WebGL 3D model view — coming soon</p>
           </div>
         ) : (
-          <FlatGrid localBooks={pageItems} onOpen={handleOpen} loadingId={bookLoadingId} />
+          <FlatGrid
+            localBooks={pageItems}
+            onOpen={handleOpen}
+            onInfo={lb => openDetail(lb.id)}
+            loadingId={bookLoadingId}
+            cardMode={cardMode}
+          />
         )}
       </div>
 
       {/* Loading overlay while an EPUB/PDF is fetched + parsed */}
       {bookLoadingId && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/40 backdrop-blur-sm pointer-events-none">
-          <div className="glass-panel rounded-xl px-5 py-4 flex items-center gap-3">
+        <div className="scrim fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
+          <div className="surface rounded-2xl px-5 py-4 flex items-center gap-3">
             <Loader2 className="w-4 h-4 animate-spin text-accent" />
             <span className="text-[12.5px] text-text-dim">Opening book…</span>
           </div>
@@ -159,7 +151,7 @@ export function LibraryView() {
 
       {/* Error / info toast */}
       {bookError && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] glass-panel rounded-xl px-4 py-3 flex items-center gap-3 max-w-md shadow-lg">
+        <div className="surface fixed bottom-[104px] left-1/2 -translate-x-1/2 z-[70] rounded-2xl px-4 py-3 flex items-center gap-3 max-w-md shadow-lg border-l-4 border-l-accent-warm">
           <span className="text-[12px] text-text-dim">{bookError}</span>
           <button onClick={clearBookError} className="text-text-muted hover:text-text flex-shrink-0">
             <X className="w-3.5 h-3.5" />
@@ -170,12 +162,86 @@ export function LibraryView() {
   )
 }
 
+/**
+ * Sort key + direction. The direction button is separate rather than a pair of
+ * menu entries per key, so reversing is one click from wherever you are.
+ */
+function SortControl() {
+  const { sortKey, sortDir, setSortKey, toggleSortDir } = useApp()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const keys = Object.keys(SORT_LABELS) as SortKey[]
+
+  return (
+    <div className="relative flex items-center gap-1" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full border border-border-hover text-text-dim text-[12px] font-semibold hover:border-accent hover:text-text transition-colors"
+        title="Sort library"
+      >
+        <ArrowUpDown className="w-3.5 h-3.5" />
+        {SORT_LABELS[sortKey]}
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      <button
+        onClick={toggleSortDir}
+        className="p-1.5 rounded-full border border-border-hover text-text-dim hover:border-accent hover:text-text transition-colors"
+        title={`Reverse order — currently ${SORT_DIR_LABELS[sortKey][sortDir]}`}
+        aria-label={`Reverse order, currently ${SORT_DIR_LABELS[sortKey][sortDir]}`}
+      >
+        {sortDir === 'asc'
+          ? <ArrowUpNarrowWide className="w-3.5 h-3.5" />
+          : <ArrowDownWideNarrow className="w-3.5 h-3.5" />}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-30 w-52 surface rounded-xl py-1.5 shadow-lg">
+          {keys.map(k => (
+            <button
+              key={k}
+              onClick={() => { setSortKey(k); setOpen(false) }}
+              className={`w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[12px] text-left transition-colors ${
+                sortKey === k
+                  ? 'text-accent font-bold'
+                  : 'text-text-dim hover:text-text hover:bg-bg-sunken/40'
+              }`}
+            >
+              <span>{SORT_LABELS[k]}</span>
+              {sortKey === k && (
+                <span className="text-[10px] text-text-muted font-semibold">
+                  {SORT_DIR_LABELS[k][sortDir]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BookCover({ coverUrl, title }: { coverUrl?: string; title: string }) {
   const [errored, setErrored] = useState(false)
   if (!coverUrl || errored) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-bg-surface to-bg-elevated">
-        <span className="font-display text-3xl text-text-muted">{title.charAt(0)}</span>
+      <div className="w-full h-full flex items-center justify-center bg-bg-sunken">
+        <span className="font-display text-3xl font-extrabold text-text/30">{title.charAt(0)}</span>
       </div>
     )
   }
@@ -190,42 +256,164 @@ function BookCover({ coverUrl, title }: { coverUrl?: string; title: string }) {
   )
 }
 
+/**
+ * The four bookify card modes. `spine` lays books out as a shelf of vertical
+ * spines whose width scales with page count; `art` drops the cover for an
+ * author-tinted typographic card; `book3d` fakes a half-open book using the
+ * CSV's spine art where present.
+ */
+function CardFace({ book, mode }: { book: LocalBook; mode: CardMode }) {
+  const hue = authorHue(book.author, book.title)
+
+  if (mode === 'art') {
+    return (
+      <div
+        className="w-full h-full flex flex-col justify-between p-3 text-left"
+        style={{ background: `linear-gradient(155deg, hsl(${hue} 62% 30%), hsl(${hue} 68% 14%))` }}
+      >
+        <span className="text-[9px] font-mono uppercase tracking-widest text-white/60 truncate">
+          {book.year || book.publisher || ''}
+        </span>
+        <span className="font-display text-[13px] font-bold text-white leading-tight line-clamp-4">
+          {book.title}
+        </span>
+        <span className="text-[9.5px] text-white/70 truncate">{book.author}</span>
+      </div>
+    )
+  }
+
+  if (mode === 'book3d') {
+    return (
+      <div className="w-full h-full flex" style={{ perspective: 600 }}>
+        {/* Spine slab, then the front board angled away from it. */}
+        <div
+          className="w-[18%] h-full flex-shrink-0"
+          style={hasDistinctSpineArt(book)
+            ? { backgroundImage: `url(${JSON.stringify(book.coverArtSpine)})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : { background: `linear-gradient(90deg, hsl(${hue} 55% 16%), hsl(${hue} 58% 26%))` }}
+        />
+        <div className="flex-1 h-full relative overflow-hidden shadow-inner">
+          <BookCover coverUrl={book.coverUrl} title={book.title} />
+          <div className="absolute inset-y-0 left-0 w-3 bg-gradient-to-r from-black/45 to-transparent" />
+        </div>
+      </div>
+    )
+  }
+
+  // 'cover' and 'spine' both show the cover art; spine just gets a narrow box.
+  return <BookCover coverUrl={book.coverUrl} title={book.title} />
+}
+
 function FlatGrid({
-  localBooks, onOpen, loadingId,
+  localBooks, onOpen, onInfo, loadingId, cardMode,
 }: {
   localBooks: LocalBook[]
   onOpen: (book: LocalBook) => void
+  onInfo: (book: LocalBook) => void
   loadingId: string | null
+  cardMode: CardMode
 }) {
   if (localBooks.length === 0) {
     return <p className="text-text-muted text-sm">No books match this filter.</p>
   }
+
+  // Spine mode is a shelf, not a grid: the whole point is that widths differ,
+  // so it has to flow rather than sit in equal columns.
+  const wrapper = cardMode === 'spine'
+    ? 'flex flex-wrap items-end gap-1.5'
+    : 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4'
+
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
-      {localBooks.map(lb => (
-        <button
-          key={lb.id}
-          onClick={() => onOpen(lb)}
-          disabled={loadingId === lb.id}
-          className="group text-left hover:scale-[1.03] transition-transform disabled:opacity-60"
-        >
-          <div className="aspect-[2/3] rounded-lg overflow-hidden mb-2 bg-bg-glass-active shadow-lg relative">
-            <BookCover coverUrl={lb.coverUrl} title={lb.title} />
-            {lb.format && lb.format !== 'epub' && (
-              <span className="absolute top-1 right-1 text-[8px] font-mono uppercase px-1 py-0.5 rounded bg-black/60 text-text-dim">
-                {lb.format}
-              </span>
-            )}
-            {loadingId === lb.id && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <Loader2 className="w-5 h-5 animate-spin text-accent" />
+    <div className={wrapper}>
+      {localBooks.map(lb => {
+        const isSpine = cardMode === 'spine'
+        return (
+          <div
+            key={lb.id}
+            className={`group relative ${isSpine ? '' : 'text-left'}`}
+            style={isSpine ? { width: spineWidth(lb.pages) } : undefined}
+          >
+            <button
+              onClick={() => onOpen(lb)}
+              disabled={loadingId === lb.id}
+              title={isSpine ? `${lb.title}${lb.author ? ` — ${lb.author}` : ''}` : undefined}
+              className="w-full text-left disabled:opacity-60"
+            >
+              <div
+                className={`overflow-hidden rounded-xl bg-bg-sunken shadow-sm relative transition-all group-hover:-translate-y-1 group-hover:shadow-md ${
+                  isSpine ? 'h-56' : 'aspect-[2/3] mb-2.5'
+                }`}
+              >
+                <CardFace book={lb} mode={cardMode} />
+                {lb.format && lb.format !== 'epub' && !isSpine && (
+                  <span className="absolute top-1.5 right-1.5 text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-chrome text-on-chrome-dim">
+                    {lb.format}
+                  </span>
+                )}
+                {loadingId === lb.id && (
+                  <div className="scrim absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-accent-vivid" />
+                  </div>
+                )}
               </div>
-            )}
+              {!isSpine && (
+                <>
+                  <p className="text-[11.5px] font-bold text-text truncate leading-tight group-hover:text-accent-warm transition-colors">
+                    {lb.title}
+                  </p>
+                  <p className="text-[10.5px] text-text-muted truncate mt-0.5">{lb.author || ''}</p>
+                </>
+              )}
+            </button>
+
+            {/* Quick actions. Siblings of the main button, not children — a
+                <button> inside a <button> is invalid and swallows the click. */}
+            <div
+              className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity ${
+                isSpine ? 'bottom-1.5' : 'bottom-[4.25rem]'
+              }`}
+            >
+              <QuickAction label="Details" onClick={() => onInfo(lb)}>
+                <Info className="w-3.5 h-3.5" />
+              </QuickAction>
+              {lb.buyLink && (
+                <QuickAction label="Buy" href={lb.buyLink}>
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                </QuickAction>
+              )}
+            </div>
           </div>
-          <p className="text-[11px] font-medium text-text truncate leading-tight">{lb.title}</p>
-          <p className="text-[10px] text-text-muted truncate">{lb.author || ''}</p>
-        </button>
-      ))}
+        )
+      })}
     </div>
+  )
+}
+
+function QuickAction({ label, onClick, href, children }: {
+  label: string
+  onClick?: () => void
+  href?: string
+  children: React.ReactNode
+}) {
+  const cls = 'p-1.5 rounded-full bg-chrome text-on-chrome hover:bg-chrome-elevated shadow-md transition-colors'
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={label}
+        aria-label={label}
+        className={cls}
+        onClick={e => e.stopPropagation()}
+      >
+        {children}
+      </a>
+    )
+  }
+  return (
+    <button type="button" title={label} aria-label={label} className={cls} onClick={onClick}>
+      {children}
+    </button>
   )
 }

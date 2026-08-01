@@ -1,36 +1,170 @@
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import {
-  Library, BookOpen, BookMarked, Clock, Star,
-  Upload, Settings, Grid3x3, Box, Circle, Dna, BookCopy, HardDrive, Check,
+  Library, BookOpen, BookMarked, Clock, Star, Home, Flame, Check,
+  Upload, Settings, Grid3x3, Box, Circle, Dna, BookCopy, HardDrive,
+  Play, Smartphone, Plus, Trash2, Image, AlignJustify, Palette, BookOpenText,
 } from 'lucide-react'
-import type { ShelfFilter } from '../../context/AppContext'
+import type { ShelfFilter, AvailabilityFilter, CardMode } from '../../context/AppContext'
+import type { BookSource } from '../../context/BookContext'
+import {
+  dedupe, shelfCounts, availabilityCounts, sourceCounts,
+} from '../../lib/filterBooks'
 
-const NAV_ITEMS: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
-  { id: 'all', label: 'All Books', icon: Library },
-  { id: 'reading', label: 'Reading Now', icon: BookOpen },
-  { id: 'want', label: 'Want to Read', icon: BookMarked },
-  { id: 'read', label: 'Read', icon: Star },
-  { id: 'recent', label: 'Recent', icon: Clock },
+/** Top-level places, always shown. */
+const BROWSE: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
+  { id: 'all', label: 'Library', icon: Library },
+  { id: 'reading', label: 'Now Reading', icon: BookOpen },
+  { id: 'recent', label: 'History', icon: Clock },
   { id: 'local', label: 'Local Library', icon: HardDrive },
 ]
 
-const LAYOUT_ITEMS = [
+/** Shelves, hidden when a library has none of that kind. */
+const SHELVES: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
+  { id: 'favorites', label: 'Favorites', icon: Star },
+  { id: 'recommended', label: 'Highly Recommended', icon: Flame },
+  { id: 'read', label: 'Have Read', icon: Check },
+  { id: 'want', label: 'Want to Read', icon: BookMarked },
+]
+
+const AVAILABILITY: { id: AvailabilityFilter; label: string; icon: typeof Play }[] = [
+  { id: 'playable', label: 'Playable', icon: Play },
+  { id: 'ebook', label: 'Has Ebook', icon: Smartphone },
+]
+
+/** bookify's four card treatments. */
+const CARD_MODES: { id: CardMode; label: string; icon: typeof Library }[] = [
+  { id: 'cover', label: 'Covers', icon: Image },
+  { id: 'spine', label: 'Spines', icon: AlignJustify },
+  { id: 'art', label: 'Art cards', icon: Palette },
+  { id: 'book3d', label: '3D books', icon: BookOpenText },
+]
+
+const LAYOUTS = [
   { id: 'grid' as const, label: 'Grid', icon: Grid3x3 },
   { id: 'shelf' as const, label: 'Shelf', icon: Box },
   { id: 'sphere' as const, label: 'Sphere', icon: Circle },
   { id: 'helix' as const, label: 'Helix', icon: Dna },
 ]
 
+/** Avatar tints are per-source and fixed, as in the mockup — they're how you
+    tell one library from another at a glance, so they don't follow the theme. */
+const SOURCES: {
+  id: BookSource; label: string; blurb: string; initials: string; tint: string
+}[] = [
+  { id: 'curated', label: 'Patrick Collison', blurb: 'Stripe CEO · Eclectic reader', initials: 'PC', tint: '#15803d' },
+  { id: 'local', label: 'Local Folder', blurb: 'Files on this machine', initials: 'LF', tint: '#0f766e' },
+  { id: 'goodreads', label: 'Goodreads', blurb: 'Imported shelves', initials: 'GR', tint: '#cc583d' },
+  { id: 'upload', label: 'Uploads', blurb: 'Added by hand', initials: 'UP', tint: '#a16207' },
+]
+
+function Group({ title, action, children }: {
+  title?: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div className="mt-8 first:mt-4">
+      {title && (
+        <div className="flex items-center justify-between px-3 mb-3">
+          <h2 className="text-[10px] font-bold tracking-[0.16em] uppercase text-on-chrome-muted">
+            {title}
+          </h2>
+          {action}
+        </div>
+      )}
+      <div className="flex flex-col gap-1">{children}</div>
+    </div>
+  )
+}
+
+/**
+ * One sidebar row. `badge` shows the count as a green pill (shelves, in the
+ * mockup); otherwise it's plain muted text (availability).
+ */
+function Row({ icon: Icon, label, count, active, onClick, badge, dense }: {
+  icon?: typeof Library
+  label: string
+  count?: number
+  active?: boolean
+  onClick: () => void
+  badge?: boolean
+  dense?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`group w-full flex items-center gap-3 rounded-lg px-3 text-sm font-medium text-left transition-colors ${
+        dense ? 'py-1.5' : 'py-2'
+      } ${
+        active
+          ? 'bg-chrome-active text-on-chrome-active'
+          : 'text-on-chrome-dim hover:text-on-chrome hover:bg-chrome-active/40'
+      }`}
+    >
+      {Icon && (
+        <Icon className={`w-4 h-4 flex-shrink-0 ${
+          active ? '' : 'text-on-chrome-muted group-hover:text-on-chrome'
+        }`} />
+      )}
+      <span className="truncate flex-1">{label}</span>
+      {count !== undefined && (
+        <span
+          className={`flex-shrink-0 tabular-nums ${
+            badge
+              ? 'px-2 py-0.5 rounded-full bg-accent-vivid/20 text-on-chrome-active text-[10px] font-semibold'
+              : 'text-xs text-on-chrome-muted group-hover:text-on-chrome-dim'
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
 export function Sidebar() {
   const {
-    layout, setLayout, libraryView, setLibraryView,
-    shelfFilter, setShelfFilter, setSettingsOpen,
-    readableOnly, setReadableOnly,
+    view, setView,
+    layout, setLayout,
+    shelfFilter, setShelfFilter,
+    availability, toggleAvailability,
+    librarySource, setLibrarySource,
+    collectionId, setCollectionId,
+    collections, createCollection, deleteCollection,
+    cardMode, setCardMode,
+    setSettingsOpen,
+    searchQuery, readableOnly,
   } = useApp()
-  const { uploadFile, importGoodreads, importLocalLibrary } = useBook()
+  const { localBooks, isReadable, uploadFile, importGoodreads, importLocalLibrary } = useBook()
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
+
+  // Counts run the same pipeline the grid does, so what a row promises is what
+  // clicking it delivers.
+  const filterOpts = {
+    shelfFilter, searchQuery, readableOnly, availability,
+    librarySource, collectionId, collections,
+  }
+  const shelves = useMemo(
+    () => shelfCounts(deduped, filterOpts, isReadable),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deduped, searchQuery, readableOnly, availability, librarySource, isReadable],
+  )
+  const avail = useMemo(
+    () => availabilityCounts(deduped, filterOpts, isReadable),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deduped, searchQuery, readableOnly, shelfFilter, librarySource, isReadable],
+  )
+  const sources = useMemo(
+    () => sourceCounts(deduped, filterOpts, isReadable),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deduped, searchQuery, readableOnly, availability, isReadable],
+  )
+
+  const visibleShelves = SHELVES.filter(s => shelves[s.id] > 0 || shelfFilter === s.id)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -66,99 +200,165 @@ export function Sidebar() {
     }
   }
 
+  const handleNewCollection = () => {
+    const name = window.prompt('Name this collection')
+    if (name) createCollection(name)
+  }
+
   return (
-    <div className="glass-panel h-full w-[240px] flex flex-col rounded-tr-xl rounded-br-xl overflow-hidden">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-4 h-4 text-bg" />
-          </div>
-          <span className="font-display text-lg font-bold tracking-tight">
-            Booklit
-          </span>
-        </div>
+    <div className="chrome h-full w-[240px] flex flex-col">
+      {/* Masthead */}
+      <div className="px-6 pt-6 pb-2 flex-shrink-0">
+        <h1 className="font-display text-2xl font-bold tracking-tight text-on-chrome leading-none">
+          Booklit
+        </h1>
+        <p className="text-[11px] text-on-chrome-muted mt-1 font-medium tracking-wide uppercase">
+          Your Reading Universe
+        </p>
       </div>
 
-      {/* Navigation */}
-      <div className="py-3 border-b border-border">
-        <div className="px-5 py-1 text-[10px] font-semibold tracking-[0.12em] uppercase text-text-muted">
-          Library
-        </div>
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setShelfFilter(id)}
-            className={`w-full flex items-center gap-3 px-5 py-2 transition-colors text-[12.5px] ${
-              shelfFilter === id
-                ? 'text-text bg-bg-glass-active'
-                : 'text-text-dim hover:text-text hover:bg-bg-glass-hover'
-            }`}
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            <span>{label}</span>
-          </button>
-        ))}
+      {/* Scrolling nav. The first group is unlabelled in the mockup — the
+          masthead already says where you are. */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+        <Group>
+          <Row icon={Home} label="Home" active={view === 'home'} onClick={() => setView('home')} />
+          {BROWSE.map(({ id, label, icon }) => (
+            <Row
+              key={id}
+              icon={icon}
+              label={label}
+              count={shelves[id]}
+              active={view === 'library' && shelfFilter === id && !collectionId}
+              onClick={() => setShelfFilter(id)}
+            />
+          ))}
+        </Group>
 
-        {/* Readable-only toggle */}
-        <button
-          onClick={() => setReadableOnly(!readableOnly)}
-          className="w-full flex items-center gap-3 px-5 py-2 mt-1 text-[12.5px] text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors"
-        >
-          <span className={`w-4 h-4 flex-shrink-0 rounded border flex items-center justify-center ${
-            readableOnly ? 'bg-accent border-accent' : 'border-border-hover'
-          }`}>
-            {readableOnly && <Check className="w-3 h-3 text-bg" />}
-          </span>
-          <span>Readable only</span>
-        </button>
-      </div>
+        {/* Only shelves this library actually has. A row with nothing behind it
+            is just noise — and the curated CSV only uses three of them. */}
+        {visibleShelves.length > 0 && (
+          <Group title="Shelves">
+            {visibleShelves.map(({ id, label, icon }) => (
+              <Row
+                key={id}
+                dense
+                badge
+                icon={icon}
+                label={label}
+                count={shelves[id]}
+                active={view === 'library' && shelfFilter === id && !collectionId}
+                onClick={() => setShelfFilter(id)}
+              />
+            ))}
+          </Group>
+        )}
 
-      {/* View mode */}
-      <div className="py-3 border-b border-border">
-        <div className="px-5 py-1 text-[10px] font-semibold tracking-[0.12em] uppercase text-text-muted">
-          View
-        </div>
-        <div className="px-4 flex gap-1">
-          {(['css3d', 'webgl', 'flat'] as const).map(mode => (
+        <Group title="Availability">
+          {AVAILABILITY.map(({ id, label, icon }) => (
+            <Row
+              key={id}
+              dense
+              icon={icon}
+              label={label}
+              count={avail[id]}
+              active={availability.includes(id)}
+              onClick={() => toggleAvailability(id)}
+            />
+          ))}
+        </Group>
+
+        <Group
+          title="My Collections"
+          action={
             <button
-              key={mode}
-              onClick={() => setLibraryView(mode)}
-              className={`flex-1 py-1.5 rounded text-[11px] font-medium uppercase tracking-wider transition-colors ${
-                libraryView === mode
-                  ? 'bg-bg-glass-active text-text'
-                  : 'text-text-muted hover:text-text-dim'
+              onClick={handleNewCollection}
+              className="text-on-chrome-muted hover:text-on-chrome transition-colors"
+              title="New collection"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          }
+        >
+          {collections.length === 0 ? (
+            <p className="px-3 text-xs italic text-on-chrome-muted">
+              No collections yet
+            </p>
+          ) : (
+            collections.map(c => (
+              <div key={c.id} className="group/col relative">
+                <Row
+                  label={c.name}
+                  count={c.bookIds.length}
+                  active={collectionId === c.id}
+                  onClick={() => setCollectionId(collectionId === c.id ? null : c.id)}
+                />
+                <button
+                  onClick={() => deleteCollection(c.id)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover/col:opacity-100 text-on-chrome-muted hover:text-accent-warm transition-opacity"
+                  title={`Delete "${c.name}"`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))
+          )}
+        </Group>
+
+        <Group title="Libraries">
+          <Row
+            label="All sources"
+            active={librarySource === null}
+            onClick={() => setLibrarySource(null)}
+          />
+          {SOURCES.filter(s => sources[s.id] > 0).map(({ id, label, blurb, initials, tint }) => (
+            <button
+              key={id}
+              onClick={() => setLibrarySource(librarySource === id ? null : id)}
+              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                librarySource === id
+                  ? 'bg-chrome-active text-on-chrome-active'
+                  : 'text-on-chrome-dim hover:text-on-chrome hover:bg-chrome-active/40'
               }`}
             >
-              {mode === 'css3d' ? '3D' : mode === 'webgl' ? 'GLB' : 'Flat'}
+              <span
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                style={{ background: tint }}
+              >
+                {initials}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm truncate leading-snug">{label}</span>
+                <span className="block text-[10px] text-on-chrome-muted truncate">{blurb}</span>
+              </span>
+              <span className="text-xs tabular-nums text-on-chrome-muted flex-shrink-0 ml-2">
+                {sources[id]}
+              </span>
             </button>
           ))}
-        </div>
+        </Group>
+
+        <Group title="Layout">
+          {LAYOUTS.map(({ id, label, icon }) => (
+            <Row key={id} icon={icon} label={label} active={layout === id} onClick={() => setLayout(id)} />
+          ))}
+        </Group>
+
+        <Group title="Card Style">
+          {CARD_MODES.map(({ id, label, icon }) => (
+            <Row
+              key={id}
+              dense
+              icon={icon}
+              label={label}
+              active={cardMode === id}
+              onClick={() => setCardMode(id)}
+            />
+          ))}
+        </Group>
       </div>
 
-      {/* Layout */}
-      <div className="py-3 border-b border-border">
-        <div className="px-5 py-1 text-[10px] font-semibold tracking-[0.12em] uppercase text-text-muted">
-          Layout
-        </div>
-        {LAYOUT_ITEMS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setLayout(id)}
-            className={`w-full flex items-center gap-3 px-5 py-2 text-[12.5px] transition-colors ${
-              layout === id
-                ? 'text-text bg-bg-glass-active'
-                : 'text-text-dim hover:text-text hover:bg-bg-glass-hover'
-            }`}
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Bottom actions */}
-      <div className="mt-auto py-3 border-t border-border">
+      {/* Pinned actions */}
+      <div className="flex-shrink-0 border-t border-on-chrome-muted/15 px-3 py-3 flex flex-col gap-px">
         <input
           ref={fileRef}
           type="file"
@@ -166,34 +366,10 @@ export function Sidebar() {
           onChange={handleFileChange}
           className="hidden"
         />
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
-        >
-          <Upload className="w-4 h-4" />
-          <span>Import Books</span>
-        </button>
-        <button
-          onClick={handleGoodreads}
-          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
-        >
-          <BookCopy className="w-4 h-4" />
-          <span>Connect Goodreads</span>
-        </button>
-        <button
-          onClick={handleScanLocal}
-          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
-        >
-          <HardDrive className="w-4 h-4" />
-          <span>Rescan Local Folder</span>
-        </button>
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="w-full flex items-center gap-3 px-5 py-2 text-text-dim hover:text-text hover:bg-bg-glass-hover transition-colors text-[12.5px]"
-        >
-          <Settings className="w-4 h-4" />
-          <span>Settings</span>
-        </button>
+        <Row icon={Upload} label="Import Books" onClick={() => fileRef.current?.click()} />
+        <Row icon={BookCopy} label="Connect Goodreads" onClick={handleGoodreads} />
+        <Row icon={HardDrive} label="Rescan Local Folder" onClick={handleScanLocal} />
+        <Row icon={Settings} label="Settings" onClick={() => setSettingsOpen(true)} />
       </div>
     </div>
   )

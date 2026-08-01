@@ -13,7 +13,7 @@ $g    = [System.Drawing.Graphics]::FromImage($bmp)
 $g.SmoothingMode     = 'AntiAlias'
 $g.TextRenderingHint = 'AntiAlias'
 
-# Rounded-rect background - dark navy (#0a0e27)
+# Rounded-rect background - forest chrome (#1a3a0a)
 $bgRect = New-Object System.Drawing.Rectangle 4, 4, ($size - 8), ($size - 8)
 $path   = New-Object System.Drawing.Drawing2D.GraphicsPath
 $r = 28
@@ -23,16 +23,16 @@ $path.AddArc($bgRect.Right - $r*2, $bgRect.Bottom - $r*2, $r*2, $r*2, 0,   90)
 $path.AddArc($bgRect.X,            $bgRect.Bottom - $r*2, $r*2, $r*2, 90,  90)
 $path.CloseFigure()
 
-$bgBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 10, 14, 39))
+$bgBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 26, 58, 10))
 $g.FillPath($bgBrush, $path)
 
-# Border - ember orange (#F15A22)
-$borderPen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 241, 90, 34)), 5
+# Border - accent green (#5a9e30)
+$borderPen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 90, 158, 48)), 5
 $g.DrawPath($borderPen, $path)
 
-# Draw an open book shape
-$bookPen   = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 241, 90, 34)), 4
-$bookBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(60, 241, 90, 34))
+# Draw an open book shape - on-chrome green (#c8e6b0)
+$bookPen   = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 200, 230, 160)), 4
+$bookBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(60, 200, 230, 160))
 
 # Left page
 $leftPage = New-Object System.Drawing.Drawing2D.GraphicsPath
@@ -56,7 +56,7 @@ $g.DrawPath($bookPen, $rightPage)
 $g.DrawLine($bookPen, 128, 78, 128, 177)
 
 # Text lines on left page (small orange lines)
-$linePen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(140, 241, 90, 34)), 2
+$linePen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(140, 200, 230, 160)), 2
 $g.DrawLine($linePen, 68, 110, 115, 108)
 $g.DrawLine($linePen, 70, 122, 117, 120)
 $g.DrawLine($linePen, 72, 134, 119, 132)

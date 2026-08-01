@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import type { LocalBook } from '../../context/BookContext'
 import { dedupe, matchesShelf, hasEbook } from '../../lib/filterBooks'
+import { allLists, CARD_TINTS } from '../../lib/curatedLists'
 import { Play, ChevronRight } from 'lucide-react'
 
 function greeting(hour: number): string {
@@ -12,20 +13,13 @@ function greeting(hour: number): string {
   return 'Good evening'
 }
 
-/**
- * Forest Day's featured cards are deliberately *not* green — the colour is how
- * you tell one shelf from another at a glance, and a wall of greens on a green
- * ground reads as one undifferentiated block. These are the mockup's own six.
- * A dark gradient sits over the top so white titles clear AA on every one.
- */
-const CARD_TINTS = [
-  '#4a7fd4', '#e07b39', '#d44a7a', '#3abcd4', '#3aad5a', '#d4a83a',
-]
-
-/* Assigned by position, not by hashing the title: hashing 7 titles into 6 tints
-   collides often, and two neighbouring cards in the same colour is exactly the
-   sameness this is meant to avoid. The card order is fixed, so this is stable. */
-const cardTint = (index: number) => CARD_TINTS[index % CARD_TINTS.length]
+/* Shelf cards cycle the shared palette by position — hashing the title would
+   collide often, and two neighbouring cards in the same colour is exactly the
+   sameness this is meant to avoid. The card order is fixed, so this is stable.
+   Offset by 2 so the shelf row doesn't open on the same blue as the curated row
+   directly above it. A dark gradient sits over every tint so white titles clear
+   AA on all six. */
+const cardTint = (index: number) => CARD_TINTS[(index + 2) % CARD_TINTS.length]
 
 interface Row {
   key: string
@@ -34,24 +28,28 @@ interface Row {
   onOpen: () => void
 }
 
-/** Big two-up shelf card, as in Forest Day's "Featured Playlists". */
-function ShelfCard({ title, count, index, onClick }: {
+/** Big two-up card, as in Forest Day's "Featured Playlists". */
+function TintCard({ title, blurb, count, tint, onClick }: {
   title: string
+  blurb?: string
   count: number
-  index: number
+  tint: string
   onClick: () => void
 }) {
   return (
     <button
       onClick={onClick}
       className="group relative overflow-hidden rounded-xl h-48 text-left shadow-sm hover:shadow-md transition-shadow"
-      style={{ background: cardTint(index) }}
+      style={{ background: tint }}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-black/60 mix-blend-multiply" />
       <div className="absolute inset-0 p-6 flex flex-col justify-end">
         <h3 className="text-white text-2xl font-bold leading-tight mb-1 origin-bottom-left group-hover:scale-105 transition-transform duration-300">
           {title}
         </h3>
+        {blurb && (
+          <p className="text-white/90 text-[12.5px] leading-snug mt-1 line-clamp-2">{blurb}</p>
+        )}
         {/* /90 not the mockup's /80: on the cyan and gold tints /80 lands at
             4.2:1, just under AA for 14px text. */}
         <p className="text-white/90 text-sm font-medium mt-1">
@@ -95,7 +93,7 @@ function CoverStrip({ books, onOpen }: { books: LocalBook[]; onOpen: (b: LocalBo
 }
 
 export function HomeView() {
-  const { setShelfFilter, setLibrarySource, openReader } = useApp()
+  const { setShelfFilter, setLibrarySource, setListId, openReader } = useApp()
   const { localBooks, isReadable, openBook } = useBook()
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
@@ -120,6 +118,16 @@ export function HomeView() {
   const wantToRead = useMemo(
     () => deduped.filter(b => matchesShelf(b, 'want')).slice(0, 8),
     [deduped],
+  )
+
+  /* Counts are computed over the same deduped set the grid uses, so a card that
+     says "95 books" opens onto 95 books. Empty lists are dropped rather than
+     shown at zero — a library with no science fiction shouldn't advertise it. */
+  const curatedCards = useMemo(
+    () => allLists(isReadable)
+      .map(l => ({ ...l, count: deduped.filter(l.match).length }))
+      .filter(l => l.count > 0),
+    [deduped, isReadable],
   )
 
   const shelfCards = useMemo(() => ([
@@ -160,6 +168,26 @@ export function HomeView() {
         <p className="text-text-dim text-lg">What do you want to read?</p>
       </header>
 
+      {curatedCards.length > 0 && (
+        <section className="mb-12">
+          <h2 className="text-xs font-bold tracking-widest uppercase text-accent-warm mb-4">
+            Curated Lists
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {curatedCards.map(l => (
+              <TintCard
+                key={l.id}
+                title={l.title}
+                blurb={l.blurb}
+                count={l.count}
+                tint={l.tint}
+                onClick={() => setListId(l.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {shelfCards.length > 0 && (
         <section className="mb-12">
           <h2 className="text-xs font-bold tracking-widest uppercase text-accent-warm mb-4">
@@ -167,7 +195,13 @@ export function HomeView() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {shelfCards.map((c, i) => (
-              <ShelfCard key={c.title} title={c.title} count={c.count} index={i} onClick={c.go} />
+              <TintCard
+                key={c.title}
+                title={c.title}
+                count={c.count}
+                tint={cardTint(i)}
+                onClick={c.go}
+              />
             ))}
           </div>
         </section>

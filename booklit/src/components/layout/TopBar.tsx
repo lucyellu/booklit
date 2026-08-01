@@ -4,10 +4,13 @@ import {
   Search, PanelLeftClose, PanelLeft, Eye, EyeOff, Sun, Moon,
 } from 'lucide-react'
 
+/* "GLB" was the old label for the WebGL mode, from a plan to load real .glb
+   models out of the CSV's 3d_mesh column. That column is empty for every row, so
+   the mode builds its own meshes and the name was only ever misleading. */
 const VIEW_MODES = [
-  { id: 'css3d' as const, label: '3D' },
-  { id: 'webgl' as const, label: 'GLB' },
-  { id: 'flat' as const, label: 'Flat' },
+  { id: 'flat' as const, label: 'Flat', hint: 'Plain grid' },
+  { id: 'css3d' as const, label: 'Cards', hint: '3D scene of flat cards' },
+  { id: 'webgl' as const, label: 'Books', hint: '3D scene of solid books' },
 ]
 
 export function TopBar() {
@@ -48,10 +51,11 @@ export function TopBar() {
 
       {/* Segmented view switcher */}
       <div className="flex items-center bg-bg rounded-full p-1 border border-border">
-        {VIEW_MODES.map(({ id, label }) => (
+        {VIEW_MODES.map(({ id, label, hint }) => (
           <button
             key={id}
             onClick={() => setLibraryView(id)}
+            title={hint}
             className={`px-3 py-1 text-sm font-medium rounded-full transition-colors ${
               libraryView === id
                 ? 'bg-accent text-on-accent shadow-sm'

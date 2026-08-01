@@ -2,12 +2,14 @@ import { useMemo, useState, useEffect, useRef } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { CSS3DScene } from './CSS3DScene'
+import { WebGLScene } from './WebGLScene'
 import type { LocalBook } from '../../context/BookContext'
 import {
   dedupe, applyFilters, sortBooks, SORT_LABELS, SORT_DIR_LABELS,
 } from '../../lib/filterBooks'
 import type { SortKey } from '../../lib/filterBooks'
 import { authorHue, spineWidth, hasDistinctSpineArt } from '../../lib/bookMeta'
+import { findList } from '../../lib/curatedLists'
 import type { CardMode } from '../../context/AppContext'
 import {
   Loader2, X, ChevronLeft, ChevronRight, Info, ShoppingCart,
@@ -19,7 +21,7 @@ const PAGE_SIZE = 300
 export function LibraryView() {
   const {
     libraryView, openReader, shelfFilter, searchQuery, readableOnly,
-    availability, librarySource, collectionId, collections,
+    availability, librarySource, collectionId, collections, listId,
     cardMode, openDetail, sortKey, sortDir,
   } = useApp()
   const { localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable } = useBook()
@@ -27,24 +29,29 @@ export function LibraryView() {
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
 
+  const activeList = useMemo(() => findList(listId, isReadable), [listId, isReadable])
+
   const filtered = useMemo(
     () => sortBooks(
       applyFilters(
         deduped,
-        { shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections },
+        {
+          shelfFilter, searchQuery, readableOnly, availability, librarySource,
+          collectionId, collections, listMatch: activeList?.match ?? null,
+        },
         isReadable,
       ),
       sortKey,
       sortDir,
     ),
-    [deduped, shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections, isReadable, sortKey, sortDir],
+    [deduped, shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections, activeList, isReadable, sortKey, sortDir],
   )
 
   const activeCollection = collections.find(c => c.id === collectionId) ?? null
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
 
   // Reset to the first page whenever the result set changes.
-  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, sortKey, sortDir])
+  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, listId, sortKey, sortDir])
   useEffect(() => { if (page > totalPages - 1) setPage(0) }, [page, totalPages])
 
   const pageItems = useMemo(
@@ -76,15 +83,29 @@ export function LibraryView() {
     <div className="h-full flex flex-col min-h-0">
       {/* Header: count + pagination */}
       <div className="flex items-end justify-between mb-6 flex-shrink-0">
-        <div>
-          <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-accent-warm mb-1.5">
-            {activeCollection ? 'Collection' : 'Your Bookshelf'}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            {activeList && (
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ background: activeList.tint }}
+              />
+            )}
+            <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-accent-warm">
+              {activeList ? 'Curated List' : activeCollection ? 'Collection' : 'Your Bookshelf'}
+            </div>
           </div>
           <div className="flex items-baseline gap-2.5">
-            <h2 className="font-display text-3xl font-extrabold tracking-tight text-text capitalize">
-              {activeCollection
-                ? activeCollection.name
-                : shelfFilter === 'all' ? 'Your Library' : shelfFilter}
+            {/* Only shelf names need capitalising — they're raw filter ids.
+                List and collection names are already written as titles. */}
+            <h2 className={`font-display text-3xl font-extrabold tracking-tight text-text ${
+              activeList || activeCollection ? '' : 'capitalize'
+            }`}>
+              {activeList
+                ? activeList.title
+                : activeCollection
+                  ? activeCollection.name
+                  : shelfFilter === 'all' ? 'Your Library' : shelfFilter}
             </h2>
             <span className="text-[12px] text-text-muted">
               {filtered.length === 0
@@ -92,6 +113,9 @@ export function LibraryView() {
                 : `${rangeStart}–${rangeEnd} of ${filtered.length}`}
             </span>
           </div>
+          {activeList && (
+            <p className="text-[12.5px] text-text-dim mt-1 max-w-xl">{activeList.blurb}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <SortControl />
@@ -125,9 +149,7 @@ export function LibraryView() {
         {libraryView === 'css3d' ? (
           <CSS3DScene books={pageItems} />
         ) : libraryView === 'webgl' ? (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-text-muted text-sm">WebGL 3D model view — coming soon</p>
-          </div>
+          <WebGLScene books={pageItems} />
         ) : (
           <FlatGrid
             localBooks={pageItems}

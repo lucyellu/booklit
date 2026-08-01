@@ -135,6 +135,12 @@ export interface FilterOptions {
   librarySource: BookSource | null
   collectionId: string | null
   collections: Collection[]
+  /**
+   * Membership test for the active curated list, or null for no list. Passed in
+   * already resolved rather than as an id, so this module stays independent of
+   * `curatedLists` — which imports `matchesShelf` from here.
+   */
+  listMatch?: ((b: LocalBook) => boolean) | null
 }
 
 export function applyFilters(
@@ -144,15 +150,18 @@ export function applyFilters(
 ): LocalBook[] {
   const {
     shelfFilter, searchQuery, readableOnly,
-    availability, librarySource, collectionId, collections,
+    availability, librarySource, collectionId, collections, listMatch,
   } = opts
 
   let list = deduped
 
-  // A collection is an explicit hand-picked set, so it replaces the shelf filter.
+  // A collection or a curated list is an explicit set, so it replaces the shelf
+  // filter rather than intersecting with it.
   if (collectionId) {
     const ids = new Set(collections.find(c => c.id === collectionId)?.bookIds ?? [])
     list = list.filter(b => ids.has(b.id))
+  } else if (listMatch) {
+    list = list.filter(listMatch)
   } else {
     list = list.filter(b => matchesShelf(b, shelfFilter))
   }
@@ -168,7 +177,7 @@ export function applyFilters(
       b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q))
   }
 
-  if (!collectionId && shelfFilter === 'recent') {
+  if (!collectionId && !listMatch && shelfFilter === 'recent') {
     list = [...list]
       .sort((a, b) => (b.lastRead || '').localeCompare(a.lastRead || ''))
       .slice(0, 80)
@@ -193,7 +202,28 @@ export function shelfCounts(
   for (const shelf of shelves) {
     out[shelf] = applyFilters(
       deduped,
-      { ...opts, shelfFilter: shelf, collectionId: null },
+      { ...opts, shelfFilter: shelf, collectionId: null, listMatch: null },
+      isReadable,
+    ).length
+  }
+  return out
+}
+
+/**
+ * How many books each curated list would show. Same pipeline as the grid, with
+ * the shelf/collection facet cleared, so the sidebar badge is the number you get.
+ */
+export function listCounts(
+  deduped: LocalBook[],
+  opts: FilterOptions,
+  isReadable: (b: LocalBook) => boolean,
+  lists: { id: string; match: (b: LocalBook) => boolean }[],
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const l of lists) {
+    out[l.id] = applyFilters(
+      deduped,
+      { ...opts, shelfFilter: 'all', collectionId: null, listMatch: l.match },
       isReadable,
     ).length
   }
@@ -222,7 +252,7 @@ export function sourceCounts(
   for (const src of sources) {
     out[src] = applyFilters(
       deduped,
-      { ...opts, librarySource: src, shelfFilter: 'all', collectionId: null },
+      { ...opts, librarySource: src, shelfFilter: 'all', collectionId: null, listMatch: null },
       isReadable,
     ).length
   }

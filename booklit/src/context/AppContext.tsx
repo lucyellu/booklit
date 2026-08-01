@@ -42,6 +42,8 @@ interface AppState {
   librarySource: BookSource | null
   /** Id of the active user collection, or null. */
   collectionId: string | null
+  /** Id of the active curated list, or null. */
+  listId: string | null
   /** How grid cards are drawn. */
   cardMode: CardMode
   /** Library sort order. */
@@ -67,6 +69,7 @@ interface AppContextValue extends AppState {
   toggleAvailability: (f: AvailabilityFilter) => void
   setLibrarySource: (s: BookSource | null) => void
   setCollectionId: (id: string | null) => void
+  setListId: (id: string | null) => void
   setCardMode: (m: CardMode) => void
   setSortKey: (k: SortKey) => void
   toggleSortDir: () => void
@@ -103,6 +106,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     availability: [],
     librarySource: null,
     collectionId: null,
+    listId: null,
     cardMode: 'cover',
     sortKey: 'default',
     sortDir: 'asc',
@@ -139,14 +143,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setReadableOnly = useCallback((readableOnly: boolean) =>
     setState(s => ({ ...s, readableOnly })), [])
 
-  // Picking a shelf, a source or a collection always lands you on the grid,
-  // and clears whichever of the other two would otherwise fight it.
+  // Shelf, collection and curated list are three ways of naming *one* place, so
+  // picking any of them clears the other two — otherwise "Favorites" and "Tech
+  // Canon" would silently intersect and the sidebar counts would lie. Source and
+  // availability are separate facets and deliberately survive the switch.
   const setShelfFilter = useCallback((shelfFilter: ShelfFilter) =>
-    setState(s => ({ ...s, shelfFilter, collectionId: null, view: 'library' })), [])
+    setState(s => ({ ...s, shelfFilter, collectionId: null, listId: null, view: 'library' })), [])
   const setLibrarySource = useCallback((librarySource: BookSource | null) =>
     setState(s => ({ ...s, librarySource, view: 'library' })), [])
   const setCollectionId = useCallback((collectionId: string | null) =>
-    setState(s => ({ ...s, collectionId, shelfFilter: 'all', view: 'library' })), [])
+    setState(s => ({ ...s, collectionId, listId: null, shelfFilter: 'all', view: 'library' })), [])
+  const setListId = useCallback((listId: string | null) =>
+    setState(s => ({ ...s, listId, collectionId: null, shelfFilter: 'all', view: 'library' })), [])
 
   const setCardMode = useCallback((cardMode: CardMode) =>
     setState(s => ({ ...s, cardMode })), [])
@@ -210,7 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setView, setLibraryView, setLayout,
       toggleSidebar, toggleUI, openReader, closeReader,
       setShelfFilter, setSearchQuery, setSettingsOpen, setReadableOnly,
-      toggleAvailability, setLibrarySource, setCollectionId,
+      toggleAvailability, setLibrarySource, setCollectionId, setListId,
       setCardMode, setSortKey, toggleSortDir, openDetail, closeDetail,
       createCollection, deleteCollection, toggleBookInCollection,
     }}>

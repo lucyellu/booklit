@@ -9,8 +9,9 @@ import {
 import type { ShelfFilter, AvailabilityFilter, CardMode } from '../../context/AppContext'
 import type { BookSource } from '../../context/BookContext'
 import {
-  dedupe, shelfCounts, availabilityCounts, sourceCounts,
+  dedupe, shelfCounts, availabilityCounts, sourceCounts, listCounts,
 } from '../../lib/filterBooks'
+import { allLists } from '../../lib/curatedLists'
 
 /** Top-level places, always shown. */
 const BROWSE: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
@@ -132,6 +133,7 @@ export function Sidebar() {
     availability, toggleAvailability,
     librarySource, setLibrarySource,
     collectionId, setCollectionId,
+    listId, setListId,
     collections, createCollection, deleteCollection,
     cardMode, setCardMode,
     setSettingsOpen,
@@ -142,11 +144,15 @@ export function Sidebar() {
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
 
+  const lists = useMemo(() => allLists(isReadable), [isReadable])
+  const activeList = lists.find(l => l.id === listId) ?? null
+
   // Counts run the same pipeline the grid does, so what a row promises is what
   // clicking it delivers.
   const filterOpts = {
     shelfFilter, searchQuery, readableOnly, availability,
     librarySource, collectionId, collections,
+    listMatch: activeList?.match ?? null,
   }
   const shelves = useMemo(
     () => shelfCounts(deduped, filterOpts, isReadable),
@@ -162,6 +168,11 @@ export function Sidebar() {
     () => sourceCounts(deduped, filterOpts, isReadable),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [deduped, searchQuery, readableOnly, availability, isReadable],
+  )
+  const listNums = useMemo(
+    () => listCounts(deduped, filterOpts, isReadable, lists),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deduped, searchQuery, readableOnly, availability, librarySource, isReadable, lists],
   )
 
   const visibleShelves = SHELVES.filter(s => shelves[s.id] > 0 || shelfFilter === s.id)
@@ -228,7 +239,7 @@ export function Sidebar() {
               icon={icon}
               label={label}
               count={shelves[id]}
-              active={view === 'library' && shelfFilter === id && !collectionId}
+              active={view === 'library' && shelfFilter === id && !collectionId && !listId}
               onClick={() => setShelfFilter(id)}
             />
           ))}
@@ -246,12 +257,41 @@ export function Sidebar() {
                 icon={icon}
                 label={label}
                 count={shelves[id]}
-                active={view === 'library' && shelfFilter === id && !collectionId}
+                active={view === 'library' && shelfFilter === id && !collectionId && !listId}
                 onClick={() => setShelfFilter(id)}
               />
             ))}
           </Group>
         )}
+
+        {/* Curated lists. A list with nothing in it is dropped rather than shown
+            at zero — the set is derived, so which ones apply depends entirely on
+            what's in the library. */}
+        <Group title="Curated Lists">
+          {lists.filter(l => listNums[l.id] > 0 || listId === l.id).map(l => (
+            <button
+              key={l.id}
+              onClick={() => setListId(listId === l.id ? null : l.id)}
+              title={l.blurb}
+              className={`group w-full flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium text-left transition-colors ${
+                listId === l.id
+                  ? 'bg-chrome-active text-on-chrome-active'
+                  : 'text-on-chrome-dim hover:text-on-chrome hover:bg-chrome-active/40'
+              }`}
+            >
+              {/* The dot carries the same tint as the list's card on Home, so
+                  the two surfaces read as the same thing. */}
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: l.tint }}
+              />
+              <span className="truncate flex-1">{l.title}</span>
+              <span className="flex-shrink-0 text-xs tabular-nums text-on-chrome-muted group-hover:text-on-chrome-dim">
+                {listNums[l.id]}
+              </span>
+            </button>
+          ))}
+        </Group>
 
         <Group title="Availability">
           {AVAILABILITY.map(({ id, label, icon }) => (

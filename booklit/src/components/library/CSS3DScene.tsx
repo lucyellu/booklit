@@ -9,30 +9,35 @@ import { computeTargets } from './LayoutEngine'
 import { buildCardElement } from './cardElement'
 import type { LocalBook } from '../../context/BookContext'
 
+interface Built {
+  object: CSS3DObject
+  book: LocalBook
+}
+
 export function CSS3DScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const stateRef = useRef<{
-    scene: THREE.Scene
-    camera: THREE.PerspectiveCamera
-    renderer: CSS3DRenderer
-    controls: TrackballControls
-    objects: CSS3DObject[]
-    animId: number
-  } | null>(null)
 
   const { layout, openReader, cardMode } = useApp()
   const { openBook } = useBook()
-  const localBooks = books
-  const booksRef = useRef(localBooks)
-  booksRef.current = localBooks
-  // The mount effect runs once, so it reads the mode through a ref rather than
-  // taking it as a dependency and tearing down the whole scene on every switch.
+
+  /* Built once; the book list, the layout and the card mode are pushed into the
+     live scene through these. Re-sorting therefore moves each card from where it
+     was to where it now belongs — the transform the three.js periodic table does
+     between arrangements — instead of rebuilding the deck from scratch. */
+  const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
+  const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
+  const rebuildRef = useRef<(() => void) | null>(null)
+  const booksRef = useRef(books)
+  // The card mode changes what each element *is*, not where it sits, so it is
+  // the one change that has to rebuild rather than retarget.
   const cardModeRef = useRef(cardMode)
-  cardModeRef.current = cardMode
 
   const handleBookClick = useCallback((book: LocalBook) => {
     openBook(book).then(ok => { if (ok) openReader() })
   }, [openBook, openReader])
+
+  const clickRef = useRef(handleBookClick)
+  useEffect(() => { clickRef.current = handleBookClick }, [handleBookClick])
 
   useEffect(() => {
     const container = containerRef.current
@@ -46,125 +51,146 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     renderer.setSize(container.clientWidth, container.clientHeight)
     container.appendChild(renderer.domElement)
 
+    const render = () => renderer.render(scene, camera)
+
     const controls = new TrackballControls(camera, renderer.domElement)
     controls.minDistance = 500
     controls.maxDistance = 6000
-    controls.addEventListener('change', () => renderer.render(scene, camera))
+    controls.addEventListener('change', render)
 
-    const objects: CSS3DObject[] = []
+    const built: Built[] = []
+    let current = layout
 
-    const buildCards = () => {
-      objects.forEach(o => scene.remove(o))
-      objects.length = 0
-
-      booksRef.current.forEach((book) => {
-        const el = buildCardElement(book, cardModeRef.current)
-        el.addEventListener('click', () => handleBookClick(book))
-
-        const obj = new CSS3DObject(el)
-        obj.position.set(
-          Math.random() * 4000 - 2000,
-          Math.random() * 4000 - 2000,
-          Math.random() * 4000 - 2000
-        )
-        scene.add(obj)
-        objects.push(obj)
-      })
+    const make = (book: LocalBook): Built => {
+      const el = buildCardElement(book, cardModeRef.current)
+      const entry: Built = { object: new CSS3DObject(el), book }
+      // Reads the record rather than closing over `book`, so a card that
+      // survives a re-sort still opens the right thing.
+      el.addEventListener('click', () => clickRef.current(entry.book))
+      entry.object.position.set(
+        Math.random() * 4000 - 2000,
+        Math.random() * 4000 - 2000,
+        Math.random() * 4000 - 2000,
+      )
+      scene.add(entry.object)
+      return entry
     }
 
-    buildCards()
+    // CSS3DObject removes its own element from the DOM on 'removed'.
+    const destroy = (b: Built) => scene.remove(b.object)
+
+    /* CSS3DRenderer draws on demand, so a tween needs something pumping frames
+       for as long as it runs. One pump covers the whole transform. */
+    let running: { stop: () => void }[] = []
+    const applyLayout = (which: typeof layout) => {
+      current = which
+      running.forEach(t => t.stop())
+      running = []
+      const targets = computeTargets(which, built.length)
+      const duration = 1000
+      built.forEach(({ object }, i) => {
+        const target = targets[i]
+        if (!target) return
+        // Staggered, as in the original — one shared duration reads as a rigid
+        // block sliding across rather than a deck rearranging itself.
+        const ms = Math.random() * duration + duration
+        running.push(
+          new TWEEN.Tween(object.position)
+            .to({ x: target.position.x, y: target.position.y, z: target.position.z }, ms)
+            .easing(TWEEN.Easing.Exponential.InOut)
+            .start(),
+          new TWEEN.Tween(object.rotation)
+            .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, ms)
+            .easing(TWEEN.Easing.Exponential.InOut)
+            .start(),
+        )
+      })
+      running.push(
+        new TWEEN.Tween({})
+          .to({}, duration * 2)
+          .onUpdate(render)
+          .onComplete(render)
+          .start(),
+      )
+    }
+
+    /** Reconcile the scene against a new book list, keeping what survives. */
+    const sync = (next: LocalBook[]) => {
+      const byId = new Map(built.map(b => [b.book.id, b]))
+      const kept = next.map(book => {
+        const existing = byId.get(book.id)
+        if (!existing) return make(book)
+        byId.delete(book.id)
+        existing.book = book
+        return existing
+      })
+      running.forEach(t => t.stop())
+      running = []
+      byId.forEach(destroy)
+      built.length = 0
+      built.push(...kept)
+      applyLayout(current)
+    }
+
+    const rebuild = () => {
+      running.forEach(t => t.stop())
+      running = []
+      built.forEach(destroy)
+      built.length = 0
+      sync(booksRef.current)
+    }
 
     const onResize = () => {
       camera.aspect = container.clientWidth / container.clientHeight
       camera.updateProjectionMatrix()
       renderer.setSize(container.clientWidth, container.clientHeight)
-      renderer.render(scene, camera)
+      render()
     }
     window.addEventListener('resize', onResize)
 
+    let animId = 0
     const animate = () => {
-      stateRef.current!.animId = requestAnimationFrame(animate)
+      animId = requestAnimationFrame(animate)
       TWEEN.update()
       controls.update()
     }
-
-    stateRef.current = { scene, camera, renderer, controls, objects, animId: 0 }
     animate()
 
+    layoutRef.current = applyLayout
+    syncRef.current = sync
+    rebuildRef.current = rebuild
+    sync(booksRef.current)
+
     return () => {
-      cancelAnimationFrame(stateRef.current!.animId)
+      cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
+      layoutRef.current = null
+      syncRef.current = null
+      rebuildRef.current = null
+      running.forEach(t => t.stop())
+      built.forEach(destroy)
       controls.dispose()
-      container.removeChild(renderer.domElement)
-      stateRef.current = null
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement)
+      }
     }
-  }, [handleBookClick])
+    // Mount once. Everything else arrives through the refs above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
-    const state = stateRef.current
-    if (!state || state.objects.length === 0) return
+    booksRef.current = books
+    syncRef.current?.(books)
+  }, [books])
 
-    const targets = computeTargets(layout, state.objects.length)
-    const duration = 1000
-
-    state.objects.forEach((obj, i) => {
-      const target = targets[i]
-      if (!target) return
-
-      new TWEEN.Tween(obj.position)
-        .to({ x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * duration + duration)
-        .easing(TWEEN.Easing.Exponential.InOut)
-        .start()
-
-      new TWEEN.Tween(obj.rotation)
-        .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * duration + duration)
-        .easing(TWEEN.Easing.Exponential.InOut)
-        .start()
-    })
-
-    new TWEEN.Tween({})
-      .to({}, duration * 2)
-      .onUpdate(() => state.renderer.render(state.scene, state.camera))
-      .start()
-  }, [layout, localBooks.length])
+  useEffect(() => { layoutRef.current?.(layout) }, [layout])
 
   useEffect(() => {
-    const state = stateRef.current
-    if (!state) return
-
-    state.objects.forEach(o => state.scene.remove(o))
-    state.objects.length = 0
-
-    booksRef.current.forEach((book) => {
-      const el = buildCardElement(book, cardMode)
-      el.addEventListener('click', () => handleBookClick(book))
-
-      const obj = new CSS3DObject(el)
-      obj.position.set(Math.random() * 4000 - 2000, Math.random() * 4000 - 2000, Math.random() * 4000 - 2000)
-      state.scene.add(obj)
-      state.objects.push(obj)
-    })
-
-    const targets = computeTargets(layout, state.objects.length)
-    const duration = 1000
-    state.objects.forEach((obj, i) => {
-      const target = targets[i]
-      if (!target) return
-      new TWEEN.Tween(obj.position)
-        .to({ x: target.position.x, y: target.position.y, z: target.position.z }, Math.random() * duration + duration)
-        .easing(TWEEN.Easing.Exponential.InOut)
-        .start()
-      new TWEEN.Tween(obj.rotation)
-        .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, Math.random() * duration + duration)
-        .easing(TWEEN.Easing.Exponential.InOut)
-        .start()
-    })
-
-    new TWEEN.Tween({})
-      .to({}, duration * 2)
-      .onUpdate(() => state.renderer.render(state.scene, state.camera))
-      .start()
-  }, [localBooks, layout, cardMode, handleBookClick])
+    // Skip the mount pass — the scene was just built in this mode.
+    if (cardModeRef.current === cardMode) return
+    cardModeRef.current = cardMode
+    rebuildRef.current?.()
+  }, [cardMode])
 
   return (
     <div ref={containerRef} className="w-full h-full" />

@@ -9,8 +9,8 @@ import { useBook } from '../../context/BookContext'
 import { computeTargets } from './LayoutEngine'
 import { BOOK_H } from './bookTextures'
 import { hashStr } from '../../lib/bookMeta'
-import { analyzeIslands, buildAtlas, cloneGltf, applyToMesh, uprightMatrix } from './modelSkin'
-import type { Islands } from './modelSkin'
+import { prepareModel, buildAtlas, cloneGltf, applyToMesh } from './modelSkin'
+import type { ModelSkin } from './modelSkin'
 import type { LocalBook } from '../../context/BookContext'
 import { Loader2 } from 'lucide-react'
 
@@ -34,9 +34,12 @@ interface Built {
   group: THREE.Group
   book: LocalBook
   atlas: THREE.Texture
-  islands: Islands
+  skin: ModelSkin
   inner: THREE.Object3D
+  cover: 'none' | 'pending' | 'done'
 }
+
+interface Prepared { gltf: GLTF; skin: ModelSkin }
 
 type Status =
   | { kind: 'loading' }
@@ -50,10 +53,17 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [hovered, setHovered] =
     useState<{ book: LocalBook; left: number; top: number } | null>(null)
-  const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
 
-  const shown = books.slice(0, MAX_MODELS)
-  const overflow = books.length - shown.length
+  /* The scene is built once and then kept: sorting and filtering push a new book
+     list in through syncRef, and the layout through layoutRef. Rebuilding for
+     either would re-download the models and re-skin every atlas — and, worse,
+     would drop the books on the floor and fly them back in from nowhere instead
+     of moving them from where they were to where they now belong. */
+  const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
+  const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
+  const booksRef = useRef(books)
+
+  const overflow = books.length - Math.min(books.length, MAX_MODELS)
 
   const handleOpen = useCallback((book: LocalBook) => {
     openBook(book).then(ok => { if (ok) openReader() })
@@ -111,23 +121,134 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
     scene.add(rim)
 
     const built: Built[] = []
+    let prepared: Prepared[] = []
     let animId = 0
+    let current = layout
 
+    /* Fly every book to its slot. Positions are indexed, so this is what makes a
+       sort read as a sort: the books that moved take the scenic route to where
+       they now are, exactly as the three.js periodic table does when it goes
+       from table to sphere. */
+    let running: { stop: () => void }[] = []
     const applyLayout = (which: typeof layout) => {
+      current = which
+      running.forEach(t => t.stop())
+      running = []
       const targets = computeTargets(which, built.length)
       const duration = 900
       built.forEach(({ group }, i) => {
         const t = targets[i]
         if (!t) return
-        new TWEEN.Tween(group.position)
-          .to({ x: t.position.x, y: t.position.y, z: t.position.z }, Math.random() * duration + duration)
-          .easing(TWEEN.Easing.Exponential.InOut)
-          .start()
-        new TWEEN.Tween(group.rotation)
-          .to({ x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, Math.random() * duration + duration)
-          .easing(TWEEN.Easing.Exponential.InOut)
-          .start()
+        // Staggered, as in the original — a single shared duration reads as one
+        // rigid block sliding across rather than a shelf rearranging itself.
+        const ms = Math.random() * duration + duration
+        running.push(
+          new TWEEN.Tween(group.position)
+            .to({ x: t.position.x, y: t.position.y, z: t.position.z }, ms)
+            .easing(TWEEN.Easing.Exponential.InOut)
+            .start(),
+          new TWEEN.Tween(group.rotation)
+            .to({ x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms)
+            .easing(TWEEN.Easing.Exponential.InOut)
+            .start(),
+        )
       })
+    }
+
+    const make = (book: LocalBook): Built => {
+      // Stable per book, so a book keeps the same binding across reloads.
+      const tpl = prepared[hashStr(book.id) % prepared.length]
+      const inner = cloneGltf(tpl.gltf)
+      inner.updateMatrixWorld(true)
+
+      // Stand it up, then normalise the size — the source models differ in
+      // both axis convention and scale, and the layout grid expects neither.
+      inner.applyMatrix4(tpl.skin.upright)
+      inner.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(inner)
+      const size = box.getSize(new THREE.Vector3())
+      const scale = size.y > 0 ? BOOK_H / size.y : 1
+      inner.scale.multiplyScalar(scale)
+      inner.updateMatrixWorld(true)
+      // Re-centre on the group origin whatever the model's own pivot was.
+      const centred = new THREE.Box3().setFromObject(inner)
+      inner.position.sub(centred.getCenter(new THREE.Vector3()))
+
+      const atlas = buildAtlas(book, tpl.skin, null)
+      applyToMesh(inner, atlas)
+
+      const group = new THREE.Group()
+      group.add(inner)
+      group.position.set(
+        Math.random() * 3000 - 1500,
+        Math.random() * 3000 - 1500,
+        Math.random() * 3000 - 1500,
+      )
+      scene.add(group)
+      return { group, book, atlas, skin: tpl.skin, inner, cover: 'none' }
+    }
+
+    const destroy = (b: Built) => {
+      scene.remove(b.group)
+      b.atlas.dispose()
+      b.group.traverse(n => {
+        const mesh = n as THREE.Mesh
+        if (!mesh.isMesh) return
+        // Geometry is shared with the loader's template — only the cloned
+        // materials belong to this instance.
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        mats.forEach(m => m.dispose())
+      })
+    }
+
+    let loading = 0
+    const pumpCovers = () => {
+      while (!disposed && loading < COVER_CONCURRENCY) {
+        const item = built.find(b => b.cover === 'none' && b.book.coverUrl)
+        if (!item) return
+        item.cover = 'pending'
+        loading++
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        const settle = (paint: boolean) => {
+          loading--
+          item.cover = 'done'
+          // The book may have been filtered out while its cover was in flight.
+          if (paint && !disposed && built.includes(item)) {
+            const fresh = buildAtlas(item.book, item.skin, img)
+            applyToMesh(item.inner, fresh)
+            item.atlas.dispose()
+            item.atlas = fresh
+          }
+          pumpCovers()
+        }
+        img.onload = () => settle(true)
+        // No cover, or it 404s: the typographic board stands.
+        img.onerror = () => settle(false)
+        img.src = item.book.coverUrl!
+      }
+    }
+
+    /** Reconcile the scene against a new book list, keeping what survives. */
+    const sync = (next: LocalBook[]) => {
+      if (disposed || !prepared.length) return
+      const wanted = next.slice(0, MAX_MODELS)
+      const byId = new Map(built.map(b => [b.book.id, b]))
+      const kept = wanted.map(book => {
+        const existing = byId.get(book.id)
+        if (!existing) return make(book)
+        byId.delete(book.id)
+        // Same book, possibly a fresher record — keep the mesh and the atlas.
+        existing.book = book
+        return existing
+      })
+      running.forEach(t => t.stop())
+      running = []
+      byId.forEach(destroy)
+      built.length = 0
+      built.push(...kept)
+      applyLayout(current)
+      pumpCovers()
     }
 
     const build = async () => {
@@ -153,11 +274,11 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
       const loader = new GLTFLoader()
       const loaded = await Promise.all(names.map(n =>
         loader.loadAsync(`/models/${n}`)
-          .then(g => [n, g] as [string, GLTF])
+          .then(g => g)
           .catch(() => null)))
       if (disposed) return
 
-      const templates = loaded.filter((x): x is [string, GLTF] => !!x)
+      const templates = loaded.filter((x): x is GLTF => !!x)
       if (!templates.length) {
         setStatus({ kind: 'error', message: 'The book models failed to load.' })
         return
@@ -165,73 +286,18 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
 
       /* The island analysis walks every triangle, so it runs once per *model*
          and is shared by every book skinned with it. */
-      const prepared = templates.map(([name, gltf]) => ({
-        name, gltf, islands: analyzeIslands(gltf),
-      })).filter(p => p.islands)
+      prepared = templates
+        .map(gltf => ({ gltf, skin: prepareModel(gltf) }))
+        .filter((p): p is Prepared => !!p.skin)
 
       if (!prepared.length) {
         setStatus({ kind: 'error', message: 'The models carry no UV data to place covers into.' })
         return
       }
 
-      for (const book of shown) {
-        // Stable per book, so a book keeps the same binding across reloads.
-        const tpl = prepared[hashStr(book.id) % prepared.length]
-        const inner = cloneGltf(tpl.gltf)
-        inner.updateMatrixWorld(true)   // bbox below reads world matrices
-
-        // Stand it up, then normalise the size — the source models differ in
-        // both axis convention and scale, and the layout grid expects neither.
-        inner.applyMatrix4(uprightMatrix(inner))
-        inner.updateMatrixWorld(true)
-        const box = new THREE.Box3().setFromObject(inner)
-        const size = box.getSize(new THREE.Vector3())
-        const scale = size.y > 0 ? BOOK_H / size.y : 1
-        inner.scale.multiplyScalar(scale)
-        inner.updateMatrixWorld(true)
-        // Re-centre on the group origin whatever the model's own pivot was.
-        const centred = new THREE.Box3().setFromObject(inner)
-        inner.position.sub(centred.getCenter(new THREE.Vector3()))
-
-        const atlas = buildAtlas(book, tpl.islands!, null)
-        applyToMesh(inner, atlas)
-
-        const group = new THREE.Group()
-        group.add(inner)
-        group.position.set(
-          Math.random() * 3000 - 1500,
-          Math.random() * 3000 - 1500,
-          Math.random() * 3000 - 1500,
-        )
-        scene.add(group)
-        built.push({ group, book, atlas, islands: tpl.islands!, inner })
-      }
-
-      if (disposed) return
       setStatus({ kind: 'ready' })
-      applyLayout(layout)
-      layoutRef.current = applyLayout
-
-      // Repaint each atlas once its cover art is in, a few at a time.
-      const queue = built.filter(b => !!b.book.coverUrl)
-      let next = 0
-      const pump = () => {
-        if (disposed || next >= queue.length) return
-        const item = queue[next++]
-        const img = new Image()
-        img.crossOrigin = 'anonymous'
-        img.onload = () => {
-          if (disposed) { pump(); return }
-          const fresh = buildAtlas(item.book, item.islands, img)
-          applyToMesh(item.inner, fresh)
-          item.atlas.dispose()
-          item.atlas = fresh
-          pump()
-        }
-        img.onerror = () => pump()   // no cover: the typographic board stands
-        img.src = item.book.coverUrl!
-      }
-      for (let i = 0; i < COVER_CONCURRENCY; i++) pump()
+      syncRef.current = sync
+      sync(booksRef.current)
     }
 
     build().catch(e => {
@@ -314,9 +380,12 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
     }
     animate()
 
+    layoutRef.current = applyLayout
+
     return () => {
       disposed = true
       layoutRef.current = null
+      syncRef.current = null
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
       ro.disconnect()
@@ -325,26 +394,20 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointerleave', onLeave)
       controls.dispose()
-      for (const b of built) {
-        scene.remove(b.group)
-        b.atlas.dispose()
-        b.group.traverse(n => {
-          const mesh = n as THREE.Mesh
-          if (!mesh.isMesh) return
-          // Geometry is shared with the loader's template — only the cloned
-          // materials belong to this instance.
-          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-          mats.forEach(m => m.dispose())
-        })
-      }
+      running.forEach(t => t.stop())
+      built.forEach(destroy)
       renderer.dispose()
       if (el.parentNode === container) container.removeChild(el)
       setHovered(null)
       setStatus({ kind: 'loading' })
     }
-    // Layout is pushed in through layoutRef; rebuilding for it would re-download
-    // nothing but would re-skin 40 atlases.
+    // Mount once. The book list and the layout are pushed in through refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    booksRef.current = books
+    syncRef.current?.(books)
   }, [books])
 
   useEffect(() => { layoutRef.current?.(layout) }, [layout])
@@ -375,7 +438,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
           )}
         </div>
       )}
-      {status.kind === 'ready' && (
+      {status.kind === 'ready' && books.length > 0 && (
         <p className="absolute bottom-2 left-2 z-10 text-[10.5px] text-text-muted pointer-events-none">
           Drag to orbit · scroll to zoom · click a book to read · shift-click for details
           {overflow > 0 && ` · showing the first ${MAX_MODELS} of ${books.length}`}

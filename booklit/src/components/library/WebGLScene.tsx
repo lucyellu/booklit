@@ -15,12 +15,13 @@ import type { LocalBook } from '../../context/BookContext'
  * Real WebGL view: every book is a solid box with a cover, a printed spine and
  * cut page edges, arranged by the same LayoutEngine the CSS3D view uses.
  *
- * This replaces a placeholder that rendered the words "coming soon". The plan
- * called for loading GLB models from the CSV's `3d_mesh` column, but that column
- * is empty for all 763 rows and no .glb files exist anywhere in the project — so
- * the meshes are generated instead. Depth comes from the page count, which means
- * the shelf has real variation for Goodreads and local books and sits at the
- * default width for the curated ones, whose `pages` column is also empty.
+ * The plan called for loading GLB models from the CSV's `3d_mesh` column, which
+ * is empty for all 763 rows — real models do exist, in the sibling cards/
+ * project, and ModelScene loads those. These meshes are generated, which is what
+ * lets this view carry a whole page where that one carries forty. Depth comes
+ * from the page count, so the shelf has real variation for Goodreads and local
+ * books and sits at the default width for the curated ones, whose `pages` column
+ * is also empty.
  */
 
 /**
@@ -40,6 +41,7 @@ interface Built {
   book: LocalBook
   materials: THREE.MeshLambertMaterial[]
   ownTextures: THREE.Texture[]
+  cover: 'none' | 'pending' | 'done'
 }
 
 export function WebGLScene({ books }: { books: LocalBook[] }) {
@@ -51,12 +53,14 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
      rendering is exactly what React tells you not to do. */
   const [hovered, setHovered] =
     useState<{ book: LocalBook; left: number; top: number } | null>(null)
-  /* Layout changes are pushed into the live scene through this ref rather than
-     being an effect dependency — see the teardown note below. */
+  /* The scene is built once. A new book list — from sorting, filtering or
+     paging — is pushed in through syncRef and reconciled against what is
+     already there, and the layout through layoutRef. See the note on sync. */
+  const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
   const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
+  const booksRef = useRef(books)
 
-  const shown = books.slice(0, MAX_MESHES)
-  const overflow = books.length - shown.length
+  const overflow = books.length - Math.min(books.length, MAX_MESHES)
 
   const handleOpen = useCallback((book: LocalBook) => {
     openBook(book).then(ok => { if (ok) openReader() })
@@ -110,8 +114,10 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
 
     const pages = pagesTexture()
     const built: Built[] = []
+    let disposed = false
+    let current = layout
 
-    for (const book of shown) {
+    const make = (book: LocalBook): Built => {
       const depth = spineWidth(book.pages)
       const geo = new THREE.BoxGeometry(BOOK_W, BOOK_H, depth)
 
@@ -140,58 +146,102 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       )
       mesh.userData.bookId = book.id
       scene.add(mesh)
-      built.push({ mesh, book, materials, ownTextures: [cover, spine, back] })
+      return { mesh, book, materials, ownTextures: [cover, spine, back], cover: 'none' }
     }
 
-    // Fly the boxes into the chosen layout.
+    const destroy = (b: Built) => {
+      scene.remove(b.mesh)
+      b.mesh.geometry.dispose()
+      b.materials.forEach(m => m.dispose())
+      // The shared pages texture is deliberately not disposed here.
+      b.ownTextures.forEach(t => t.dispose())
+    }
+
+    /* Fly the boxes to their slots. Positions are indexed, so this is also what
+       makes a re-sort read as a sort: each book travels from where it was to
+       where it now belongs, the way the three.js periodic table moves between
+       arrangements, rather than the shelf blinking into a new order. */
+    let running: { stop: () => void }[] = []
     const applyLayout = (which: typeof layout) => {
+      current = which
+      running.forEach(t => t.stop())
+      running = []
       const targets = computeTargets(which, built.length)
       const duration = 900
       built.forEach(({ mesh }, i) => {
         const t = targets[i]
         if (!t) return
-        new TWEEN.Tween(mesh.position)
-          .to({ x: t.position.x, y: t.position.y, z: t.position.z }, Math.random() * duration + duration)
-          .easing(TWEEN.Easing.Exponential.InOut)
-          .start()
-        new TWEEN.Tween(mesh.rotation)
-          .to({ x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, Math.random() * duration + duration)
-          .easing(TWEEN.Easing.Exponential.InOut)
-          .start()
+        // Staggered, as in the original — one shared duration reads as a rigid
+        // block sliding across rather than a shelf rearranging itself.
+        const ms = Math.random() * duration + duration
+        running.push(
+          new TWEEN.Tween(mesh.position)
+            .to({ x: t.position.x, y: t.position.y, z: t.position.z }, ms)
+            .easing(TWEEN.Easing.Exponential.InOut)
+            .start(),
+          new TWEEN.Tween(mesh.rotation)
+            .to({ x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms)
+            .easing(TWEEN.Easing.Exponential.InOut)
+            .start(),
+        )
       })
     }
-    applyLayout(layout)
 
     /* Swap in real cover art as it arrives. Throttled, and every load is
        recorded so the texture can be disposed on unmount even if it lands after
        the user has already left the view. */
-    let disposed = false
     const loader = new THREE.TextureLoader()
     loader.setCrossOrigin('anonymous')
-    const queue = built.filter(b => !!b.book.coverUrl)
-    let next = 0
-    const pump = () => {
-      if (disposed || next >= queue.length) return
-      const item = queue[next++]
-      loader.load(
-        item.book.coverUrl!,
-        tex => {
-          if (disposed) { tex.dispose(); return }
-          tex.colorSpace = THREE.SRGBColorSpace
-          tex.anisotropy = 4
-          const front = item.materials[4]
-          front.map?.dispose()
-          front.map = tex
-          front.needsUpdate = true
-          item.ownTextures.push(tex)
-          pump()
-        },
-        undefined,
-        // A cover that 404s or is blocked by CORS just keeps its painted board.
-        () => pump(),
-      )
+    let loading = 0
+    const pumpCovers = () => {
+      while (!disposed && loading < COVER_CONCURRENCY) {
+        const item = built.find(b => b.cover === 'none' && b.book.coverUrl)
+        if (!item) return
+        item.cover = 'pending'
+        loading++
+        loader.load(
+          item.book.coverUrl!,
+          tex => {
+            loading--
+            item.cover = 'done'
+            // The book may have been filtered out while its cover was in flight.
+            if (disposed || !built.includes(item)) { tex.dispose(); pumpCovers(); return }
+            tex.colorSpace = THREE.SRGBColorSpace
+            tex.anisotropy = 4
+            const front = item.materials[4]
+            front.map?.dispose()
+            front.map = tex
+            front.needsUpdate = true
+            item.ownTextures.push(tex)
+            pumpCovers()
+          },
+          undefined,
+          // A cover that 404s or is blocked by CORS just keeps its painted board.
+          () => { loading--; item.cover = 'done'; pumpCovers() },
+        )
+      }
     }
-    for (let i = 0; i < COVER_CONCURRENCY; i++) pump()
+
+    /** Reconcile the scene against a new book list, keeping what survives. */
+    const sync = (next: LocalBook[]) => {
+      if (disposed) return
+      const wanted = next.slice(0, MAX_MESHES)
+      const byId = new Map(built.map(b => [b.book.id, b]))
+      const kept = wanted.map(book => {
+        const existing = byId.get(book.id)
+        if (!existing) return make(book)
+        byId.delete(book.id)
+        existing.book = book
+        return existing
+      })
+      running.forEach(t => t.stop())
+      running = []
+      byId.forEach(destroy)
+      built.length = 0
+      built.push(...kept)
+      applyLayout(current)
+      pumpCovers()
+    }
 
     // Pointer: raycast for hover and click, with drag suppressed so orbiting
     // the scene doesn't open whatever happened to be under the cursor.
@@ -265,10 +315,13 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     animate()
 
     layoutRef.current = applyLayout
+    syncRef.current = sync
+    sync(booksRef.current)
 
     return () => {
       disposed = true
       layoutRef.current = null
+      syncRef.current = null
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
       ro.disconnect()
@@ -277,21 +330,21 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointerleave', onLeave)
       controls.dispose()
-      for (const b of built) {
-        scene.remove(b.mesh)
-        b.mesh.geometry.dispose()
-        b.materials.forEach(m => m.dispose())
-        // The shared pages texture is deliberately not disposed here.
-        b.ownTextures.forEach(t => t.dispose())
-      }
+      running.forEach(t => t.stop())
+      built.forEach(destroy)
       renderer.dispose()
       if (el.parentNode === container) container.removeChild(el)
       setHovered(null)
     }
-    // Rebuilt only when the book set changes. The layout is re-applied through
-    // layoutRef instead, so switching Grid → Sphere animates rather than
-    // dropping 160 meshes on the floor and making 480 new textures.
+    // Mount once. The book list and the layout are pushed in through refs, so
+    // switching Grid → Sphere, or re-sorting, animates rather than dropping 160
+    // meshes on the floor and making 480 new textures.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    booksRef.current = books
+    syncRef.current?.(books)
   }, [books])
 
   useEffect(() => { layoutRef.current?.(layout) }, [layout])

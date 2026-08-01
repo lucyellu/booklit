@@ -12,6 +12,7 @@ import {
   dedupe, shelfCounts, availabilityCounts, sourceCounts, listCounts,
 } from '../../lib/filterBooks'
 import { allLists } from '../../lib/curatedLists'
+import { PLAYLISTS } from '../../lib/clips'
 
 /** Top-level places, always shown. */
 const BROWSE: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
@@ -134,6 +135,7 @@ export function Sidebar() {
     librarySource, setLibrarySource,
     collectionId, setCollectionId,
     listId, setListId,
+    playlistId, setPlaylistId,
     collections, createCollection, deleteCollection,
     cardMode, setCardMode,
     setSettingsOpen,
@@ -263,6 +265,32 @@ export function Sidebar() {
             ))}
           </Group>
         )}
+
+        {/* Clip playlists. Not a library filter — these hold excerpts, so they
+            open their own screen and are always available, books or not. */}
+        <Group title="Playlists">
+          {PLAYLISTS.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setPlaylistId(playlistId === p.id ? null : p.id)}
+              title={p.description}
+              className={`group w-full flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium text-left transition-colors ${
+                view === 'playlist' && playlistId === p.id
+                  ? 'bg-chrome-active text-on-chrome-active'
+                  : 'text-on-chrome-dim hover:text-on-chrome hover:bg-chrome-active/40'
+              }`}
+            >
+              <span
+                className="w-4 h-4 rounded flex-shrink-0"
+                style={{ background: p.color }}
+              />
+              <span className="truncate flex-1">{p.title}</span>
+              <span className="flex-shrink-0 text-xs tabular-nums text-on-chrome-muted group-hover:text-on-chrome-dim">
+                {p.clipIds.length}
+              </span>
+            </button>
+          ))}
+        </Group>
 
         {/* Curated lists. A list with nothing in it is dropped rather than shown
             at zero — the set is derived, so which ones apply depends entirely on

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { BookSource } from './BookContext'
 import type { SortKey, SortDir } from '../lib/filterBooks'
 
-export type ViewMode = 'home' | 'library' | 'reader'
+export type ViewMode = 'home' | 'library' | 'reader' | 'playlist'
 export type LibraryViewMode = 'css3d' | 'webgl' | 'flat'
 export type LayoutMode = 'shelf' | 'grid' | 'sphere' | 'helix'
 export type ShelfFilter =
@@ -44,6 +44,8 @@ interface AppState {
   collectionId: string | null
   /** Id of the active curated list, or null. */
   listId: string | null
+  /** Id of the open clip playlist, or null. */
+  playlistId: string | null
   /** How grid cards are drawn. */
   cardMode: CardMode
   /** Library sort order. */
@@ -70,6 +72,7 @@ interface AppContextValue extends AppState {
   setLibrarySource: (s: BookSource | null) => void
   setCollectionId: (id: string | null) => void
   setListId: (id: string | null) => void
+  setPlaylistId: (id: string | null) => void
   setCardMode: (m: CardMode) => void
   setSortKey: (k: SortKey) => void
   toggleSortDir: () => void
@@ -107,6 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     librarySource: null,
     collectionId: null,
     listId: null,
+    playlistId: null,
     cardMode: 'cover',
     sortKey: 'default',
     sortDir: 'asc',
@@ -155,6 +159,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, collectionId, listId: null, shelfFilter: 'all', view: 'library' })), [])
   const setListId = useCallback((listId: string | null) =>
     setState(s => ({ ...s, listId, collectionId: null, shelfFilter: 'all', view: 'library' })), [])
+
+  /* A clip playlist is a screen of its own rather than a library filter — it
+     holds excerpts, not books you own. Closing one returns you to Home. */
+  const setPlaylistId = useCallback((playlistId: string | null) =>
+    setState(s => ({ ...s, playlistId, view: playlistId ? 'playlist' : 'home' })), [])
 
   const setCardMode = useCallback((cardMode: CardMode) =>
     setState(s => ({ ...s, cardMode })), [])
@@ -218,7 +227,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setView, setLibraryView, setLayout,
       toggleSidebar, toggleUI, openReader, closeReader,
       setShelfFilter, setSearchQuery, setSettingsOpen, setReadableOnly,
-      toggleAvailability, setLibrarySource, setCollectionId, setListId,
+      toggleAvailability, setLibrarySource, setCollectionId, setListId, setPlaylistId,
       setCardMode, setSortKey, toggleSortDir, openDetail, closeDetail,
       createCollection, deleteCollection, toggleBookInCollection,
     }}>

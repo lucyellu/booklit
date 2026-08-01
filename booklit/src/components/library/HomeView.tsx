@@ -4,6 +4,8 @@ import { useBook } from '../../context/BookContext'
 import type { LocalBook } from '../../context/BookContext'
 import { dedupe, matchesShelf, hasEbook } from '../../lib/filterBooks'
 import { allLists, CARD_TINTS } from '../../lib/curatedLists'
+import { PLAYLISTS } from '../../lib/clips'
+import { PlaylistCard } from './PlaylistView'
 import { Play, ChevronRight } from 'lucide-react'
 
 function greeting(hour: number): string {
@@ -93,7 +95,7 @@ function CoverStrip({ books, onOpen }: { books: LocalBook[]; onOpen: (b: LocalBo
 }
 
 export function HomeView() {
-  const { setShelfFilter, setLibrarySource, setListId, openReader } = useApp()
+  const { setShelfFilter, setLibrarySource, setListId, setPlaylistId, openReader } = useApp()
   const { localBooks, isReadable, openBook } = useBook()
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
@@ -146,15 +148,33 @@ export function HomeView() {
     { key: 'want', title: 'Want to Read', books: wantToRead, onOpen: () => setShelfFilter('want') },
   ].filter(r => r.books.length > 0)
 
+  /* Playlists are self-contained excerpts, so they work before a single book
+     has loaded — the empty state keeps them rather than showing a bare page. */
+  const playlistRow = (
+    <section className="mb-12">
+      <h2 className="text-xs font-bold tracking-widest uppercase text-accent-warm mb-4">
+        Playlists
+      </h2>
+      <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+        {PLAYLISTS.map(p => (
+          <PlaylistCard key={p.id} playlist={p} onOpen={() => setPlaylistId(p.id)} />
+        ))}
+      </div>
+    </section>
+  )
+
   if (deduped.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-display text-5xl font-extrabold tracking-tight mb-4 text-text">Booklit</h1>
-          <p className="text-text-dim text-sm max-w-md">
+      <div className="max-w-5xl mx-auto pb-12">
+        <header className="mb-10">
+          <h1 className="font-display text-4xl font-bold tracking-tight text-text mb-2">
+            {greeting(new Date().getHours())}
+          </h1>
+          <p className="text-text-dim text-lg">
             Connecting to your library… or import a Goodreads CSV / upload EPUBs to get started.
           </p>
-        </div>
+        </header>
+        {playlistRow}
       </div>
     )
   }
@@ -167,6 +187,8 @@ export function HomeView() {
         </h1>
         <p className="text-text-dim text-lg">What do you want to read?</p>
       </header>
+
+      {playlistRow}
 
       {curatedCards.length > 0 && (
         <section className="mb-12">

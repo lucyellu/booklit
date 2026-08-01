@@ -53,6 +53,13 @@ interface AppState {
   sortDir: SortDir
   /** Book whose detail panel is open, or null. */
   detailBookId: string | null
+  /**
+   * Columns for the 3D layouts, and rows per slab for the cube. 0 means "shape
+   * it from the window", which is the default and is right most of the time —
+   * these are here for when you want the shelf to line up a particular way.
+   */
+  gridCols: number
+  gridRows: number
 }
 
 interface AppContextValue extends AppState {
@@ -60,6 +67,8 @@ interface AppContextValue extends AppState {
   setView: (v: ViewMode) => void
   setLibraryView: (v: LibraryViewMode) => void
   setLayout: (l: LayoutMode) => void
+  setGridCols: (n: number) => void
+  setGridRows: (n: number) => void
   toggleSidebar: () => void
   toggleUI: () => void
   openReader: () => void
@@ -115,6 +124,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sortKey: 'default',
     sortDir: 'asc',
     detailBookId: null,
+    gridCols: 0,
+    gridRows: 0,
   })
   const [collections, setCollections] = useState<Collection[]>(loadCollections)
 
@@ -130,6 +141,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, libraryView })), [])
   const setLayout = useCallback((layout: LayoutMode) =>
     setState(s => ({ ...s, layout })), [])
+  // Clamped here rather than at the slider, so nothing can put the scene into a
+  // hundred-column arrangement by writing to the context directly.
+  const setGridCols = useCallback((n: number) =>
+    setState(s => ({ ...s, gridCols: Math.max(0, Math.min(40, Math.round(n) || 0)) })), [])
+  const setGridRows = useCallback((n: number) =>
+    setState(s => ({ ...s, gridRows: Math.max(0, Math.min(24, Math.round(n) || 0)) })), [])
   const toggleSidebar = useCallback(() =>
     setState(s => ({ ...s, sidebarOpen: !s.sidebarOpen })), [])
   const toggleUI = useCallback(() =>
@@ -224,7 +241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       ...state,
       collections,
-      setView, setLibraryView, setLayout,
+      setView, setLibraryView, setLayout, setGridCols, setGridRows,
       toggleSidebar, toggleUI, openReader, closeReader,
       setShelfFilter, setSearchQuery, setSettingsOpen, setReadableOnly,
       toggleAvailability, setLibrarySource, setCollectionId, setListId, setPlaylistId,

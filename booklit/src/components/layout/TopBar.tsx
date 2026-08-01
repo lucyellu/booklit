@@ -4,15 +4,15 @@ import {
   Search, PanelLeftClose, PanelLeft, Eye, EyeOff, Sun, Moon,
 } from 'lucide-react'
 
-/* The old "GLB" label came from a plan to load models out of the CSV's 3d_mesh
-   column, which is empty for every row. Real models do exist — in the sibling
-   cards/ project — and that is what "Models" loads. "Books" is the generated
-   fallback that can carry a whole page. */
+/* Named for how much of a book each one draws, which is also the order they get
+   more expensive in: flat cards, then generated solids, then the real hardcover
+   meshes out of the sibling cards/ project. The hints carry what the labels used
+   to say, since 2D/3D/4D says nothing about what you're switching to. */
 const VIEW_MODES = [
-  { id: 'flat' as const, label: 'Flat', hint: 'Plain grid' },
-  { id: 'css3d' as const, label: 'Cards', hint: '3D scene of flat cards' },
-  { id: 'webgl' as const, label: 'Books', hint: '3D scene of generated book shapes' },
-  { id: 'models' as const, label: 'Models', hint: 'Real 3D book models — first 40' },
+  { id: 'flat' as const, label: 'Flat', hint: 'Plain scrolling grid' },
+  { id: 'css3d' as const, label: '2D', hint: 'Flat cards in a 3D scene' },
+  { id: 'webgl' as const, label: '3D', hint: 'Generated book solids — first 160' },
+  { id: 'models' as const, label: '4D', hint: 'Real hardcover models — first 40' },
 ]
 
 export function TopBar() {

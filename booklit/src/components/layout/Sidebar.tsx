@@ -132,10 +132,46 @@ function Row({ icon: Icon, label, count, active, onClick, badge, dense, hint }: 
   )
 }
 
+/**
+ * Columns / rows for the 3D layouts. The far left of the track is Auto, which
+ * shapes the block from the window and is the right answer most of the time —
+ * this is for when you want the shelf to line up a particular way.
+ */
+function CountSlider({ label, value, max, onChange }: {
+  label: string
+  value: number
+  max: number
+  onChange: (n: number) => void
+}) {
+  return (
+    <div className="px-3 pt-2.5">
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-[11px] font-medium text-on-chrome-dim">{label}</span>
+        <span className="text-[11px] tabular-nums text-on-chrome-muted">
+          {value === 0 ? 'Auto' : value}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={max}
+        step={1}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        aria-label={`${label} — 0 for automatic`}
+        title={value === 0 ? 'Automatic — shaped from the window' : `${value}`}
+        className="w-full h-1 cursor-pointer"
+        style={{ accentColor: 'var(--color-accent-vivid)' }}
+      />
+    </div>
+  )
+}
+
 export function Sidebar() {
   const {
     view, setView,
     layout, setLayout,
+    libraryView, gridCols, gridRows, setGridCols, setGridRows,
     shelfFilter, setShelfFilter,
     availability, toggleAvailability,
     librarySource, setLibrarySource,
@@ -422,6 +458,17 @@ export function Sidebar() {
               onClick={() => setLayout(id)}
             />
           ))}
+
+          {/* Only the ordered layouts have rows and columns to set, and only the
+              3D views use the layout at all — the flat grid is CSS. */}
+          {libraryView !== 'flat' && layout !== 'sphere' && layout !== 'helix' && (
+            <>
+              <CountSlider label="Columns" value={gridCols} max={40} onChange={setGridCols} />
+              {layout === 'cube' && (
+                <CountSlider label="Rows per slab" value={gridRows} max={24} onChange={setGridRows} />
+              )}
+            </>
+          )}
         </Group>
 
         <Group title="Card Style">

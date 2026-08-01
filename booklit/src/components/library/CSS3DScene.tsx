@@ -2,11 +2,12 @@ import { useRef, useEffect, useCallback } from 'react'
 import * as THREE from 'three'
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js'
 import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
-import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { computeLayout } from './LayoutEngine'
 import { createFramer } from './frameCamera'
+import { createTweens } from './tweens'
+import type { Stoppable } from './tweens'
 import { buildCardElement, CARD_W, CARD_H } from './cardElement'
 import type { LocalBook } from '../../context/BookContext'
 
@@ -18,7 +19,7 @@ interface Built {
 export function CSS3DScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const { layout, openReader, cardMode } = useApp()
+  const { layout, gridCols, gridRows, openReader, cardMode } = useApp()
   const { openBook } = useBook()
 
   /* Built once; the book list, the layout and the card mode are pushed into the
@@ -32,6 +33,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
   // The card mode changes what each element *is*, not where it sits, so it is
   // the one change that has to rebuild rather than retarget.
   const cardModeRef = useRef(cardMode)
+  const gridRef = useRef({ cols: gridCols, rows: gridRows })
 
   const handleBookClick = useCallback((book: LocalBook) => {
     openBook(book).then(ok => { if (ok) openReader() })
@@ -59,7 +61,8 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     controls.maxDistance = 6000
     controls.addEventListener('change', render)
 
-    const framer = createFramer(camera, controls)
+    const tweens = createTweens()
+    const framer = createFramer(camera, controls, tweens)
     const built: Built[] = []
     let current = layout
     let spawn = 2000
@@ -87,7 +90,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     // CSS3DObject removes its own element from the DOM on 'removed'.
     const destroy = (b: Built) => scene.remove(b.object)
 
-    let running: { stop: () => void }[] = []
+    let running: Stoppable[] = []
     const applyLayout = (which: typeof layout) => {
       current = which
       running.forEach(t => t.stop())
@@ -97,7 +100,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
 
       const aspect = container.clientWidth / Math.max(1, container.clientHeight)
       const { targets, extent } = computeLayout(which, built.length, {
-        cellW: CARD_W, cellH: CARD_H, aspect,
+        cellW: CARD_W, cellH: CARD_H, aspect, ...gridRef.current,
       })
       spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
 
@@ -109,14 +112,12 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
         // block sliding across rather than a deck rearranging itself.
         const ms = Math.random() * duration + duration
         running.push(
-          new TWEEN.Tween(object.position)
-            .to({ x: target.position.x, y: target.position.y, z: target.position.z }, ms)
-            .easing(TWEEN.Easing.Exponential.InOut)
-            .start(),
-          new TWEEN.Tween(object.rotation)
-            .to({ x: target.rotation.x, y: target.rotation.y, z: target.rotation.z }, ms)
-            .easing(TWEEN.Easing.Exponential.InOut)
-            .start(),
+          tweens.move(object.position, {
+            x: target.position.x, y: target.position.y, z: target.position.z,
+          }, ms),
+          tweens.move(object.rotation, {
+            x: target.rotation.x, y: target.rotation.y, z: target.rotation.z,
+          }, ms),
         )
       })
       running.push(...framer(extent, duration * 1.4))
@@ -165,7 +166,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     let animId = 0
     const animate = () => {
       animId = requestAnimationFrame(animate)
-      TWEEN.update()
+      tweens.update()
       controls.update()
       if (performance.now() < renderUntil) render()
     }
@@ -183,7 +184,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
       layoutRef.current = null
       syncRef.current = null
       rebuildRef.current = null
-      running.forEach(t => t.stop())
+      tweens.stopAll()
       built.forEach(destroy)
       controls.dispose()
       if (renderer.domElement.parentNode === container) {
@@ -199,7 +200,10 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
     syncRef.current?.(books)
   }, [books])
 
-  useEffect(() => { layoutRef.current?.(layout) }, [layout])
+  useEffect(() => {
+    gridRef.current = { cols: gridCols, rows: gridRows }
+    layoutRef.current?.(layout)
+  }, [layout, gridCols, gridRows])
 
   useEffect(() => {
     // Skip the mount pass — the scene was just built in this mode.

@@ -1,10 +1,7 @@
 import * as THREE from 'three'
 import type { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
-import TWEEN from '@tweenjs/tween.js'
 import { fitDistance } from './LayoutEngine'
-
-/** Anything the scenes can stop when they start a new transition. */
-export interface Stoppable { stop: () => void }
+import type { Tweens, Stoppable } from './tweens'
 
 /**
  * Keeps the whole arrangement inside the frame.
@@ -19,7 +16,11 @@ export interface Stoppable { stop: () => void }
  * every time someone changes the sort key would undo their own zoom for no
  * reason. Only a different layout, or a different number of books, refits.
  */
-export function createFramer(camera: THREE.PerspectiveCamera, controls: TrackballControls) {
+export function createFramer(
+  camera: THREE.PerspectiveCamera,
+  controls: TrackballControls,
+  tweens: Tweens,
+) {
   let last: THREE.Vector3 | null = null
 
   return (extent: THREE.Vector3, ms: number, force = false): Stoppable[] => {
@@ -50,14 +51,8 @@ export function createFramer(camera: THREE.PerspectiveCamera, controls: Trackbal
       return []
     }
     return [
-      new TWEEN.Tween(camera.position)
-        .to({ x: eye.x, y: eye.y, z: eye.z }, ms)
-        .easing(TWEEN.Easing.Exponential.InOut)
-        .start(),
-      new TWEEN.Tween(controls.target)
-        .to({ x: 0, y: 0, z: 0 }, ms)
-        .easing(TWEEN.Easing.Exponential.InOut)
-        .start(),
+      tweens.move(camera.position, { x: eye.x, y: eye.y, z: eye.z }, ms),
+      tweens.move(controls.target, { x: 0, y: 0, z: 0 }, ms),
     ]
   }
 }

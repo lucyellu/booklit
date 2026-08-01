@@ -28,6 +28,14 @@ export interface LayoutOptions {
   cellH: number
   /** Viewport aspect, so a block comes out roughly the shape of the window. */
   aspect: number
+  /** Columns to lay out in. 0 or absent means "shape it from the window". */
+  cols?: number
+  /**
+   * Rows per slab. Only the cube reads it: in a flat grid the rows are however
+   * many the columns leave over, so a second control there would just fight the
+   * first.
+   */
+  rows?: number
 }
 
 export interface Layout {
@@ -59,13 +67,18 @@ export function computeLayout(kind: LayoutType, count: number, opts: LayoutOptio
  * the viewport, which packs the most books into the frame; higher makes long
  * shelves with fewer, longer rows.
  */
-function rows(n: number, { cellW, cellH, aspect }: LayoutOptions, stretch: number): Layout {
+function rows(n: number, opts: LayoutOptions, stretch: number): Layout {
+  const { cellW, cellH, aspect } = opts
   const gapX = cellW * 1.3
   const gapY = cellH * 1.3
 
   // cols/rows should come out as the window's aspect, in units of one cell:
-  // cols·gapX / (rows·gapY) = aspect, with cols·rows = n.
-  const wanted = Math.sqrt((n * aspect * stretch * gapY) / gapX)
+  // cols·gapX / (rows·gapY) = aspect, with cols·rows = n. A set column count
+  // wins outright — it's the one number someone reaches for when they want the
+  // shelf to line up a particular way.
+  const wanted = opts.cols && opts.cols > 0
+    ? opts.cols
+    : Math.sqrt((n * aspect * stretch * gapY) / gapX)
   const cols = Math.min(n, Math.max(1, Math.round(wanted)))
   const rowCount = Math.ceil(n / cols)
 
@@ -93,7 +106,8 @@ function rows(n: number, { cellW, cellH, aspect }: LayoutOptions, stretch: numbe
  * window rather than square — a square slab in a wide window leaves most of the
  * frame empty and shrinks every book for nothing.
  */
-function cube(n: number, { cellW, cellH, aspect }: LayoutOptions): Layout {
+function cube(n: number, opts: LayoutOptions): Layout {
+  const { cellW, cellH, aspect } = opts
   const gapX = cellW * 1.35
   const gapY = cellH * 1.3
   // Slabs need real air between them or the front one just hides the rest.
@@ -101,9 +115,15 @@ function cube(n: number, { cellW, cellH, aspect }: LayoutOptions): Layout {
 
   const slabs = Math.max(1, Math.round(Math.cbrt(n)))
   const perSlab = Math.ceil(n / slabs)
-  const wanted = Math.sqrt((perSlab * aspect * gapY) / gapX)
-  const cols = Math.min(perSlab, Math.max(1, Math.round(wanted)))
-  const rowCount = Math.ceil(perSlab / cols)
+  const wanted = opts.cols && opts.cols > 0
+    ? opts.cols
+    : Math.sqrt((perSlab * aspect * gapY) / gapX)
+  const cols = Math.min(n, Math.max(1, Math.round(wanted)))
+  // Here rows *are* free to be set: they choose how tall each slab is, and the
+  // depth follows from what's left over.
+  const rowCount = opts.rows && opts.rows > 0
+    ? Math.max(1, Math.round(opts.rows))
+    : Math.ceil(perSlab / cols)
   const face = cols * rowCount
   const depth = Math.ceil(n / face)
 

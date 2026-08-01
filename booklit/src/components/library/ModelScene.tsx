@@ -3,11 +3,12 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
-import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { computeLayout } from './LayoutEngine'
 import { createFramer } from './frameCamera'
+import { createTweens } from './tweens'
+import type { Stoppable } from './tweens'
 import { BOOK_W, BOOK_H } from './bookTextures'
 import { hashStr } from '../../lib/bookMeta'
 import { prepareModel, buildAtlas, cloneGltf, applyToMesh } from './modelSkin'
@@ -23,8 +24,9 @@ import { Loader2 } from 'lucide-react'
  * rather than copied into booklit/public — they are ~7 MB each and this repo is
  * public. If the folder isn't there, the view says so instead of hanging.
  *
- * Sibling to WebGLScene ("Books"), which builds its own boxes: that one renders
- * a whole page cheaply, this one renders far fewer books far better.
+ * This is the "4D" view. Sibling to WebGLScene ("3D"), which builds its own
+ * boxes: that one renders a whole page cheaply, this one renders far fewer books
+ * far better.
  */
 
 /** Each book needs its own 1024² atlas — about 4 MB of GPU memory. */
@@ -49,7 +51,7 @@ type Status =
 
 export function ModelScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { layout, openReader, openDetail } = useApp()
+  const { layout, gridCols, gridRows, openReader, openDetail } = useApp()
   const { openBook } = useBook()
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [hovered, setHovered] =
@@ -63,6 +65,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
   const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
   const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
   const booksRef = useRef(books)
+  const gridRef = useRef({ cols: gridCols, rows: gridRows })
 
   const overflow = books.length - Math.min(books.length, MAX_MODELS)
 
@@ -121,7 +124,8 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
     rim.position.set(0, -500, -800)
     scene.add(rim)
 
-    const framer = createFramer(camera, controls)
+    const tweens = createTweens()
+    const framer = createFramer(camera, controls, tweens)
     const built: Built[] = []
     let prepared: Prepared[] = []
     let animId = 0
@@ -132,7 +136,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
        sort read as a sort: the books that moved take the scenic route to where
        they now are, exactly as the three.js periodic table does when it goes
        from table to sphere. */
-    let running: { stop: () => void }[] = []
+    let running: Stoppable[] = []
     const applyLayout = (which: typeof layout) => {
       current = which
       running.forEach(t => t.stop())
@@ -142,7 +146,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
 
       const aspect = container.clientWidth / Math.max(1, container.clientHeight)
       const { targets, extent } = computeLayout(which, built.length, {
-        cellW: BOOK_W, cellH: BOOK_H, aspect,
+        cellW: BOOK_W, cellH: BOOK_H, aspect, ...gridRef.current,
       })
       spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
 
@@ -154,14 +158,8 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
         // rigid block sliding across rather than a shelf rearranging itself.
         const ms = Math.random() * duration + duration
         running.push(
-          new TWEEN.Tween(group.position)
-            .to({ x: t.position.x, y: t.position.y, z: t.position.z }, ms)
-            .easing(TWEEN.Easing.Exponential.InOut)
-            .start(),
-          new TWEEN.Tween(group.rotation)
-            .to({ x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms)
-            .easing(TWEEN.Easing.Exponential.InOut)
-            .start(),
+          tweens.move(group.position, { x: t.position.x, y: t.position.y, z: t.position.z }, ms),
+          tweens.move(group.rotation, { x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms),
         )
       })
       running.push(...framer(extent, duration * 1.4))
@@ -389,7 +387,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
 
     const animate = () => {
       animId = requestAnimationFrame(animate)
-      TWEEN.update()
+      tweens.update()
       controls.update()
       renderer.render(scene, camera)
     }
@@ -409,7 +407,7 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointerleave', onLeave)
       controls.dispose()
-      running.forEach(t => t.stop())
+      tweens.stopAll()
       built.forEach(destroy)
       renderer.dispose()
       if (el.parentNode === container) container.removeChild(el)
@@ -425,7 +423,10 @@ export function ModelScene({ books }: { books: LocalBook[] }) {
     syncRef.current?.(books)
   }, [books])
 
-  useEffect(() => { layoutRef.current?.(layout) }, [layout])
+  useEffect(() => {
+    gridRef.current = { cols: gridCols, rows: gridRows }
+    layoutRef.current?.(layout)
+  }, [layout, gridCols, gridRows])
 
   return (
     <div ref={containerRef} className="w-full h-full relative">

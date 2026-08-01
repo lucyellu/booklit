@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
-import TWEEN from '@tweenjs/tween.js'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { computeLayout } from './LayoutEngine'
 import { createFramer } from './frameCamera'
+import { createTweens } from './tweens'
+import type { Stoppable } from './tweens'
 import { spineWidth } from '../../lib/bookMeta'
 import {
   BOOK_W, BOOK_H, coverTexture, spineTexture, backTexture, pagesTexture,
@@ -47,7 +48,7 @@ interface Built {
 
 export function WebGLScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { layout, openReader, openDetail } = useApp()
+  const { layout, gridCols, gridRows, openReader, openDetail } = useApp()
   const { openBook } = useBook()
   /* Tooltip position is stored already clamped, because it's the pointer handler
      that has the container's width — reading it back out of a ref while
@@ -60,6 +61,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
   const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
   const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
   const booksRef = useRef(books)
+  const gridRef = useRef({ cols: gridCols, rows: gridRows })
 
   const overflow = books.length - Math.min(books.length, MAX_MESHES)
 
@@ -113,7 +115,8 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     fill.position.set(-800, -300, -900)
     scene.add(fill)
 
-    const framer = createFramer(camera, controls)
+    const tweens = createTweens()
+    const framer = createFramer(camera, controls, tweens)
     const pages = pagesTexture()
     const built: Built[] = []
     let disposed = false
@@ -165,7 +168,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
        makes a re-sort read as a sort: each book travels from where it was to
        where it now belongs, the way the three.js periodic table moves between
        arrangements, rather than the shelf blinking into a new order. */
-    let running: { stop: () => void }[] = []
+    let running: Stoppable[] = []
     const applyLayout = (which: typeof layout) => {
       current = which
       running.forEach(t => t.stop())
@@ -175,7 +178,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
 
       const aspect = container.clientWidth / Math.max(1, container.clientHeight)
       const { targets, extent } = computeLayout(which, built.length, {
-        cellW: BOOK_W, cellH: BOOK_H, aspect,
+        cellW: BOOK_W, cellH: BOOK_H, aspect, ...gridRef.current,
       })
       spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
 
@@ -187,14 +190,8 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
         // block sliding across rather than a shelf rearranging itself.
         const ms = Math.random() * duration + duration
         running.push(
-          new TWEEN.Tween(mesh.position)
-            .to({ x: t.position.x, y: t.position.y, z: t.position.z }, ms)
-            .easing(TWEEN.Easing.Exponential.InOut)
-            .start(),
-          new TWEEN.Tween(mesh.rotation)
-            .to({ x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms)
-            .easing(TWEEN.Easing.Exponential.InOut)
-            .start(),
+          tweens.move(mesh.position, { x: t.position.x, y: t.position.y, z: t.position.z }, ms),
+          tweens.move(mesh.rotation, { x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms),
         )
       })
       running.push(...framer(extent, duration * 1.4))
@@ -323,7 +320,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     let animId = 0
     const animate = () => {
       animId = requestAnimationFrame(animate)
-      TWEEN.update()
+      tweens.update()
       controls.update()
       renderer.render(scene, camera)
     }
@@ -345,7 +342,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       el.removeEventListener('pointerup', onUp)
       el.removeEventListener('pointerleave', onLeave)
       controls.dispose()
-      running.forEach(t => t.stop())
+      tweens.stopAll()
       built.forEach(destroy)
       renderer.dispose()
       if (el.parentNode === container) container.removeChild(el)
@@ -362,7 +359,10 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     syncRef.current?.(books)
   }, [books])
 
-  useEffect(() => { layoutRef.current?.(layout) }, [layout])
+  useEffect(() => {
+    gridRef.current = { cols: gridCols, rows: gridRows }
+    layoutRef.current?.(layout)
+  }, [layout, gridCols, gridRows])
 
   return (
     <div ref={containerRef} className="w-full h-full relative">

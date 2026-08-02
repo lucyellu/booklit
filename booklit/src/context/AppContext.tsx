@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import type { BookSource } from './BookContext'
 import type { SortKey, SortDir } from '../lib/filterBooks'
 
-export type ViewMode = 'home' | 'library' | 'reader' | 'playlist'
+export type ViewMode = 'home' | 'library' | 'reader' | 'playlist' | 'index'
+/** A sidebar section browsable as its own screen, opened by clicking its header. */
+export type IndexSection = 'playlists' | 'curatedLists' | 'collections'
 export type LibraryViewMode = 'css3d' | 'webgl' | 'models' | 'flat'
 export type LayoutMode = 'shelf' | 'grid' | 'cube' | 'sphere' | 'helix'
 export type ShelfFilter =
@@ -46,6 +48,8 @@ interface AppState {
   listId: string | null
   /** Id of the open clip playlist, or null. */
   playlistId: string | null
+  /** Which section's overview screen is open, when view is 'index'. */
+  indexSection: IndexSection | null
   /** How grid cards are drawn. */
   cardMode: CardMode
   /** Library sort order. */
@@ -82,6 +86,7 @@ interface AppContextValue extends AppState {
   setCollectionId: (id: string | null) => void
   setListId: (id: string | null) => void
   setPlaylistId: (id: string | null) => void
+  openIndex: (section: IndexSection) => void
   setCardMode: (m: CardMode) => void
   setSortKey: (k: SortKey) => void
   toggleSortDir: () => void
@@ -120,6 +125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     collectionId: null,
     listId: null,
     playlistId: null,
+    indexSection: null,
     cardMode: 'cover',
     sortKey: 'default',
     sortDir: 'asc',
@@ -183,6 +189,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setPlaylistId = useCallback((playlistId: string | null) =>
     setState(s => ({ ...s, playlistId, view: playlistId ? 'playlist' : 'home' })), [])
 
+  /* A section header opens that section's own overview screen — all its items
+     at once, sortable — distinct from picking one item off the sidebar. Any
+     single-item selection is cleared so its row doesn't stay highlighted
+     while a different screen is open. */
+  const openIndex = useCallback((indexSection: IndexSection) =>
+    setState(s => ({
+      ...s, view: 'index', indexSection, playlistId: null, listId: null, collectionId: null,
+    })), [])
+
   const setCardMode = useCallback((cardMode: CardMode) =>
     setState(s => ({ ...s, cardMode })), [])
 
@@ -245,7 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setView, setLibraryView, setLayout, setGridCols, setGridRows,
       toggleSidebar, toggleUI, openReader, closeReader,
       setShelfFilter, setSearchQuery, setSettingsOpen, setReadableOnly,
-      toggleAvailability, setLibrarySource, setCollectionId, setListId, setPlaylistId,
+      toggleAvailability, setLibrarySource, setCollectionId, setListId, setPlaylistId, openIndex,
       setCardMode, setSortKey, toggleSortDir, openDetail, closeDetail,
       createCollection, deleteCollection, toggleBookInCollection,
     }}>

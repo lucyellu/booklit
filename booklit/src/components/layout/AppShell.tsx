@@ -6,6 +6,7 @@ import { SettingsModal } from './SettingsModal'
 import { LibraryView } from '../library/LibraryView'
 import { HomeView } from '../library/HomeView'
 import { PlaylistView } from '../library/PlaylistView'
+import { SectionIndexView } from '../library/SectionIndexView'
 import { BookDetailPanel } from '../library/BookDetailPanel'
 
 export function AppShell() {
@@ -31,6 +32,7 @@ export function AppShell() {
             <main className="flex-1 min-h-0 overflow-auto p-8">
               {view === 'home' ? <HomeView />
                 : view === 'playlist' ? <PlaylistView />
+                : view === 'index' ? <SectionIndexView />
                 : <LibraryView />}
             </main>
           </div>

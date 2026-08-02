@@ -1,10 +1,11 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import {
   Library, BookOpen, BookMarked, Clock, Star, Home, Flame, Check,
   Upload, Settings, Grid3x3, Box, Boxes, Circle, Dna, BookCopy, HardDrive,
   Play, Smartphone, Plus, Trash2, Image, AlignJustify, Palette, BookOpenText,
+  ChevronRight,
 } from 'lucide-react'
 import type { ShelfFilter, AvailabilityFilter, CardMode } from '../../context/AppContext'
 import type { BookSource } from '../../context/BookContext'
@@ -67,22 +68,75 @@ const SOURCES: { id: BookSource; label: string; icon: typeof Library }[] = [
   { id: 'curated', label: 'Curated CSV', icon: Library },
 ]
 
-function Group({ title, action, children }: {
+const COLLAPSED_KEY = 'booklit-sidebar-collapsed'
+
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * A titled group whose header does two independent things: the chevron
+ * collapses the group in place, and — for the sections that are themselves
+ * browsable collections (Playlists, Curated Lists, My Collections) — the
+ * title opens that whole section as its own sortable screen, the same way an
+ * item inside the group already does. For groups with no `onHeaderClick`, the
+ * title collapses too, so the whole header is one big hit target.
+ */
+function Group({ title, action, children, collapsed, onToggleCollapse, onHeaderClick, headerActive }: {
   title?: string
   action?: React.ReactNode
   children: React.ReactNode
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+  onHeaderClick?: () => void
+  headerActive?: boolean
 }) {
   return (
     <div className="mt-8 first:mt-4">
       {title && (
-        <div className="flex items-center justify-between px-3 mb-3">
-          <h2 className="text-[10px] font-bold tracking-[0.16em] uppercase text-on-chrome-muted">
-            {title}
-          </h2>
+        <div className="flex items-center gap-1.5 px-3 mb-3">
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="flex-shrink-0 -ml-0.5 p-0.5 rounded text-on-chrome-muted hover:text-on-chrome transition-colors"
+              title={collapsed ? `Show ${title}` : `Hide ${title}`}
+              aria-label={collapsed ? `Show ${title}` : `Hide ${title}`}
+            >
+              <ChevronRight className={`w-3 h-3 transition-transform ${collapsed ? '' : 'rotate-90'}`} />
+            </button>
+          )}
+          {onHeaderClick ? (
+            <button
+              onClick={onHeaderClick}
+              title={`Open all ${title}`}
+              className={`flex-1 min-w-0 text-left text-[10px] font-bold tracking-[0.16em] uppercase truncate transition-colors ${
+                headerActive ? 'text-on-chrome' : 'text-on-chrome-muted hover:text-on-chrome'
+              }`}
+            >
+              {title}
+            </button>
+          ) : onToggleCollapse ? (
+            <button
+              onClick={onToggleCollapse}
+              className="flex-1 min-w-0 text-left text-[10px] font-bold tracking-[0.16em] uppercase text-on-chrome-muted hover:text-on-chrome transition-colors truncate"
+            >
+              {title}
+            </button>
+          ) : (
+            <h2 className="flex-1 min-w-0 text-[10px] font-bold tracking-[0.16em] uppercase text-on-chrome-muted truncate">
+              {title}
+            </h2>
+          )}
           {action}
         </div>
       )}
-      <div className="flex flex-col gap-1">{children}</div>
+      {!collapsed && <div className="flex flex-col gap-1">{children}</div>}
     </div>
   )
 }
@@ -184,10 +238,18 @@ export function Sidebar() {
     cardMode, setCardMode,
     setSettingsOpen,
     searchQuery, readableOnly,
+    openIndex, indexSection,
   } = useApp()
   const { localBooks, isReadable, uploadFile, syncProfile, importLocalLibrary } = useBook()
   const { owner, setUpOwner } = useProfiles()
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed)
+  const toggleGroup = (id: string) => setCollapsed(prev => {
+    const next = { ...prev, [id]: !prev[id] }
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next)) } catch { /* quota */ }
+    return next
+  })
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
 
@@ -309,7 +371,11 @@ export function Sidebar() {
         {/* Only shelves this library actually has. A row with nothing behind it
             is just noise — and the curated CSV only uses three of them. */}
         {visibleShelves.length > 0 && (
-          <Group title="Shelves">
+          <Group
+            title="Shelves"
+            collapsed={collapsed.shelves}
+            onToggleCollapse={() => toggleGroup('shelves')}
+          >
             {visibleShelves.map(({ id, label, icon }) => (
               <Row
                 key={id}
@@ -326,8 +392,16 @@ export function Sidebar() {
         )}
 
         {/* Clip playlists. Not a library filter — these hold excerpts, so they
-            open their own screen and are always available, books or not. */}
-        <Group title="Playlists">
+            open their own screen and are always available, books or not. The
+            header opens the same kind of screen for the whole section — every
+            playlist at once, sortable — rather than any one of them. */}
+        <Group
+          title="Playlists"
+          collapsed={collapsed.playlists}
+          onToggleCollapse={() => toggleGroup('playlists')}
+          onHeaderClick={() => openIndex('playlists')}
+          headerActive={view === 'index' && indexSection === 'playlists'}
+        >
           {PLAYLISTS.map(p => (
             <button
               key={p.id}
@@ -354,7 +428,13 @@ export function Sidebar() {
         {/* Curated lists. A list with nothing in it is dropped rather than shown
             at zero — the set is derived, so which ones apply depends entirely on
             what's in the library. */}
-        <Group title="Curated Lists">
+        <Group
+          title="Curated Lists"
+          collapsed={collapsed.curatedLists}
+          onToggleCollapse={() => toggleGroup('curatedLists')}
+          onHeaderClick={() => openIndex('curatedLists')}
+          headerActive={view === 'index' && indexSection === 'curatedLists'}
+        >
           {lists.filter(l => listNums[l.id] > 0 || listId === l.id).map(l => (
             <button
               key={l.id}
@@ -380,7 +460,11 @@ export function Sidebar() {
           ))}
         </Group>
 
-        <Group title="Availability">
+        <Group
+          title="Availability"
+          collapsed={collapsed.availability}
+          onToggleCollapse={() => toggleGroup('availability')}
+        >
           {AVAILABILITY.map(({ id, label, icon }) => (
             <Row
               key={id}
@@ -396,6 +480,10 @@ export function Sidebar() {
 
         <Group
           title="My Collections"
+          collapsed={collapsed.collections}
+          onToggleCollapse={() => toggleGroup('collections')}
+          onHeaderClick={() => openIndex('collections')}
+          headerActive={view === 'index' && indexSection === 'collections'}
           action={
             <button
               onClick={handleNewCollection}
@@ -439,7 +527,11 @@ export function Sidebar() {
             open library actually draws on more than one — a guest's shelf is
             all Goodreads, so the group would be a single row saying nothing. */}
         {SOURCES.filter(s => sources[s.id] > 0).length > 1 && (
-          <Group title="Source">
+          <Group
+            title="Source"
+            collapsed={collapsed.source}
+            onToggleCollapse={() => toggleGroup('source')}
+          >
             <Row
               label="All sources"
               active={librarySource === null}
@@ -459,7 +551,11 @@ export function Sidebar() {
           </Group>
         )}
 
-        <Group title="Layout">
+        <Group
+          title="Layout"
+          collapsed={collapsed.layout}
+          onToggleCollapse={() => toggleGroup('layout')}
+        >
           {LAYOUTS.map(({ id, label, icon, hint }) => (
             <Row
               key={id}
@@ -483,7 +579,11 @@ export function Sidebar() {
           )}
         </Group>
 
-        <Group title="Card Style">
+        <Group
+          title="Card Style"
+          collapsed={collapsed.cardStyle}
+          onToggleCollapse={() => toggleGroup('cardStyle')}
+        >
           {CARD_MODES.map(({ id, label, icon }) => (
             <Row
               key={id}

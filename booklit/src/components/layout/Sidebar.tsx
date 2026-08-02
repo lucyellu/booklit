@@ -13,6 +13,9 @@ import {
 } from '../../lib/filterBooks'
 import { allLists } from '../../lib/curatedLists'
 import { PLAYLISTS } from '../../lib/clips'
+import { ProfileSwitcher } from './ProfileSwitcher'
+import { useProfiles } from '../../context/ProfileContext'
+import { parseGoodreadsId } from '../../lib/profiles'
 
 /** Top-level places, always shown. */
 const BROWSE: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
@@ -54,15 +57,14 @@ const LAYOUTS = [
   { id: 'helix' as const, label: 'Helix', icon: Dna, hint: 'One long spiral' },
 ]
 
-/** Avatar tints are per-source and fixed, as in the mockup — they're how you
-    tell one library from another at a glance, so they don't follow the theme. */
-const SOURCES: {
-  id: BookSource; label: string; blurb: string; initials: string; tint: string
-}[] = [
-  { id: 'curated', label: 'Patrick Collison', blurb: 'Stripe CEO · Eclectic reader', initials: 'PC', tint: '#15803d' },
-  { id: 'local', label: 'Local Folder', blurb: 'Files on this machine', initials: 'LF', tint: '#0f766e' },
-  { id: 'goodreads', label: 'Goodreads', blurb: 'Imported shelves', initials: 'GR', tint: '#cc583d' },
-  { id: 'upload', label: 'Uploads', blurb: 'Added by hand', initials: 'UP', tint: '#a16207' },
+/** How a book got into the open shelf — not whose shelf it is. That's the
+    profile switcher above this group. */
+const SOURCES: { id: BookSource; label: string; icon: typeof Library }[] = [
+  { id: 'goodreads', label: 'From Goodreads', icon: BookCopy },
+  { id: 'local', label: 'Local Folder', icon: HardDrive },
+  { id: 'upload', label: 'Uploads', icon: Upload },
+  { id: 'saved', label: 'Saved from others', icon: BookMarked },
+  { id: 'curated', label: 'Curated CSV', icon: Library },
 ]
 
 function Group({ title, action, children }: {
@@ -183,7 +185,8 @@ export function Sidebar() {
     setSettingsOpen,
     searchQuery, readableOnly,
   } = useApp()
-  const { localBooks, isReadable, uploadFile, importGoodreads, importLocalLibrary } = useBook()
+  const { localBooks, isReadable, uploadFile, syncProfile, importLocalLibrary } = useBook()
+  const { owner, setUpOwner } = useProfiles()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
@@ -232,14 +235,28 @@ export function Sidebar() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  /* Connecting Goodreads now means "this shelf is mine", not "pour these books
+     into whatever's already here" — that second behaviour is exactly what
+     merged two people's libraries together. */
   const handleGoodreads = async () => {
     const input = window.prompt(
-      'Enter your Goodreads user id or profile URL\n(e.g. https://www.goodreads.com/user/show/12345-name or just 12345).\nYour profile must be public.'
+      owner?.goodreadsUserId
+        ? `Your library currently reads from Goodreads user ${owner.goodreadsUserId}.\nPaste a different profile URL to change it.`
+        : 'Paste your Goodreads profile URL\n(e.g. https://www.goodreads.com/user/show/12345-name).\nYour profile must be public.',
+      owner?.goodreadsUserId ?? '',
     )
     if (!input) return
+    const grId = parseGoodreadsId(input)
+    if (!grId) {
+      window.alert('That doesn’t contain a Goodreads user id.')
+      return
+    }
+    setUpOwner(owner?.name || 'My Library', grId)
     try {
-      const added = await importGoodreads(input)
-      window.alert(added > 0 ? `Added ${added} books from Goodreads.` : 'No new books found.')
+      const count = await syncProfile('owner', grId)
+      window.alert(count > 0
+        ? `Your library now reads ${count} books from Goodreads.`
+        : 'No books found — is the profile public?')
     } catch (err) {
       window.alert(`Goodreads import failed: ${(err as Error).message}`)
     }
@@ -414,38 +431,33 @@ export function Sidebar() {
           )}
         </Group>
 
-        <Group title="Libraries">
-          <Row
-            label="All sources"
-            active={librarySource === null}
-            onClick={() => setLibrarySource(null)}
-          />
-          {SOURCES.filter(s => sources[s.id] > 0).map(({ id, label, blurb, initials, tint }) => (
-            <button
-              key={id}
-              onClick={() => setLibrarySource(librarySource === id ? null : id)}
-              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                librarySource === id
-                  ? 'bg-chrome-active text-on-chrome-active'
-                  : 'text-on-chrome-dim hover:text-on-chrome hover:bg-chrome-active/40'
-              }`}
-            >
-              <span
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
-                style={{ background: tint }}
-              >
-                {initials}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm truncate leading-snug">{label}</span>
-                <span className="block text-[10px] text-on-chrome-muted truncate">{blurb}</span>
-              </span>
-              <span className="text-xs tabular-nums text-on-chrome-muted flex-shrink-0 ml-2">
-                {sources[id]}
-              </span>
-            </button>
-          ))}
-        </Group>
+        {/* Whose shelf. Switching here swaps the library out rather than
+            filtering one merged pile, which is what "Libraries" used to do. */}
+        <ProfileSwitcher />
+
+        {/* How the books in *this* shelf arrived. Only worth showing when the
+            open library actually draws on more than one — a guest's shelf is
+            all Goodreads, so the group would be a single row saying nothing. */}
+        {SOURCES.filter(s => sources[s.id] > 0).length > 1 && (
+          <Group title="Source">
+            <Row
+              label="All sources"
+              active={librarySource === null}
+              onClick={() => setLibrarySource(null)}
+            />
+            {SOURCES.filter(s => sources[s.id] > 0).map(({ id, label, icon: Icon }) => (
+              <Row
+                key={id}
+                dense
+                icon={Icon}
+                label={label}
+                count={sources[id]}
+                active={librarySource === id}
+                onClick={() => setLibrarySource(librarySource === id ? null : id)}
+              />
+            ))}
+          </Group>
+        )}
 
         <Group title="Layout">
           {LAYOUTS.map(({ id, label, icon, hint }) => (

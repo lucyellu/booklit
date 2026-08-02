@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
+import { useProfiles } from '../../context/ProfileContext'
 import { CSS3DScene } from './CSS3DScene'
 import { WebGLScene } from './WebGLScene'
 import { ModelScene } from './ModelScene'
@@ -25,7 +26,11 @@ export function LibraryView() {
     availability, librarySource, collectionId, collections, listId,
     cardMode, openDetail, detailBookId, sortKey, sortDir,
   } = useApp()
-  const { localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable } = useBook()
+  const {
+    localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable,
+    syncingProfileId,
+  } = useBook()
+  const { activeProfile } = useProfiles()
   const [page, setPage] = useState(0)
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
@@ -64,13 +69,23 @@ export function LibraryView() {
     openBook(lb).then(ok => { if (ok) openReader() })
   }
 
+  /* An empty shelf now means one of three different things, and saying which
+     is the difference between "it's working" and "it's broken". */
   if (localBooks.length === 0) {
+    const loading = syncingProfileId === activeProfile?.id
+    const isOwnEmpty = activeProfile?.kind === 'owner' && !activeProfile.goodreadsUserId
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-display text-5xl font-extrabold tracking-tight mb-4 text-text">Booklit</h1>
-          <p className="text-text-dim text-sm max-w-md">
-            Connecting to your library… or import a Goodreads CSV / upload EPUBs to get started.
+        <div className="text-center max-w-md">
+          <h1 className="font-display text-5xl font-extrabold tracking-tight mb-4 text-text">
+            {activeProfile?.name ?? 'Booklit'}
+          </h1>
+          <p className="text-text-dim text-sm">
+            {loading
+              ? `Reading ${activeProfile?.name ?? 'this'}’s shelf…`
+              : isOwnEmpty
+                ? 'No shelf connected yet. Link a Goodreads profile in Settings, upload an EPUB, or scan your local folder.'
+                : `Nothing on this shelf. It may be private, or empty on Goodreads.`}
           </p>
         </div>
       </div>
@@ -92,8 +107,15 @@ export function LibraryView() {
                 style={{ background: activeList.tint }}
               />
             )}
+            {/* Whose shelf this is, so a guest library never reads as yours. */}
             <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-accent-warm">
-              {activeList ? 'Curated List' : activeCollection ? 'Collection' : 'Your Bookshelf'}
+              {activeList
+                ? 'Curated List'
+                : activeCollection
+                  ? 'Collection'
+                  : activeProfile?.kind === 'guest'
+                    ? `${activeProfile.name} · read-only`
+                    : 'Your Bookshelf'}
             </div>
           </div>
           <div className="flex items-baseline gap-2.5">
@@ -106,7 +128,11 @@ export function LibraryView() {
                 ? activeList.title
                 : activeCollection
                   ? activeCollection.name
-                  : shelfFilter === 'all' ? 'Your Library' : shelfFilter}
+                  : shelfFilter !== 'all'
+                    ? shelfFilter
+                    : activeProfile?.kind === 'guest'
+                      ? `${activeProfile.name}’s Library`
+                      : 'Your Library'}
             </h2>
             <span className="text-[12px] text-text-muted">
               {filtered.length === 0

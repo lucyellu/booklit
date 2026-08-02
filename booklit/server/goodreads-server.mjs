@@ -5,6 +5,11 @@
 //   GET /files/<relpath>            → stream a file from that folder for reading.
 //
 // Run:  node server/goodreads-server.mjs   (listens on :8765, proxied by Vite)
+//
+// Goodreads has no usable API — developer keys stopped being issued in Dec 2020
+// and the legacy ones now 403 — so the only way in is the public RSS feed, and
+// the only way out is a CSV you import by hand on their site. Everything here
+// is therefore read-only: Booklit owns shelf edits, not Goodreads.
 
 import http from 'node:http'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +21,9 @@ import JSZip from 'jszip'
 const PORT = process.env.GOODREADS_PORT ? Number(process.env.GOODREADS_PORT) : 8765
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(__dirname, '..', 'public', 'data')
-const MAX_PAGES = 20          // ~20 books/page on RSS → up to ~400 books
+const PER_PAGE = 100          // Goodreads honours per_page up to 100
+const MAX_PAGES = 20          // → up to 2000 books per shelf
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000   // how long a shelf snapshot stays fresh
 const UA = 'Mozilla/5.0 (compatible; booklit/1.0)'
 
 // Local books folder (override with BOOKS_DIR env var).
@@ -44,6 +51,7 @@ const coverCache = new Map()  // id → { buffer, mime }  (extracted EPUB covers
 const CSV_FIELDS = [
   'title', 'author', 'year', 'isbn', 'rating', 'my_rating',
   'pages', 'cover_url', 'goodreads_url', 'shelf', 'epub_link',
+  'date_read', 'date_added',
 ]
 
 // ---- tiny XML helpers (RSS fields are simple, often CDATA-wrapped) ----
@@ -59,13 +67,19 @@ function upgradeCover(url) {
   return url ? url.replace(/\._S[XY]\d+_\.(jpg|png)/i, '.$1') : ''
 }
 
-function parseFeed(xml) {
+function parseFeed(xml, exclusiveShelf) {
   const items = xml.match(/<item>[\s\S]*?<\/item>/gi) || []
   return items.map(block => {
     const isbn = tag(block, 'isbn').replace(/\D/g, '')
     const bookId = tag(block, 'book_id')
     let cover = upgradeCover(tag(block, 'book_large_image_url') || tag(block, 'book_medium_image_url') || tag(block, 'book_image_url'))
     if (!cover && isbn) cover = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`
+    /* <user_shelves> holds only the *custom* shelves ("favourites",
+       "biographies") and is empty for a book sitting on nothing but an
+       exclusive shelf. The exclusive shelf is the feed we asked for, so it has
+       to come from the caller — reading it off the item is what made every
+       to-read book look "read". */
+    const custom = tag(block, 'user_shelves')
     return {
       title: tag(block, 'title'),
       author: tag(block, 'author_name') || 'Unknown',
@@ -76,16 +90,30 @@ function parseFeed(xml) {
       pages: tag(block, 'num_pages'),
       cover_url: cover,
       goodreads_url: bookId ? `https://www.goodreads.com/book/show/${bookId}` : '',
-      shelf: tag(block, 'user_shelves') || 'read',
+      shelf: custom ? `${exclusiveShelf}, ${custom}` : exclusiveShelf,
+      date_read: tag(block, 'user_read_at'),
+      date_added: tag(block, 'user_date_added'),
       epub_link: isbn ? `https://openlibrary.org/isbn/${isbn}` : '',
     }
   }).filter(b => b.title)
 }
 
-async function fetchGoodreads(userId) {
-  const all = []
+// The three shelves every Goodreads account has. A book lives on exactly one.
+const EXCLUSIVE_SHELVES = ['read', 'currently-reading', 'to-read']
+
+// "Lucy's bookshelf: read" → "Lucy". Gives a profile its display name without
+// scraping the profile page.
+function nameFromFeed(xml) {
+  const t = tag(xml, 'title')
+  const m = t.match(/^(.*?)'s bookshelf/i)
+  return (m ? m[1] : '').trim()
+}
+
+async function fetchShelf(userId, shelf) {
+  const books = []
+  let displayName = ''
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = `https://www.goodreads.com/review/list_rss/${userId}?shelf=ALL&page=${page}&per_page=100`
+    const url = `https://www.goodreads.com/review/list_rss/${userId}?shelf=${shelf}&page=${page}&per_page=${PER_PAGE}`
     let xml
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/rss+xml,text/xml' } })
@@ -98,12 +126,45 @@ async function fetchGoodreads(userId) {
       if (page === 1) throw e
       break
     }
-    const books = parseFeed(xml)
-    if (books.length === 0) break
-    all.push(...books)
-    if (books.length < 20) break  // last page
+    if (!displayName) displayName = nameFromFeed(xml)
+    const batch = parseFeed(xml, shelf)
+    books.push(...batch)
+    if (batch.length < PER_PAGE) break   // short page = last page
   }
-  return all
+  return { books, displayName }
+}
+
+async function fetchGoodreads(userId) {
+  const all = []
+  let displayName = ''
+  let firstError = null
+
+  for (const shelf of EXCLUSIVE_SHELVES) {
+    try {
+      const res = await fetchShelf(userId, shelf)
+      if (!displayName) displayName = res.displayName
+      all.push(...res.books)
+    } catch (e) {
+      // One empty or unreadable shelf shouldn't sink the whole import — a
+      // profile with nothing on "currently-reading" is completely normal.
+      if (!firstError) firstError = e
+    }
+  }
+
+  if (all.length === 0 && firstError) throw firstError
+
+  /* A book can appear on more than one shelf feed (Goodreads lets a review sit
+     on "read" and still be listed elsewhere). Keep the first occurrence, which
+     is the earliest shelf in EXCLUSIVE_SHELVES order. */
+  const seen = new Set()
+  const books = all.filter(b => {
+    const k = `${b.title}|${b.author}`.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+
+  return { books, displayName }
 }
 
 function toCSV(books) {
@@ -379,24 +440,44 @@ const server = http.createServer(async (req, res) => {
     return
   }
   const userId = match[0]
+  const cacheFile = path.join(DATA_DIR, `goodreads_${userId}.json`)
+  const wantsFresh = !!u.searchParams.get('refresh')
+
+  // Switching between profiles shouldn't re-scrape three shelves every time, so
+  // a snapshot is kept on disk and served until it ages out or is refreshed by
+  // hand. Guest profiles in particular are read far more often than they change.
+  if (!wantsFresh) {
+    try {
+      const cached = JSON.parse(await fs.readFile(cacheFile, 'utf8'))
+      if (cached?.books?.length && Date.now() - (cached.fetchedAt || 0) < CACHE_TTL_MS) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ...cached, cached: true, count: cached.books.length }))
+        return
+      }
+    } catch { /* no cache yet, or unreadable — fall through and fetch */ }
+  }
 
   try {
-    const books = await fetchGoodreads(userId)
+    const { books, displayName } = await fetchGoodreads(userId)
     if (books.length === 0) {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'No books found. The profile may be private or empty.' }))
       return
     }
+    const payload = { books, name: displayName, userId, fetchedAt: Date.now() }
     let saved = ''
     try {
       await fs.mkdir(DATA_DIR, { recursive: true })
+      await fs.writeFile(cacheFile, JSON.stringify(payload), 'utf8')
+      // The CSV is what you hand to Goodreads' own importer, so it's written
+      // alongside the cache rather than generated on demand.
       saved = `goodreads_${userId}.csv`
       await fs.writeFile(path.join(DATA_DIR, saved), toCSV(books), 'utf8')
     } catch (e) {
-      console.error('Could not persist CSV:', e.message)
+      console.error('Could not persist snapshot:', e.message)
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ books, saved, count: books.length }))
+    res.end(JSON.stringify({ ...payload, saved, count: books.length, cached: false }))
   } catch (e) {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ error: e.message || 'Failed to fetch Goodreads library.' }))

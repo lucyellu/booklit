@@ -8,7 +8,9 @@ import {
 } from '../../lib/bookMeta'
 import {
   X, BookOpen, ShoppingCart, Landmark, ExternalLink, Loader2, Plus, Check,
+  BookmarkPlus, Star,
 } from 'lucide-react'
+import { useProfiles } from '../../context/ProfileContext'
 
 /**
  * The right-hand detail panel — what you get when you pick a book in any of the
@@ -40,6 +42,106 @@ export function BookDetailPanel() {
   // Keyed on the book so per-book UI state (the broken-cover fallback) resets
   // when you switch books, instead of leaking from the previous one.
   return <DetailBody key={book.id} book={book} />
+}
+
+/** The three shelves a book can sit on, matching Goodreads' own exclusive set. */
+const SHELF_CHOICES: { id: string; label: string }[] = [
+  { id: 'currently-reading', label: 'Reading' },
+  { id: 'read', label: 'Read' },
+  { id: 'to-read', label: 'Want to read' },
+]
+
+function ShelfControls({ book }: { book: LocalBook }) {
+  const {
+    canEdit, setBookShelf, setBookRating, saveToMyLibrary, removeFromMyLibrary,
+  } = useBook()
+  const { activeProfile } = useProfiles()
+  const [justSaved, setJustSaved] = useState(false)
+
+  // Someone else's shelf is a reference, not a workspace — the useful verb is
+  // "put this on mine", not "change theirs".
+  if (!canEdit) {
+    return (
+      <section className="mt-6">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-accent-warm mb-2">
+          {activeProfile?.name ?? 'This shelf'}
+        </h3>
+        <button
+          onClick={() => { saveToMyLibrary(book); setJustSaved(true) }}
+          disabled={justSaved}
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition-colors ${
+            justSaved
+              ? 'border-transparent bg-accent text-on-accent'
+              : 'border-border-hover text-text-dim hover:border-accent hover:text-text'
+          }`}
+        >
+          {justSaved ? <Check className="w-4 h-4" /> : <BookmarkPlus className="w-4 h-4" />}
+          {justSaved ? 'Saved to your library' : 'Save to my library'}
+        </button>
+        <p className="text-[11px] text-text-muted mt-2 leading-snug">
+          Read-only — this is {activeProfile?.name ?? 'someone else'}’s shelf.
+        </p>
+      </section>
+    )
+  }
+
+  const current = SHELF_CHOICES.find(s => (book.shelf || '').includes(s.id))?.id
+    ?? (book.shelf === 'local' ? undefined : 'read')
+
+  return (
+    <section className="mt-6">
+      <h3 className="text-[10px] font-bold uppercase tracking-widest text-accent-warm mb-2">
+        Shelf
+      </h3>
+      <div className="flex flex-wrap gap-2">
+        {SHELF_CHOICES.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setBookShelf(book, s.id)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+              current === s.id
+                ? 'bg-accent text-on-accent border-transparent'
+                : 'border-border-hover text-text-dim hover:border-accent hover:text-text'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 mt-4">
+        <span className="text-[11px] text-text-muted">Your rating</span>
+        <div className="flex gap-0.5">
+          {[1, 2, 3, 4, 5].map(n => (
+            <button
+              key={n}
+              onClick={() => setBookRating(book, book.rating === n ? 0 : n)}
+              title={`${n} star${n > 1 ? 's' : ''}`}
+              className="p-0.5 text-text-muted hover:text-accent-warm transition-colors"
+            >
+              <Star
+                className={`w-3.5 h-3.5 ${
+                  (book.rating ?? 0) >= n ? 'fill-accent-warm text-accent-warm' : ''
+                }`}
+              />
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => removeFromMyLibrary(book)}
+          className="ml-auto text-[11px] text-text-muted hover:text-accent-warm transition-colors"
+          title="Hide this book from your library"
+        >
+          Remove
+        </button>
+      </div>
+
+      <p className="text-[11px] text-text-muted mt-3 leading-snug">
+        Saved in Booklit. Goodreads has no write API, so this doesn’t change your
+        shelf there — export a CSV from Settings to push it back.
+      </p>
+    </section>
+  )
 }
 
 function DetailBody({ book }: { book: LocalBook }) {
@@ -158,6 +260,10 @@ function DetailBody({ book }: { book: LocalBook }) {
               <ActionLink href={book.goodreadsUrl} icon={ExternalLink} label="Goodreads" />
             )}
           </div>
+
+          {/* Shelf controls. On your own library these edit it; on someone
+              else's the only sensible action is to take a copy. */}
+          <ShelfControls book={book} />
 
           {/* Meta grid */}
           <MetaGrid book={book} />

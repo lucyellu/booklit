@@ -1,7 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import {
+  createContext, useContext, useState, useEffect, useCallback, useMemo, useRef,
+  type ReactNode,
+} from 'react'
 import JSZip from 'jszip'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { useProfiles } from './ProfileContext'
+import { bookKey, type ShelfOverride } from '../lib/profiles'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -33,8 +38,11 @@ export interface TextHighlight {
   timestamp: string
 }
 
-/** Where a book entered the library. Drives the Libraries switcher. */
-export type BookSource = 'curated' | 'local' | 'goodreads' | 'upload'
+/**
+ * How a book entered the library. Note this is *not* whose library it is —
+ * that's `profileId`. Your own profile holds books from all four sources.
+ */
+export type BookSource = 'curated' | 'local' | 'goodreads' | 'upload' | 'saved'
 
 export interface LocalBook {
   id: string
@@ -46,6 +54,8 @@ export interface LocalBook {
   rating?: number
   /** Ingest path this book came from. Older persisted entries may lack it. */
   source?: BookSource
+  /** Whose shelf this book sits on. Absent on entries persisted before profiles. */
+  profileId?: string
   bookData?: Book
   /** External link from a CSV (e.g. OpenLibrary / Amazon) — used as a reading fallback. */
   epubLink?: string
@@ -149,8 +159,22 @@ interface BookContextType {
   importCSV: (file: File) => Promise<number>
   /** Pull a public Goodreads library by user id (via the local backend). Returns # added. */
   importGoodreads: (userId: string) => Promise<number>
+  /** Re-pull one profile's Goodreads shelf, ignoring the snapshot cache. */
+  syncProfile: (profileId: string, goodreadsUserId: string) => Promise<number>
+  /** Profile currently being fetched, or null. */
+  syncingProfileId: string | null
   /** Load the local books folder (L:\Media\Text\Books) via the backend. Returns # added. */
   importLocalLibrary: (refresh?: boolean) => Promise<number>
+
+  /* ---- Shelf editing. Goodreads has no write API, so these are Booklit's own
+     and are layered over the imported snapshot rather than pushed upstream. ---- */
+  /** Copy a book off the shelf you're browsing into your own library. */
+  saveToMyLibrary: (lb: LocalBook) => void
+  setBookShelf: (lb: LocalBook, shelf: string) => void
+  setBookRating: (lb: LocalBook, rating: number) => void
+  removeFromMyLibrary: (lb: LocalBook) => void
+  /** True when the open profile is yours, so edits apply. Guests are read-only. */
+  canEdit: boolean
 }
 
 const BookContext = createContext<BookContextType | undefined>(undefined)
@@ -364,7 +388,85 @@ function findEpubForBook(book: LocalBook, manifest: EpubManifest | null): EpubSo
   return null
 }
 
-function parseCSVToBooks(text: string): LocalBook[] {
+/** Cache identity for a profile's shelf: who it is *and* what it reads from. */
+function profileCacheKey(p: { id: string; goodreadsUserId?: string; bundledCsv?: string } | null): string {
+  if (!p) return ''
+  return `${p.id}::${p.goodreadsUserId ?? p.bundledCsv ?? 'none'}`
+}
+
+/** Backend `/api/local-books` rows → library entries. Always the owner's. */
+function mapLocalFolderBooks(rows: unknown): LocalBook[] {
+  return ((rows as Record<string, string | number>[]) || []).map(b => ({
+    id: String(b.id),
+    title: String(b.title),
+    author: String(b.author || ''),
+    format: String(b.format),
+    coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
+    srcUrl: `/files/${String(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
+    shelf: 'local',
+    source: 'local' as const,
+    profileId: 'owner',
+    // When the file appeared in the books folder — what "date added" sorts on.
+    // The backend reads it from the filesystem.
+    addedAt: typeof b.addedAt === 'number' && b.addedAt > 0 ? b.addedAt : undefined,
+    lastRead: new Date().toISOString(),
+    progress: 0,
+    pages: 0,
+  })).filter(b => b.title)
+}
+
+/** Backend `/api/goodreads` rows → library entries for one profile. */
+function mapGoodreadsBooks(rows: unknown, userId: string, profileId: string): LocalBook[] {
+  return ((rows as Record<string, string>[]) || []).map((b, i) => ({
+    // Positional, but scoped by profile — two people's shelves can't collide.
+    id: `gr-${userId}-${i}`,
+    title: b.title,
+    author: b.author || '',
+    isbn: b.isbn || undefined,
+    coverUrl: b.cover_url || (b.isbn ? `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg` : undefined),
+    shelf: b.shelf || 'read',
+    rating: parseInt(b.my_rating || '0') || 0,
+    year: parseInt(b.year || '0') || undefined,
+    source: 'goodreads' as const,
+    profileId,
+    goodreadsUrl: b.goodreads_url || undefined,
+    epubLink: b.epub_link || undefined,
+    addedAt: b.date_added ? Date.parse(b.date_added) || undefined : undefined,
+    lastRead: new Date().toISOString(),
+    progress: 0,
+    pages: parseInt(b.pages || '0') || 0,
+  })).filter(b => b.title)
+}
+
+/** Books pulled into your library off someone else's shelf. */
+function savedBooksFrom(
+  overrides: Record<string, ShelfOverride>,
+  profileId: string,
+): LocalBook[] {
+  const out: LocalBook[] = []
+  for (const [key, ov] of Object.entries(overrides)) {
+    if (!ov.saved || ov.removed) continue
+    out.push({
+      id: `saved-${key}`,
+      title: ov.saved.title,
+      author: ov.saved.author || '',
+      coverUrl: ov.saved.coverUrl,
+      isbn: ov.saved.isbn,
+      shelf: ov.shelf || 'to-read',
+      rating: ov.rating ?? 0,
+      source: 'saved',
+      profileId,
+      notes: ov.notes,
+      lastRead: new Date(ov.updatedAt).toISOString(),
+      addedAt: ov.updatedAt,
+      progress: 0,
+      pages: 0,
+    })
+  }
+  return out
+}
+
+function parseCSVToBooks(text: string, profileId = 'owner'): LocalBook[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim())
   if (lines.length < 2) return []
   const headers = parseCSVRow(lines[0]).map(h => h.toLowerCase().trim())
@@ -432,6 +534,7 @@ function parseCSVToBooks(text: string): LocalBook[] {
       shelf: shelf || 'read',
       rating,
       source: 'curated',
+      profileId,
       epubLink: epubLink || undefined,
       lastRead: new Date().toISOString(),
       progress: 0,
@@ -473,114 +576,165 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [autoPlayNext, setAutoPlayNext] = useState(true)
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [textHighlights, setTextHighlights] = useState<TextHighlight[]>([])
-  const [localBooks, setLocalBooks] = useState<LocalBook[]>([])
   const [bookLoadingId, setBookLoadingId] = useState<string | null>(null)
   const [bookError, setBookError] = useState<string | null>(null)
   const manifestRef = useRef<EpubManifest | null>(null)
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('booklit-library')
-      if (stored) setLocalBooks(JSON.parse(stored))
-    } catch { /* ignore */ }
-  }, [])
+  const {
+    activeProfile, activeProfileId, overrides, ready: profilesReady,
+    markSynced, setOverride,
+  } = useProfiles()
+  const isOwnerProfile = activeProfile?.kind === 'owner'
 
-  // Auto-connect to the bundled library: load the EPUB manifest + curated shelf CSV
-  // on first launch so the shelf is populated without any manual import.
+  /* Shelf books, keyed by whose shelf they are. Keeping them in separate
+     buckets rather than one array is the whole fix: two people's Goodreads
+     imports can no longer dedupe into each other.
+
+     The key carries the shelf's *source* as well as the profile id, because
+     "owner" is a stable id across accounts — without it, signing into a second
+     account would show the first account's books until a refetch, and
+     re-pointing your profile at a different Goodreads user would show the old
+     one. Either way the entry simply misses and reloads. */
+  const [booksByProfile, setBooksByProfile] = useState<Record<string, LocalBook[]>>({})
+  const cacheKey = profileCacheKey(activeProfile)
+  /* Local folder + hand-uploaded books. These are yours by definition, so they
+     ride with the owner profile rather than any particular shelf. */
+  const [ownerExtras, setOwnerExtras] = useState<LocalBook[]>([])
+  /* id → parsed content, filled in on demand by openBook. Held apart from the
+     book lists so re-syncing a shelf doesn't throw away what's been parsed. */
+  const [parsed, setParsed] = useState<Record<string, Book>>({})
+  const [syncingProfileId, setSyncingProfileId] = useState<string | null>(null)
+
+  // The EPUB manifest is shelf-independent — it just says which titles have a
+  // readable file bundled — so it loads once, for everybody.
   useEffect(() => {
-    let cancelled = false
     ;(async () => {
       try {
         const r = await fetch('/books/patrick/epubs/manifest.json')
         if (r.ok) manifestRef.current = await r.json()
       } catch { /* no manifest — bundled reading just won't resolve */ }
+    })()
+  }, [])
 
-      try {
-        const r = await fetch('/data/patrick_collison_bookshelf.csv')
-        if (r.ok) {
-          const shelfBooks = parseCSVToBooks(await r.text())
-          if (!cancelled && shelfBooks.length > 0) {
-            setLocalBooks(prev => {
-              const fromCsv = new Map(shelfBooks.map(b => [normaliseTitle(b.title), b]))
+  // Hand-uploaded books, restored from the last session.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('booklit-library')
+      if (!stored) return
+      const books: LocalBook[] = JSON.parse(stored)
+      setOwnerExtras(prev => {
+        const have = new Set(prev.map(b => b.id))
+        return [...prev, ...books.filter(b => !have.has(b.id))]
+      })
+    } catch { /* ignore */ }
+  }, [])
 
-              // Backfill bibliographic detail onto books already in state —
-              // in practice the manually-uploaded ones restored from
-              // localStorage, since the merge below only ever adds *new*
-              // titles. Reading state (progress, lastRead, bookData) and
-              // anything the book already has always wins over the CSV.
-              const merged = prev.map(b => {
-                const csv = fromCsv.get(normaliseTitle(b.title))
-                if (!csv || b.source === 'local') return b
-                return {
-                  ...b,
-                  subtitle: b.subtitle ?? csv.subtitle,
-                  year: b.year ?? csv.year,
-                  publisher: b.publisher ?? csv.publisher,
-                  language: b.language ?? csv.language,
-                  edition: b.edition ?? csv.edition,
-                  wordCount: b.wordCount ?? csv.wordCount,
-                  notes: b.notes ?? csv.notes,
-                  goodreadsUrl: b.goodreadsUrl ?? csv.goodreadsUrl,
-                  buyLink: b.buyLink ?? csv.buyLink,
-                  notesSearchUrl: b.notesSearchUrl ?? csv.notesSearchUrl,
-                  coverArtSpine: b.coverArtSpine ?? csv.coverArtSpine,
-                  coverArtBack: b.coverArtBack ?? csv.coverArtBack,
-                  mesh3d: b.mesh3d ?? csv.mesh3d,
-                  pages: b.pages || csv.pages,
-                  isbn: b.isbn ?? csv.isbn,
-                }
-              })
-
-              const existing = new Set(prev.map(b => normaliseTitle(b.title)))
-              const fresh = shelfBooks.filter(b => !existing.has(normaliseTitle(b.title)))
-              return [...merged, ...fresh]
-            })
-          }
-        }
-      } catch { /* offline / missing data — keep whatever's in localStorage */ }
-
-      // Local books folder (L:\Media\Text\Books) via the backend, if it's running.
+  // Local books folder (L:\Media\Text\Books) via the backend, if it's running.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
       try {
         const r = await fetch('/api/local-books')
-        if (r.ok) {
-          const data = await r.json()
-          const localItems: LocalBook[] = (data.books || []).map((b: Record<string, string | number>) => ({
-            id: String(b.id),
-            title: String(b.title),
-            author: String(b.author || ''),
-            format: String(b.format),
-            coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
-            srcUrl: `/files/${String(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
-            shelf: 'local',
-            source: 'local',
-            // When the file appeared in the books folder — what "date added"
-            // sorts on. The backend reads it from the filesystem.
-            addedAt: typeof b.addedAt === 'number' && b.addedAt > 0 ? b.addedAt : undefined,
-            lastRead: new Date().toISOString(),
-            progress: 0,
-            pages: 0,
-          })).filter((b: LocalBook) => b.title)
-          if (!cancelled && localItems.length > 0) {
-            setLocalBooks(prev => {
-              const ids = new Set(prev.map(b => b.id))
-              return [...prev, ...localItems.filter(b => !ids.has(b.id))]
-            })
-          }
+        if (!r.ok) return
+        const data = await r.json()
+        const items = mapLocalFolderBooks(data.books)
+        if (!cancelled && items.length > 0) {
+          setOwnerExtras(prev => {
+            const ids = new Set(prev.map(b => b.id))
+            return [...prev, ...items.filter(b => !ids.has(b.id))]
+          })
         }
       } catch { /* backend down — local library just won't appear */ }
     })()
     return () => { cancelled = true }
   }, [])
 
+  /**
+   * Load whichever shelf is being looked at, once. Switching back to a profile
+   * already in the cache is instant; the backend caches the Goodreads snapshot
+   * behind that, so even a cold switch is one request.
+   */
+  useEffect(() => {
+    if (!profilesReady || !activeProfile || !cacheKey) return
+    if (booksByProfile[cacheKey]) return                // already loaded
+
+    let cancelled = false
+    const profile = activeProfile
+    const key = cacheKey
+    setSyncingProfileId(profile.id)
+    ;(async () => {
+      try {
+        let books: LocalBook[] = []
+        if (profile.bundledCsv) {
+          const r = await fetch(profile.bundledCsv)
+          if (r.ok) books = parseCSVToBooks(await r.text(), profile.id)
+        } else if (profile.goodreadsUserId) {
+          const r = await fetch(`/api/goodreads?userid=${encodeURIComponent(profile.goodreadsUserId)}`)
+          if (r.ok) {
+            const data = await r.json()
+            if (!data.error) books = mapGoodreadsBooks(data.books, profile.goodreadsUserId, profile.id)
+          }
+        }
+        if (cancelled) return
+        // Cache even an empty result, so a profile with no shelf connected
+        // doesn't re-request on every switch.
+        setBooksByProfile(prev => ({ ...prev, [key]: books }))
+        if (books.length > 0) markSynced(profile.id)
+      } catch {
+        if (!cancelled) setBooksByProfile(prev => ({ ...prev, [key]: [] }))
+      } finally {
+        if (!cancelled) setSyncingProfileId(null)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [activeProfile, cacheKey, profilesReady, booksByProfile, markSynced])
+
   useEffect(() => {
     try {
       // Only persist manually-uploaded books. Shelf / Goodreads / local-library
       // books are re-fetched from their source on startup, and caching their
       // parsed full text would blow the localStorage quota.
-      const saveable = localBooks.filter(b => b.bookData && b.id.startsWith('book-'))
+      const saveable = ownerExtras
+        .filter(b => b.id.startsWith('book-'))
+        .map(b => (parsed[b.id] ? { ...b, bookData: parsed[b.id] } : b))
+        .filter(b => b.bookData)
       localStorage.setItem('booklit-library', JSON.stringify(saveable))
     } catch { /* quota */ }
-  }, [localBooks])
+  }, [ownerExtras, parsed])
+
+  /**
+   * What the UI sees: one profile's books, never a blend of several.
+   *
+   * Your own library is the shelf you connected plus everything that's yours by
+   * nature — local files, uploads, and anything saved off someone else's shelf.
+   * A guest profile is just their shelf, read-only.
+   */
+  const localBooks = useMemo<LocalBook[]>(() => {
+    const shelf = booksByProfile[cacheKey] ?? []
+    if (!isOwnerProfile) {
+      return shelf.map(b => (parsed[b.id] ? { ...b, bookData: parsed[b.id] } : b))
+    }
+
+    const saved = savedBooksFrom(overrides, activeProfileId)
+    const seen = new Set<string>()
+    const out: LocalBook[] = []
+    for (const b of [...shelf, ...ownerExtras, ...saved]) {
+      const ov = overrides[bookKey(b.title, b.author)]
+      if (ov?.removed) continue
+      // A saved book that's since turned up on the real shelf is the same book.
+      const k = bookKey(b.title, b.author)
+      if (b.source === 'saved' && seen.has(k)) continue
+      seen.add(k)
+      out.push({
+        ...b,
+        ...(parsed[b.id] ? { bookData: parsed[b.id] } : null),
+        ...(ov?.shelf ? { shelf: ov.shelf } : null),
+        ...(ov?.rating !== undefined ? { rating: ov.rating } : null),
+        ...(ov?.notes ? { notes: ov.notes } : null),
+      })
+    }
+    return out
+  }, [booksByProfile, cacheKey, activeProfileId, isOwnerProfile, ownerExtras, overrides, parsed])
 
   const currentChapter = book?.chapters[currentChapterIndex] ?? null
   const totalPages = currentChapter?.content.length ?? 0
@@ -600,17 +754,20 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const setBook = useCallback((newBook: Book) => {
     activateBook(newBook)
 
+    const id = `book-${Date.now()}`
     const entry: LocalBook = {
-      id: `book-${Date.now()}`,
+      id,
       title: newBook.title,
       author: newBook.author,
       source: 'upload',
+      profileId: 'owner',
       bookData: newBook,
       lastRead: new Date().toISOString(),
       progress: 0,
       pages: newBook.chapters.reduce((sum, ch) => sum + ch.content.length, 0),
     }
-    setLocalBooks(prev => {
+    setParsed(prev => ({ ...prev, [id]: newBook }))
+    setOwnerExtras(prev => {
       if (prev.some(b => b.title === entry.title && b.author === entry.author)) return prev
       return [entry, ...prev]
     })
@@ -644,7 +801,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
           data = await parseEPUB(new File([blob], `${lb.title}.epub`))
           if (lb.author && data.author === 'Unknown Author') data.author = lb.author
         }
-        setLocalBooks(prev => prev.map(b => (b.id === lb.id ? { ...b, bookData: data } : b)))
+        setParsed(prev => ({ ...prev, [lb.id]: data }))
         activateBook(data)
         return true
       } catch (err) {
@@ -677,7 +834,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       const data = await parseEPUB(file)
       // Preserve the shelf metadata's title/author when the EPUB lacks them.
       if (lb.author && data.author === 'Unknown Author') data.author = lb.author
-      setLocalBooks(prev => prev.map(b => (b.id === lb.id ? { ...b, bookData: data } : b)))
+      setParsed(prev => ({ ...prev, [lb.id]: data }))
       activateBook(data)
       return true
     } catch (err) {
@@ -865,47 +1022,54 @@ export function BookProvider({ children }: { children: ReactNode }) {
     setBook(bookData)
   }, [setBook])
 
+  // A CSV you drop in is your own shelf data, so it lands in your library.
   const importCSV = useCallback(async (file: File): Promise<number> => {
     const text = await file.text()
-    const newBooks = parseCSVToBooks(text)
+    const newBooks = parseCSVToBooks(text, 'owner')
     if (newBooks.length === 0) return 0
-    setLocalBooks(prev => {
-      const existing = new Set(prev.map(b => b.title.toLowerCase()))
-      const fresh = newBooks.filter(b => !existing.has(b.title.toLowerCase()))
+    setOwnerExtras(prev => {
+      const existing = new Set(prev.map(b => normaliseTitle(b.title)))
+      const fresh = newBooks.filter(b => !existing.has(normaliseTitle(b.title)))
       return [...prev, ...fresh]
     })
     return newBooks.length
   }, [])
 
-  const importGoodreads = useCallback(async (userId: string): Promise<number> => {
-    const resp = await fetch(`/api/goodreads?userid=${encodeURIComponent(userId)}`)
-    if (!resp.ok) throw new Error(`Backend error (${resp.status}). Is the Goodreads server running?`)
-    const data = await resp.json()
-    if (data.error) throw new Error(data.error)
+  /**
+   * Re-pull a profile's Goodreads shelf, bypassing the backend snapshot cache.
+   * Replaces that profile's books outright rather than merging — a book you
+   * removed on Goodreads should disappear here too. Your own edits survive
+   * because they live in the override layer, not in these entries.
+   */
+  const syncProfile = useCallback(async (
+    profileId: string,
+    goodreadsUserId: string,
+  ): Promise<number> => {
+    setSyncingProfileId(profileId)
+    try {
+      const resp = await fetch(
+        `/api/goodreads?userid=${encodeURIComponent(goodreadsUserId)}&refresh=1`)
+      if (!resp.ok) throw new Error(`Backend error (${resp.status}). Is the Booklit server running?`)
+      const data = await resp.json()
+      if (data.error) throw new Error(data.error)
 
-    const books: LocalBook[] = (data.books || []).map((b: Record<string, string>, i: number) => ({
-      id: `gr-${userId}-${i}`,
-      title: b.title,
-      author: b.author || '',
-      isbn: b.isbn || undefined,
-      coverUrl: b.cover_url || (b.isbn ? `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg` : undefined),
-      shelf: b.shelf || 'read',
-      rating: parseInt(b.my_rating || '0') || 0,
-      source: 'goodreads',
-      epubLink: b.epub_link || undefined,
-      lastRead: new Date().toISOString(),
-      progress: 0,
-      pages: parseInt(b.pages || '0') || 0,
-    })).filter((b: LocalBook) => b.title)
+      const books = mapGoodreadsBooks(data.books, goodreadsUserId, profileId)
+      setBooksByProfile(prev => ({
+        ...prev,
+        [profileCacheKey({ id: profileId, goodreadsUserId })]: books,
+      }))
+      if (books.length > 0) markSynced(profileId)
+      return books.length
+    } finally {
+      setSyncingProfileId(null)
+    }
+  }, [markSynced])
 
-    if (books.length === 0) return 0
-    setLocalBooks(prev => {
-      const existing = new Set(prev.map(b => normaliseTitle(b.title)))
-      const fresh = books.filter(b => !existing.has(normaliseTitle(b.title)))
-      return [...prev, ...fresh]
-    })
-    return books.length
-  }, [])
+  /** Back-compat wrapper: pull a shelf into whichever profile is open. */
+  const importGoodreads = useCallback(
+    (userId: string) => syncProfile(activeProfileId, userId),
+    [syncProfile, activeProfileId],
+  )
 
   const importLocalLibrary = useCallback(async (refresh = false): Promise<number> => {
     const resp = await fetch(`/api/local-books${refresh ? '?refresh=1' : ''}`)
@@ -913,28 +1077,42 @@ export function BookProvider({ children }: { children: ReactNode }) {
     const data = await resp.json()
     if (data.error) throw new Error(data.error)
 
-    const books: LocalBook[] = (data.books || []).map((b: Record<string, string>) => ({
-      id: b.id,
-      title: b.title,
-      author: b.author || '',
-      format: b.format,
-      coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
-      srcUrl: `/files/${(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
-      shelf: 'local',
-      source: 'local',
-      lastRead: new Date().toISOString(),
-      progress: 0,
-      pages: 0,
-    })).filter((b: LocalBook) => b.title)
-
+    const books = mapLocalFolderBooks(data.books)
     if (books.length === 0) return 0
-    setLocalBooks(prev => {
+    setOwnerExtras(prev => {
       const existingIds = new Set(prev.map(b => b.id))
-      const fresh = books.filter(b => !existingIds.has(b.id))
-      return [...prev, ...fresh]
+      return [...prev, ...books.filter(b => !existingIds.has(b.id))]
     })
     return books.length
   }, [])
+
+  /** Pull a book off whatever shelf you're browsing into your own library. */
+  const saveToMyLibrary = useCallback((lb: LocalBook) => {
+    setOverride(bookKey(lb.title, lb.author), {
+      saved: {
+        title: lb.title,
+        author: lb.author || undefined,
+        coverUrl: lb.coverUrl,
+        isbn: lb.isbn,
+        from: lb.profileId,
+      },
+      shelf: 'to-read',
+      removed: false,
+    })
+  }, [setOverride])
+
+  /** Move a book to a different shelf in your library. Local — Goodreads is read-only. */
+  const setBookShelf = useCallback((lb: LocalBook, shelf: string) => {
+    setOverride(bookKey(lb.title, lb.author), { shelf })
+  }, [setOverride])
+
+  const setBookRating = useCallback((lb: LocalBook, rating: number) => {
+    setOverride(bookKey(lb.title, lb.author), { rating })
+  }, [setOverride])
+
+  const removeFromMyLibrary = useCallback((lb: LocalBook) => {
+    setOverride(bookKey(lb.title, lb.author), { removed: true })
+  }, [setOverride])
 
   useEffect(() => {
     setHighlightedWordIndex(-1)
@@ -971,6 +1149,9 @@ export function BookProvider({ children }: { children: ReactNode }) {
       setSentenceSpacing, setWordSpacing, setFontFamily, setHighlightColor, setAutoPlayNext,
       addBookmark, removeBookmark, goToBookmark,
       addTextHighlight, removeTextHighlight, uploadFile, importCSV, importGoodreads, importLocalLibrary,
+      syncProfile, syncingProfileId,
+      saveToMyLibrary, setBookShelf, setBookRating, removeFromMyLibrary,
+      canEdit: isOwnerProfile,
     }}>
       {children}
     </BookContext.Provider>

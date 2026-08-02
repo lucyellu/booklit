@@ -247,7 +247,7 @@ export function sourceCounts(
   opts: FilterOptions,
   isReadable: (b: LocalBook) => boolean,
 ): Record<BookSource, number> {
-  const sources: BookSource[] = ['curated', 'local', 'goodreads', 'upload']
+  const sources: BookSource[] = ['curated', 'local', 'goodreads', 'upload', 'saved']
   const out = {} as Record<BookSource, number>
   for (const src of sources) {
     out[src] = applyFilters(

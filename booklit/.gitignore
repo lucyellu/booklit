@@ -15,9 +15,15 @@ dist-ssr
 
 # Bundled / generated library data (large binaries, machine-local)
 public/books/
+# Cached Goodreads snapshots — someone's reading history, not source.
 public/data/goodreads_*.csv
+public/data/goodreads_*.json
 # but keep the curated shelf CSV tracked:
 !public/data/patrick_collison_bookshelf.csv
+
+# Firebase credentials
+.env
+.env.local
 
 # Embedded reader build artifact (regenerate with: npm run build:reader)
 public/reader/

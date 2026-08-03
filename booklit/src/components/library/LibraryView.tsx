@@ -12,19 +12,34 @@ import {
 import type { SortKey } from '../../lib/filterBooks'
 import { authorHue, spineWidth, hasDistinctSpineArt } from '../../lib/bookMeta'
 import { findList } from '../../lib/curatedLists'
-import type { CardMode } from '../../context/AppContext'
+import type { CardMode, LibraryViewMode } from '../../context/AppContext'
 import {
   Loader2, X, ChevronLeft, ChevronRight, BookOpen, ShoppingCart,
   ArrowUpDown, ChevronDown, ArrowUpNarrowWide, ArrowDownWideNarrow,
 } from 'lucide-react'
 
-const PAGE_SIZE = 300
+/**
+ * How many books a page holds, per view.
+ *
+ * The 3D scenes cap what they will build — 160 meshes, 40 models — so a flat
+ * 300 per page meant the pager promised books the scene then silently dropped,
+ * and the outliner had no page to send you to for them. Paging in the size the
+ * view can actually draw makes "page 3 of 18" true and makes every book in the
+ * library reachable.
+ */
+const PAGE_SIZES: Record<LibraryViewMode, number> = {
+  flat: 300,
+  css3d: 300,
+  webgl: 160,
+  models: 40,
+}
 
 export function LibraryView() {
   const {
     libraryView, openReader, shelfFilter, searchQuery, readableOnly,
     availability, librarySource, collectionId, collections, listId,
-    cardMode, openDetail, detailBookId, sortKey, sortDir,
+    cardMode, openDetail, detailBookId, sortKey, sortDir, requestFocus, requestReset,
+    registerRevealHandler,
   } = useApp()
   const {
     localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable,
@@ -54,20 +69,73 @@ export function LibraryView() {
   )
 
   const activeCollection = collections.find(c => c.id === collectionId) ?? null
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageSize = PAGE_SIZES[libraryView]
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
 
   // Reset to the first page whenever the result set changes.
   useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, listId, sortKey, sortDir])
   useEffect(() => { if (page > totalPages - 1) setPage(0) }, [page, totalPages])
 
   const pageItems = useMemo(
-    () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
-    [filtered, page],
+    () => filtered.slice(page * pageSize, page * pageSize + pageSize),
+    [filtered, page, pageSize],
   )
+
+  /* Reveal: the outliner can name any book in the library, including one the
+     stage isn't showing. Only this component knows the filtered order the pages
+     are cut from, so it owns the "get that book on stage and snap to it" step
+     and the panel just asks for it. */
+  const pendingRevealRef = useRef<string | null>(null)
+  useEffect(() => {
+    registerRevealHandler(id => {
+      const idx = filtered.findIndex(b => b.id === id)
+      if (idx < 0) return
+      openDetail(id)
+      const target = Math.floor(idx / pageSize)
+      // Focus by id rather than "the selection": the selection was set one line
+      // ago and hasn't reached the scene yet.
+      if (target === page) { requestFocus(id); return }
+      pendingRevealRef.current = id
+      setPage(target)
+    })
+    return () => registerRevealHandler(null)
+  }, [registerRevealHandler, filtered, page, pageSize, openDetail, requestFocus])
+
+  // The camera can't point at a book the scene hasn't built, so a reveal that
+  // had to change page finishes here, once the new page is on stage. The scene
+  // is a child, so its sync has already run by the time this does.
+  useEffect(() => {
+    const id = pendingRevealRef.current
+    if (!id || !pageItems.some(b => b.id === id)) return
+    pendingRevealRef.current = null
+    requestFocus(id)
+  }, [pageItems, requestFocus])
 
   const handleOpen = (lb: LocalBook) => {
     openBook(lb).then(ok => { if (ok) openReader() })
   }
+
+  // 'F' snaps the camera to whichever book is selected in the active 3D scene,
+  // or backs the camera out if nothing is. 'R' always clears the selection and
+  // resets the camera to frame the whole arrangement, even if nothing about
+  // the layout itself changed — the fallback for "the view has drifted and
+  // clicking empty space isn't bringing it back." Both are no-ops in Flat,
+  // and while typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isFocus = e.key === 'f' || e.key === 'F'
+      const isReset = e.key === 'r' || e.key === 'R'
+      if (!isFocus && !isReset) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      e.preventDefault()
+      if (isFocus) requestFocus()
+      else requestReset()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [requestFocus, requestReset])
 
   /* An empty shelf now means one of three different things, and saying which
      is the difference between "it's working" and "it's broken". */
@@ -92,8 +160,8 @@ export function LibraryView() {
     )
   }
 
-  const rangeStart = filtered.length === 0 ? 0 : page * PAGE_SIZE + 1
-  const rangeEnd = Math.min(filtered.length, (page + 1) * PAGE_SIZE)
+  const rangeStart = filtered.length === 0 ? 0 : page * pageSize + 1
+  const rangeEnd = Math.min(filtered.length, (page + 1) * pageSize)
 
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -358,9 +426,12 @@ function CardFace({ book, mode }: { book: LocalBook; mode: CardMode }) {
 
 /**
  * One click picks a book and fills the detail panel; a double click opens it in
- * the reader. Same contract in all four views — it used to differ per view, and
- * a plain click in the flat grid opened a book outright, which meant there was
- * no way to look one up without committing to reading it.
+ * the reader. A plain click used to open a book outright here, which meant
+ * there was no way to look one up without committing to reading it.
+ *
+ * The three 3D views (2D/3D/4D) repurpose double-click to snap the camera onto
+ * the book instead — they have a camera to snap, and the panel's "Read free"
+ * button covers reading. Flat has no camera, so double-click still reads here.
  */
 function FlatGrid({
   localBooks, onOpen, onSelect, selectedId, loadingId, cardMode,
@@ -372,6 +443,13 @@ function FlatGrid({
   loadingId: string | null
   cardMode: CardMode
 }) {
+  // Flat has no camera to snap, so "reveal" here means scrolling the card into
+  // view — the same job 'F' does in the 3D views.
+  const selectedRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selectedId])
+
   if (localBooks.length === 0) {
     return <p className="text-text-muted text-sm">No books match this filter.</p>
   }
@@ -389,6 +467,7 @@ function FlatGrid({
         return (
           <div
             key={lb.id}
+            ref={lb.id === selectedId ? selectedRef : undefined}
             className={`group relative ${isSpine ? '' : 'text-left'}`}
             style={isSpine ? { width: spineWidth(lb.pages) } : undefined}
           >

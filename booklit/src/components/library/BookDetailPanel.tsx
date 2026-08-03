@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { useTheme } from '../../context/ThemeContext'
-import type { LocalBook } from '../../context/BookContext'
+import type { LocalBook, } from '../../context/BookContext'
+import type { RightPanelTab } from '../../context/AppContext'
+import { OutlinePanel } from './OutlinePanel'
 import {
   authorHue, metaRows, shelfDisplay, shelfEmoji,
 } from '../../lib/bookMeta'
 import {
   X, BookOpen, ShoppingCart, Landmark, ExternalLink, Loader2, Plus, Check,
-  BookmarkPlus, Star,
+  BookmarkPlus, Star, Focus as FocusIcon, Info, ListTree,
+  PanelRight, PanelRightClose,
 } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
 
@@ -19,12 +22,17 @@ import { useProfiles } from '../../context/ProfileContext'
  * author-tinted shelf badge are the two bits that carried the original's
  * character, so they're kept.
  *
- * It docks into the shell rather than floating over it behind a scrim, because
- * picking a *different* book is the most likely next thing you'll do and a
- * scrim would eat that click. The library keeps working with the panel open.
+ * There is no scrim either way, because picking a *different* book is the most
+ * likely next thing you'll do and a scrim would eat that click. In the flat
+ * grid it docks into the shell and the grid reflows around it; over the 3D
+ * views it floats, so that selecting a book leaves the canvas — and therefore
+ * the camera — completely alone. See `floating` below.
  */
 export function BookDetailPanel() {
-  const { detailBookId, closeDetail } = useApp()
+  const {
+    detailBookId, closeDetail, view, libraryView,
+    rightPanelOpen, rightPanelTab, toggleRightPanel, setRightPanelTab,
+  } = useApp()
   const { localBooks } = useBook()
 
   useEffect(() => {
@@ -37,11 +45,137 @@ export function BookDetailPanel() {
   const book = detailBookId
     ? localBooks.find(b => b.id === detailBookId) ?? null
     : null
-  if (!book) return null
 
-  // Keyed on the book so per-book UI state (the broken-cover fallback) resets
-  // when you switch books, instead of leaking from the previous one.
-  return <DetailBody key={book.id} book={book} />
+  // The outline lists the library, so it's offered where there's a library to
+  // list. Everywhere else the panel is what it always was: one book's details,
+  // and nothing at all without a book.
+  const canOutline = view === 'library'
+  const tab: RightPanelTab = canOutline ? rightPanelTab : 'details'
+  if (!book && !canOutline) return null
+
+  /* Over the 3D views, not beside them. Docking narrows the canvas, and a
+     narrower canvas is a different projection — the whole arrangement slides
+     and re-crops the instant you select a book, which reads as the camera
+     jumping on its own. The flat grid reflows happily, so there it still
+     pushes the content over. */
+  const floating = view === 'library' && libraryView !== 'flat'
+  const place = floating
+    ? 'absolute right-0 top-0 bottom-0 z-30 shadow-2xl'
+    : 'relative flex-shrink-0'
+
+  if (!rightPanelOpen) {
+    return (
+      <div className={`w-11 h-full bg-bg-surface border-l border-border flex flex-col items-center gap-1 py-3 ${place}`}>
+        <RailButton
+          icon={PanelRight}
+          label="Expand the panel"
+          onClick={toggleRightPanel}
+        />
+        <div className="w-5 h-px bg-border my-1" />
+        <RailButton
+          icon={Info}
+          label={book ? `Details — ${book.title}` : 'Details'}
+          // The dot is the whole reason a click on a book doesn't force the
+          // panel open: it says "there's a selection in here" without taking
+          // the stage back off you.
+          dot={!!book}
+          onClick={() => setRightPanelTab('details')}
+        />
+        {canOutline && (
+          <RailButton
+            icon={ListTree}
+            label="Outline — every book in this shelf"
+            onClick={() => setRightPanelTab('outline')}
+          />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <aside
+      aria-label={tab === 'outline' ? 'Outline' : book?.title ?? 'Details'}
+      className={`w-[360px] xl:w-[400px] h-full flex flex-col bg-bg-surface border-l border-border ${place}`}
+    >
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border flex-shrink-0">
+        <Tab
+          active={tab === 'details'}
+          onClick={() => setRightPanelTab('details')}
+          icon={Info}
+          label="Details"
+        />
+        {canOutline && (
+          <Tab
+            active={tab === 'outline'}
+            onClick={() => setRightPanelTab('outline')}
+            icon={ListTree}
+            label="Outline"
+          />
+        )}
+        <div className="flex-1" />
+        <button
+          onClick={toggleRightPanel}
+          title="Collapse the panel"
+          aria-label="Collapse the panel"
+          className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-bg transition-colors"
+        >
+          <PanelRightClose className="w-4 h-4" />
+        </button>
+      </div>
+
+      {tab === 'outline' ? (
+        <OutlinePanel />
+      ) : book ? (
+        // Keyed on the book so per-book UI state (the broken-cover fallback)
+        // resets when you switch books, instead of leaking from the previous one.
+        <DetailBody key={book.id} book={book} />
+      ) : (
+        <p className="flex-1 flex items-center justify-center px-8 text-center text-[12.5px] text-text-muted">
+          Pick a book to see it here.
+        </p>
+      )}
+    </aside>
+  )
+}
+
+function Tab({ active, onClick, icon: Icon, label }: {
+  active: boolean
+  onClick: () => void
+  icon: typeof Info
+  label: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+        active ? 'bg-bg text-text' : 'text-text-muted hover:text-text-dim'
+      }`}
+    >
+      <Icon className="w-3.5 h-3.5" />
+      {label}
+    </button>
+  )
+}
+
+function RailButton({ icon: Icon, label, onClick, dot }: {
+  icon: typeof Info
+  label: string
+  onClick: () => void
+  dot?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="relative p-2 rounded-lg text-text-muted hover:text-text hover:bg-bg transition-colors"
+    >
+      <Icon className="w-4 h-4" />
+      {dot && (
+        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" />
+      )}
+    </button>
+  )
 }
 
 /** The three shelves a book can sit on, matching Goodreads' own exclusive set. */
@@ -145,7 +279,9 @@ function ShelfControls({ book }: { book: LocalBook }) {
 }
 
 function DetailBody({ book }: { book: LocalBook }) {
-  const { closeDetail, openReader, collections, toggleBookInCollection } = useApp()
+  const {
+    closeDetail, openReader, collections, toggleBookInCollection, libraryView, requestFocus,
+  } = useApp()
   const { openBook, isReadable, bookLoadingId } = useBook()
   const { theme } = useTheme()
   const [coverFailed, setCoverFailed] = useState(false)
@@ -162,10 +298,7 @@ function DetailBody({ book }: { book: LocalBook }) {
   }
 
   return (
-      <aside
-        aria-label={book.title}
-        className="w-[360px] xl:w-[400px] flex-shrink-0 h-full overflow-y-auto bg-bg-surface border-l border-border"
-      >
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Blurred cover band */}
         <div className="relative h-52 flex-shrink-0 overflow-hidden">
           <div
@@ -233,9 +366,7 @@ function DetailBody({ book }: { book: LocalBook }) {
             <button
               onClick={handleRead}
               disabled={loading || !readable}
-              title={readable
-                ? 'Open in the reader (or double-click the book)'
-                : 'No ebook file for this one yet'}
+              title={readable ? 'Open in the reader' : 'No ebook file for this one yet'}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-accent text-on-accent text-sm font-semibold hover:brightness-110 transition disabled:opacity-40 disabled:hover:brightness-100"
             >
               {loading
@@ -243,6 +374,19 @@ function DetailBody({ book }: { book: LocalBook }) {
                 : <BookOpen className="w-4 h-4" />}
               {readable ? 'Read free' : 'No ebook'}
             </button>
+            {/* Only the three 3D scenes have a camera to snap — Flat has none. */}
+            {libraryView !== 'flat' && (
+              <button
+                // Wrapped, not passed directly: requestFocus takes an optional
+                // book id, and a click handler would hand it a MouseEvent.
+                onClick={() => requestFocus()}
+                title="Snap the camera to this book (or press F, or double-click it)"
+                className="flex items-center gap-2 px-4 py-2 rounded-full border border-border-hover text-text-dim text-sm font-semibold hover:border-accent hover:text-text transition-colors"
+              >
+                <FocusIcon className="w-4 h-4" />
+                Focus
+              </button>
+            )}
             {book.buyLink && (
               <ActionLink href={book.buyLink} icon={ShoppingCart} label="Buy" />
             )}
@@ -306,7 +450,7 @@ function DetailBody({ book }: { book: LocalBook }) {
             </section>
           )}
         </div>
-      </aside>
+      </div>
   )
 }
 

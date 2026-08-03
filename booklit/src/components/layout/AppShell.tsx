@@ -17,7 +17,9 @@ export function AppShell() {
       {/* App grid: chrome sidebar + content column, with the player band
           spanning the full width underneath. */}
       <div className="relative h-full flex flex-col">
-        <div className="flex flex-1 min-h-0">
+        {/* `relative`: over the 3D views the detail panel positions itself
+            against this row instead of taking space in it. */}
+        <div className="relative flex flex-1 min-h-0">
           {/* Sidebar */}
           <div
             className="transition-all duration-300 ease-out flex-shrink-0 overflow-hidden"

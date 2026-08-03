@@ -14,16 +14,19 @@ import { authorHue, hasDistinctSpineArt, spineWidth } from '../../lib/bookMeta'
 /** Every card is this size, and the 3D layouts space books on it. */
 export const CARD_W = 140
 export const CARD_H = 200
+export const CARD_SHADOW = '0 4px 20px rgba(0,0,0,0.35)'
+export const CARD_SHADOW_SELECTED = '0 0 0 3px var(--color-accent-vivid), 0 6px 28px rgba(0,0,0,0.5)'
 
 export function buildCardElement(book: LocalBook, mode: CardMode): HTMLDivElement {
   const el = document.createElement('div')
   el.className = 'css3d-card'
+  el.dataset.bookId = book.id
   el.style.width = `${mode === 'spine' ? spineWidth(book.pages) : CARD_W}px`
   el.style.height = `${CARD_H}px`
   el.style.borderRadius = '8px'
   el.style.overflow = 'hidden'
   el.style.cursor = 'pointer'
-  el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.35)'
+  el.style.boxShadow = CARD_SHADOW
   el.style.fontFamily = 'Nunito, system-ui, sans-serif'
 
   const hue = authorHue(book.author, book.title)

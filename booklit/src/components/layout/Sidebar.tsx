@@ -577,6 +577,10 @@ export function Sidebar() {
               )}
             </>
           )}
+
+          {/* The reset control lives in the top bar, beside the view switcher —
+              a camera you've lost is not something to go hunting through a
+              collapsible sidebar group for. */}
         </Group>
 
         <Group

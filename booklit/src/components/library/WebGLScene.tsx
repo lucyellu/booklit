@@ -1,10 +1,9 @@
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js'
 import { useApp } from '../../context/AppContext'
-import { useBook } from '../../context/BookContext'
 import { computeLayout } from './LayoutEngine'
-import { createFramer } from './frameCamera'
+import { createFramer, focusOnPoint, readAccentColor } from './frameCamera'
 import { createTweens } from './tweens'
 import type { Stoppable } from './tweens'
 import { spineWidth } from '../../lib/bookMeta'
@@ -44,12 +43,17 @@ interface Built {
   materials: THREE.MeshLambertMaterial[]
   ownTextures: THREE.Texture[]
   cover: 'none' | 'pending' | 'done'
+  /** The slot this book is flying to. Focusing aims here rather than at the
+   *  mesh, so snapping to a book mid-rearrangement lands where it ends up. */
+  target?: THREE.Vector3
 }
 
 export function WebGLScene({ books }: { books: LocalBook[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { layout, gridCols, gridRows, openReader, openDetail } = useApp()
-  const { openBook } = useBook()
+  const {
+    layout, gridCols, gridRows, openDetail, closeDetail, detailBookId,
+    registerFocusHandler, registerResetHandler,
+  } = useApp()
   /* Tooltip position is stored already clamped, because it's the pointer handler
      that has the container's width — reading it back out of a ref while
      rendering is exactly what React tells you not to do. */
@@ -60,21 +64,23 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
      already there, and the layout through layoutRef. See the note on sync. */
   const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
   const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
+  const selectionRef = useRef<((id: string | null) => void) | null>(null)
+  const focusRef = useRef<((id: string | null) => void) | null>(null)
+  const resetRef = useRef<(() => void) | null>(null)
   const booksRef = useRef(books)
   const gridRef = useRef({ cols: gridCols, rows: gridRows })
+  const selectedIdRef = useRef(detailBookId)
 
   const overflow = books.length - Math.min(books.length, MAX_MESHES)
 
-  const handleOpen = useCallback((book: LocalBook) => {
-    openBook(book).then(ok => { if (ok) openReader() })
-  }, [openBook, openReader])
-
-  // Latest callbacks without re-mounting the scene. One click picks the book and
-  // fills the detail panel; two open it. Same in all four views.
-  const handlersRef = useRef({ open: handleOpen, select: openDetail })
+  // Latest callbacks without re-mounting the scene. One click picks the book
+  // and fills the detail panel, a click on empty space clears it; double-click
+  // focuses the camera on it instead of opening the reader — reading now lives
+  // only on the detail panel's button.
+  const handlersRef = useRef({ select: openDetail, deselect: closeDetail })
   useEffect(() => {
-    handlersRef.current = { open: handleOpen, select: openDetail }
-  }, [handleOpen, openDetail])
+    handlersRef.current = { select: openDetail, deselect: closeDetail }
+  }, [openDetail, closeDetail])
 
   useEffect(() => {
     const container = containerRef.current
@@ -170,7 +176,11 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
        where it now belongs, the way the three.js periodic table moves between
        arrangements, rather than the shelf blinking into a new order. */
     let running: Stoppable[] = []
-    const applyLayout = (which: typeof layout) => {
+    // The extent of the arrangement as it currently stands, so the camera can be
+    // re-fitted to it without recomputing — and therefore without disturbing —
+    // where the books are.
+    let extentNow: THREE.Vector3 | null = null
+    const applyLayout = (which: typeof layout, force = false) => {
       current = which
       running.forEach(t => t.stop())
       running = []
@@ -184,9 +194,11 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       spawn = Math.max(extent.x, extent.y, extent.z) * 1.4
 
       const duration = 900
-      built.forEach(({ mesh }, i) => {
+      built.forEach((entry, i) => {
+        const { mesh } = entry
         const t = targets[i]
         if (!t) return
+        entry.target = new THREE.Vector3(t.position.x, t.position.y, t.position.z)
         // Staggered, as in the original — one shared duration reads as a rigid
         // block sliding across rather than a shelf rearranging itself.
         const ms = Math.random() * duration + duration
@@ -195,7 +207,62 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
           tweens.move(mesh.rotation, { x: t.rotation.x, y: t.rotation.y, z: t.rotation.z }, ms),
         )
       })
-      running.push(...framer(extent, duration * 1.4))
+      extentNow = extent
+      running.push(...framer(extent, duration * 1.4, force))
+    }
+
+    /** Pull the camera back to hold the whole arrangement. Camera only — the
+        books stay exactly where they are. */
+    const frameAll = (ms = 700) => {
+      if (!extentNow) return
+      running.push(...framer(extentNow, ms, true))
+    }
+
+    // Selected book gets a wireframe outline, parented to its mesh so it rides
+    // along for free through every tween — no per-frame bookkeeping needed.
+    const accentColor = readAccentColor()
+    let selectionHelper: THREE.LineSegments | null = null
+    const applySelection = (id: string | null) => {
+      if (selectionHelper) {
+        selectionHelper.parent?.remove(selectionHelper)
+        selectionHelper.geometry.dispose()
+        ;(selectionHelper.material as THREE.LineBasicMaterial).dispose()
+        selectionHelper = null
+      }
+      const entry = id ? built.find(b => b.book.id === id) : undefined
+      if (!entry) return
+      const depth = spineWidth(entry.book.pages)
+      const geo = new THREE.EdgesGeometry(
+        new THREE.BoxGeometry(BOOK_W * 1.08, BOOK_H * 1.08, depth + 10),
+      )
+      selectionHelper = new THREE.LineSegments(
+        geo, new THREE.LineBasicMaterial({ color: accentColor }),
+      )
+      entry.mesh.add(selectionHelper)
+    }
+
+    /** Snap the camera onto one book, or back out to the whole arrangement if
+        nothing is selected. */
+    const focusOn = (id: string | null) => {
+      if (!built.length) return
+      // Forced, because backing out is a deliberate move: the arrangement is the
+      // same size it was, so the framer would otherwise call the camera "close
+      // enough" and leave it sitting on the book.
+      if (!id) { frameAll(); return }
+      const entry = built.find(b => b.book.id === id)
+      if (!entry) return
+      running.push(...focusOnPoint(
+        framer, entry.target ?? entry.mesh.position, BOOK_W, BOOK_H,
+      ))
+    }
+
+    /** Clears the selection and forces the camera back to frame the whole
+        arrangement — unlike backing out via focusOn(null), this always moves
+        even if the arrangement's own extent hasn't changed, so it also
+        recovers from a pan or zoom drifting away from it. */
+    const resetView = () => {
+      handlersRef.current.deselect()
+      applyLayout(current, true)
     }
 
     /* Swap in real cover art as it arrives. Throttled, and every load is
@@ -251,6 +318,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       built.length = 0
       built.push(...kept)
       applyLayout(current)
+      applySelection(selectedIdRef.current)
       pumpCovers()
     }
 
@@ -292,12 +360,13 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       if (moved > 5) return
       const found = pick(e)
       if (found) handlersRef.current.select(found.book.id)
+      else handlersRef.current.deselect()
     }
     // A drag that ends where it began still counts as a click, so the double
     // click is picked up here rather than by counting clicks in onUp.
     const onDouble = (e: MouseEvent) => {
       const found = pick(e)
-      if (found) handlersRef.current.open(found.book)
+      if (found) focusOn(found.book.id)
     }
     const onLeave = () => setHovered(null)
 
@@ -314,8 +383,11 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       camera.aspect = container.clientWidth / container.clientHeight
       camera.updateProjectionMatrix()
       renderer.setSize(container.clientWidth, container.clientHeight)
-      // The block is shaped from the window, so a resize re-lays it out.
-      applyLayout(current)
+      // Only the camera adapts. The block is shaped from the window, so
+      // re-laying it out here meant every book flew to a new slot the moment the
+      // detail panel slid in beside the canvas — selecting a book is supposed to
+      // be a camera move, not a rearrangement. 'R' re-shapes the block for the
+      // window you have now, when that's actually what you want.
     }
     window.addEventListener('resize', onResize)
     const ro = new ResizeObserver(onResize)
@@ -332,12 +404,18 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
 
     layoutRef.current = applyLayout
     syncRef.current = sync
+    selectionRef.current = applySelection
+    focusRef.current = focusOn
+    resetRef.current = resetView
     sync(booksRef.current)
 
     return () => {
       disposed = true
       layoutRef.current = null
       syncRef.current = null
+      selectionRef.current = null
+      focusRef.current = null
+      resetRef.current = null
       cancelAnimationFrame(animId)
       window.removeEventListener('resize', onResize)
       ro.disconnect()
@@ -358,6 +436,24 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     // meshes on the floor and making 480 new textures.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The active scene wires its own focusOn into context so the 'F' key
+  // (LibraryView) and the detail panel's Focus button — both outside this
+  // component — can reach it.
+  useEffect(() => {
+    registerFocusHandler(id => focusRef.current?.(id === undefined ? selectedIdRef.current : id))
+    return () => registerFocusHandler(null)
+  }, [registerFocusHandler])
+
+  useEffect(() => {
+    registerResetHandler(() => resetRef.current?.())
+    return () => registerResetHandler(null)
+  }, [registerResetHandler])
+
+  useEffect(() => {
+    selectedIdRef.current = detailBookId
+    selectionRef.current?.(detailBookId)
+  }, [detailBookId])
 
   useEffect(() => {
     booksRef.current = books
@@ -383,7 +479,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
         </div>
       )}
       <p className="absolute bottom-2 left-2 z-10 text-[10.5px] text-text-muted pointer-events-none">
-        Drag to orbit · scroll to zoom · click a book for details · double-click to read
+        Drag to orbit · scroll to zoom · click a book for details · double-click or press F to focus · press R to reset
         {overflow > 0 && ` · showing the first ${MAX_MESHES} of ${books.length}`}
       </p>
     </div>

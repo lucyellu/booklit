@@ -23,7 +23,9 @@ export function createFramer(
 ) {
   let last: THREE.Vector3 | null = null
 
-  return (extent: THREE.Vector3, ms: number, force = false): Stoppable[] => {
+  // `center` lets the same fitting math re-center on one book (focus) instead
+  // of always the arrangement's own origin.
+  return (extent: THREE.Vector3, ms: number, force = false, center = new THREE.Vector3()): Stoppable[] => {
     if (!force && last && last.distanceTo(extent) < Math.max(1, last.length() * 0.02)) {
       return []
     }
@@ -40,19 +42,45 @@ export function createFramer(
       camera.updateProjectionMatrix()
     }
 
-    // Keep whichever way they were looking; only the distance is ours to set.
+    // Keep whichever way they were looking; only the distance (and now the
+    // center) are ours to set.
     const eye = camera.position.clone().sub(controls.target)
     if (eye.lengthSq() < 1e-6) eye.set(0, 0, 1)
     eye.normalize().multiplyScalar(dist)
+    const eyePos = center.clone().add(eye)
 
     if (first || ms <= 0) {
-      camera.position.copy(eye)
-      controls.target.set(0, 0, 0)
+      camera.position.copy(eyePos)
+      controls.target.copy(center)
       return []
     }
     return [
-      tweens.move(camera.position, { x: eye.x, y: eye.y, z: eye.z }, ms),
-      tweens.move(controls.target, { x: 0, y: 0, z: 0 }, ms),
+      tweens.move(camera.position, { x: eyePos.x, y: eyePos.y, z: eyePos.z }, ms),
+      tweens.move(controls.target, { x: center.x, y: center.y, z: center.z }, ms),
     ]
   }
+}
+
+/**
+ * Snaps the camera onto one book instead of the whole arrangement — same
+ * fit-and-keep-the-viewing-angle math as the framer above, just padded around
+ * a point instead of the block's own extent. `force: true` because a focus is
+ * always a deliberate jump, never something to skip as "close enough".
+ */
+export function focusOnPoint(
+  framer: ReturnType<typeof createFramer>,
+  position: THREE.Vector3,
+  cellW: number,
+  cellH: number,
+  ms = 700,
+): Stoppable[] {
+  const pad = 1.8
+  const half = Math.max(cellW, cellH) / 2 * pad
+  return framer(new THREE.Vector3(half, half, half), ms, true, position)
+}
+
+/** The accent used for the selected-book outline in the WebGL/Models views. */
+export function readAccentColor(): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--color-accent-vivid').trim()
+  return v || '#7ab84a'
 }

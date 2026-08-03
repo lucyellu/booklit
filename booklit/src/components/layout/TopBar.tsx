@@ -1,7 +1,8 @@
 import { useApp } from '../../context/AppContext'
 import { useTheme } from '../../context/ThemeContext'
 import {
-  Search, PanelLeftClose, PanelLeft, Eye, EyeOff, Sun, Moon,
+  Search, PanelLeftClose, PanelLeft, PanelRightClose, PanelRight,
+  Eye, EyeOff, Sun, Moon, RotateCcw,
 } from 'lucide-react'
 
 /* Named for how much of a book each one draws, which is also the order they get
@@ -21,6 +22,7 @@ export function TopBar() {
     uiVisible, toggleUI,
     libraryView, setLibraryView,
     searchQuery, setSearchQuery,
+    requestReset, rightPanelOpen, toggleRightPanel,
   } = useApp()
   const { theme, toggleTheme } = useTheme()
 
@@ -51,6 +53,21 @@ export function TopBar() {
 
       <div className="flex-1" />
 
+      {/* Deselect, re-shape the arrangement for the window as it is now, and
+          put the camera back around all of it — the way out of a view that has
+          drifted, without having to bounce off another view mode to get it.
+          Same as pressing R. Only the 3D views have a camera to reset. */}
+      {libraryView !== 'flat' && (
+        <button
+          onClick={requestReset}
+          title="Reset the layout and camera (R)"
+          className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm font-medium text-text-muted hover:text-text hover:border-border-hover transition-colors"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          Reset
+        </button>
+      )}
+
       {/* Segmented view switcher */}
       <div className="flex items-center bg-bg rounded-full p-1 border border-border">
         {VIEW_MODES.map(({ id, label, hint }) => (
@@ -78,6 +95,16 @@ export function TopBar() {
         title={theme === 'day' ? 'Switch to Forest Evening' : 'Switch to Forest Day'}
       >
         {theme === 'day' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+      </button>
+
+      {/* Right panel toggle, mirroring the sidebar's at the far left, so both
+          panels collapse from the same bar. */}
+      <button
+        onClick={toggleRightPanel}
+        className="p-1.5 rounded-lg text-text-dim hover:text-text hover:bg-bg transition-colors"
+        title={rightPanelOpen ? 'Collapse the detail panel' : 'Expand the detail panel'}
+      >
+        {rightPanelOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRight className="w-4 h-4" />}
       </button>
 
       {/* UI toggle */}

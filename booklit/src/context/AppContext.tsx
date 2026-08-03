@@ -1,4 +1,6 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import {
+  createContext, useContext, useState, useCallback, useEffect, useRef,
+} from 'react'
 import type { ReactNode } from 'react'
 import type { BookSource } from './BookContext'
 import type { SortKey, SortDir } from '../lib/filterBooks'
@@ -16,6 +18,8 @@ export type ShelfFilter =
 export type AvailabilityFilter = 'playable' | 'ebook'
 /** How a book is drawn in the grid / 3D scene. Ported from bookify. */
 export type CardMode = 'cover' | 'spine' | 'art' | 'book3d'
+/** The right panel shows one book, or the whole library as a list. */
+export type RightPanelTab = 'details' | 'outline'
 export type { SortKey, SortDir } from '../lib/filterBooks'
 
 /** A user-made shelf. Holds book ids; persisted to localStorage. */
@@ -57,6 +61,18 @@ interface AppState {
   sortDir: SortDir
   /** Book whose detail panel is open, or null. */
   detailBookId: string | null
+  /** Right panel: expanded, or collapsed to its rail of tab icons. */
+  rightPanelOpen: boolean
+  rightPanelTab: RightPanelTab
+  /**
+   * The outliner's own search and sort. Deliberately separate from the
+   * library's: the point of the list is to reach a book the stage isn't
+   * currently sorted or searched to show, which it can't do if changing it
+   * re-shuffles the stage underneath you.
+   */
+  outlineQuery: string
+  outlineSortKey: SortKey
+  outlineSortDir: SortDir
   /**
    * Columns for the 3D layouts, and rows per slab for the cube. 0 means "shape
    * it from the window", which is the default and is right most of the time —
@@ -95,6 +111,28 @@ interface AppContextValue extends AppState {
   createCollection: (name: string) => void
   deleteCollection: (id: string) => void
   toggleBookInCollection: (collectionId: string, bookId: string) => void
+  toggleRightPanel: () => void
+  setRightPanelTab: (t: RightPanelTab) => void
+  setOutlineQuery: (q: string) => void
+  setOutlineSortKey: (k: SortKey) => void
+  toggleOutlineSortDir: () => void
+  /** The active 3D scene wires itself in here so the 'F' key and the detail
+   *  panel's Focus button — both outside the scene — can reach its camera.
+   *  Pass a book id to focus that book instead of the current selection: the
+   *  outliner selects and focuses in one go, and the selection it just made
+   *  hasn't reached the scene yet. */
+  registerFocusHandler: (fn: ((bookId?: string | null) => void) | null) => void
+  requestFocus: (bookId?: string | null) => void
+  /** Same wiring as the focus handler, but for a hard reset: clear the
+   *  selection and force the camera back to frame the whole arrangement,
+   *  even if panning/zooming away didn't itself count as a layout change. */
+  registerResetHandler: (fn: (() => void) | null) => void
+  requestReset: () => void
+  /** Put a book on the stage and snap the camera to it, paging there first if
+   *  it isn't on the current page. Registered by the library, because only it
+   *  knows the filtered order the pages are cut from. */
+  registerRevealHandler: (fn: ((bookId: string) => void) | null) => void
+  requestReveal: (bookId: string) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -130,10 +168,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sortKey: 'default',
     sortDir: 'asc',
     detailBookId: null,
+    rightPanelOpen: true,
+    rightPanelTab: 'details',
+    outlineQuery: '',
+    outlineSortKey: 'title',
+    outlineSortDir: 'asc',
     gridCols: 0,
     gridRows: 0,
   })
   const [collections, setCollections] = useState<Collection[]>(loadCollections)
+  // Plain refs, not state — only one scene is ever mounted at a time and a
+  // camera jump shouldn't trigger a re-render of anything outside the scene.
+  const focusHandlerRef = useRef<((bookId?: string | null) => void) | null>(null)
+  const registerFocusHandler = useCallback((fn: ((bookId?: string | null) => void) | null) => {
+    focusHandlerRef.current = fn
+  }, [])
+  const requestFocus = useCallback((bookId?: string | null) => {
+    focusHandlerRef.current?.(bookId)
+  }, [])
+
+  const resetHandlerRef = useRef<(() => void) | null>(null)
+  const registerResetHandler = useCallback((fn: (() => void) | null) => {
+    resetHandlerRef.current = fn
+  }, [])
+  const requestReset = useCallback(() => { resetHandlerRef.current?.() }, [])
+
+  const revealHandlerRef = useRef<((bookId: string) => void) | null>(null)
+  const registerRevealHandler = useCallback((fn: ((bookId: string) => void) | null) => {
+    revealHandlerRef.current = fn
+  }, [])
+  const requestReveal = useCallback((bookId: string) => {
+    revealHandlerRef.current?.(bookId)
+  }, [])
 
   useEffect(() => {
     try {
@@ -219,6 +285,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const closeDetail = useCallback(() =>
     setState(s => ({ ...s, detailBookId: null })), [])
 
+  /* Selecting a book deliberately does *not* open the panel or change its tab.
+     Collapsing it is a decision to have the stage to yourself, and the outliner
+     is somewhere you work — neither should be overridden by a click on a book.
+     The rail marks the Details tab when there's a selection waiting in it. */
+  const toggleRightPanel = useCallback(() =>
+    setState(s => ({ ...s, rightPanelOpen: !s.rightPanelOpen })), [])
+  const setRightPanelTab = useCallback((rightPanelTab: RightPanelTab) =>
+    setState(s => ({ ...s, rightPanelTab, rightPanelOpen: true })), [])
+  const setOutlineQuery = useCallback((outlineQuery: string) =>
+    setState(s => ({ ...s, outlineQuery })), [])
+  const setOutlineSortKey = useCallback((outlineSortKey: SortKey) =>
+    setState(s => ({
+      ...s,
+      outlineSortKey,
+      outlineSortDir:
+        outlineSortKey === 'published' || outlineSortKey === 'added' || outlineSortKey === 'rating'
+          ? 'desc'
+          : 'asc',
+    })), [])
+  const toggleOutlineSortDir = useCallback(() =>
+    setState(s => ({ ...s, outlineSortDir: s.outlineSortDir === 'asc' ? 'desc' : 'asc' })), [])
+
   const toggleAvailability = useCallback((f: AvailabilityFilter) =>
     setState(s => ({
       ...s,
@@ -263,6 +351,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleAvailability, setLibrarySource, setCollectionId, setListId, setPlaylistId, openIndex,
       setCardMode, setSortKey, toggleSortDir, openDetail, closeDetail,
       createCollection, deleteCollection, toggleBookInCollection,
+      toggleRightPanel, setRightPanelTab,
+      setOutlineQuery, setOutlineSortKey, toggleOutlineSortDir,
+      registerFocusHandler, requestFocus,
+      registerResetHandler, requestReset,
+      registerRevealHandler, requestReveal,
     }}>
       {children}
     </AppContext.Provider>

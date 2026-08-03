@@ -20,6 +20,12 @@ export type AvailabilityFilter = 'playable' | 'ebook'
 export type CardMode = 'cover' | 'spine' | 'art' | 'book3d'
 /** The right panel shows one book, or the whole library as a list. */
 export type RightPanelTab = 'details' | 'outline'
+/**
+ * How many books go on the stage at once. 'auto' is what the view can draw
+ * comfortably; the numbers and 'all' are the override, for when you would
+ * rather have the whole shelf in front of you than page through it.
+ */
+export type StageSize = 'auto' | 40 | 100 | 250 | 500 | 'all'
 export type { SortKey, SortDir } from '../lib/filterBooks'
 
 /** A user-made shelf. Holds book ids; persisted to localStorage. */
@@ -73,6 +79,8 @@ interface AppState {
   outlineQuery: string
   outlineSortKey: SortKey
   outlineSortDir: SortDir
+  /** How many books a page holds. */
+  stageSize: StageSize
   /**
    * Columns for the 3D layouts, and rows per slab for the cube. 0 means "shape
    * it from the window", which is the default and is right most of the time —
@@ -116,13 +124,18 @@ interface AppContextValue extends AppState {
   setOutlineQuery: (q: string) => void
   setOutlineSortKey: (k: SortKey) => void
   toggleOutlineSortDir: () => void
+  setStageSize: (s: StageSize) => void
   /** The active 3D scene wires itself in here so the 'F' key and the detail
    *  panel's Focus button — both outside the scene — can reach its camera.
    *  Pass a book id to focus that book instead of the current selection: the
    *  outliner selects and focuses in one go, and the selection it just made
-   *  hasn't reached the scene yet. */
-  registerFocusHandler: (fn: ((bookId?: string | null) => void) | null) => void
-  requestFocus: (bookId?: string | null) => void
+   *  hasn't reached the scene yet.
+   *
+   *  Returns whether the camera actually went anywhere: false means no scene is
+   *  mounted, or it hasn't built that book yet, which is the caller's cue to
+   *  try again rather than assume it worked. */
+  registerFocusHandler: (fn: ((bookId?: string | null) => boolean) | null) => void
+  requestFocus: (bookId?: string | null) => boolean
   /** Same wiring as the focus handler, but for a hard reset: clear the
    *  selection and force the camera back to frame the whole arrangement,
    *  even if panning/zooming away didn't itself count as a layout change. */
@@ -173,19 +186,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     outlineQuery: '',
     outlineSortKey: 'title',
     outlineSortDir: 'asc',
+    stageSize: 'auto',
     gridCols: 0,
     gridRows: 0,
   })
   const [collections, setCollections] = useState<Collection[]>(loadCollections)
   // Plain refs, not state — only one scene is ever mounted at a time and a
   // camera jump shouldn't trigger a re-render of anything outside the scene.
-  const focusHandlerRef = useRef<((bookId?: string | null) => void) | null>(null)
-  const registerFocusHandler = useCallback((fn: ((bookId?: string | null) => void) | null) => {
+  const focusHandlerRef = useRef<((bookId?: string | null) => boolean) | null>(null)
+  const registerFocusHandler = useCallback((fn: ((bookId?: string | null) => boolean) | null) => {
     focusHandlerRef.current = fn
   }, [])
-  const requestFocus = useCallback((bookId?: string | null) => {
-    focusHandlerRef.current?.(bookId)
-  }, [])
+  const requestFocus = useCallback(
+    (bookId?: string | null) => focusHandlerRef.current?.(bookId) ?? false,
+    [],
+  )
 
   const resetHandlerRef = useRef<(() => void) | null>(null)
   const registerResetHandler = useCallback((fn: (() => void) | null) => {
@@ -306,6 +321,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })), [])
   const toggleOutlineSortDir = useCallback(() =>
     setState(s => ({ ...s, outlineSortDir: s.outlineSortDir === 'asc' ? 'desc' : 'asc' })), [])
+  const setStageSize = useCallback((stageSize: StageSize) =>
+    setState(s => ({ ...s, stageSize })), [])
 
   const toggleAvailability = useCallback((f: AvailabilityFilter) =>
     setState(s => ({
@@ -352,7 +369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCardMode, setSortKey, toggleSortDir, openDetail, closeDetail,
       createCollection, deleteCollection, toggleBookInCollection,
       toggleRightPanel, setRightPanelTab,
-      setOutlineQuery, setOutlineSortKey, toggleOutlineSortDir,
+      setOutlineQuery, setOutlineSortKey, toggleOutlineSortDir, setStageSize,
       registerFocusHandler, requestFocus,
       registerResetHandler, requestReset,
       registerRevealHandler, requestReveal,

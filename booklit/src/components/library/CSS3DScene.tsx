@@ -36,7 +36,7 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
   const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
   const rebuildRef = useRef<(() => void) | null>(null)
   const selectionRef = useRef<((id: string | null) => void) | null>(null)
-  const focusRef = useRef<((id: string | null) => void) | null>(null)
+  const focusRef = useRef<((id: string | null) => boolean) | null>(null)
   const resetRef = useRef<(() => void) | null>(null)
   const booksRef = useRef(books)
   // The card mode changes what each element *is*, not where it sits, so it is
@@ -158,18 +158,19 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
 
     /** Snap the camera onto one book, or back out to the whole arrangement if
         nothing is selected. */
-    const focusOn = (id: string | null) => {
-      if (!built.length) return
+    const focusOn = (id: string | null): boolean => {
+      if (!built.length) return false
       // Forced, because backing out is a deliberate move: the arrangement is the
       // same size it was, so the framer would otherwise call the camera "close
       // enough" and leave it sitting on the card.
-      if (!id) { frameAll(); return }
+      if (!id) { frameAll(); return true }
       const entry = built.find(b => b.book.id === id)
-      if (!entry) return
+      if (!entry) return false
       running.push(...focusOnPoint(
         framer, entry.target ?? entry.object.position, CARD_W, CARD_H,
       ))
       renderUntil = performance.now() + 850
+      return true
     }
 
     /** Clears the selection and forces the camera back to frame the whole
@@ -304,7 +305,8 @@ export function CSS3DScene({ books }: { books: LocalBook[] }) {
   // (LibraryView) and the detail panel's Focus button — both outside this
   // component — can reach it.
   useEffect(() => {
-    registerFocusHandler(id => focusRef.current?.(id === undefined ? selectedIdRef.current : id))
+    registerFocusHandler(id =>
+      focusRef.current?.(id === undefined ? selectedIdRef.current : id) ?? false)
     return () => registerFocusHandler(null)
   }, [registerFocusHandler])
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import { useTheme } from '../../context/ThemeContext'
@@ -30,7 +31,7 @@ import { useProfiles } from '../../context/ProfileContext'
  */
 export function BookDetailPanel() {
   const {
-    detailBookId, closeDetail, view, libraryView,
+    detailBookId, closeDetail, view,
     rightPanelOpen, rightPanelTab, toggleRightPanel, setRightPanelTab,
   } = useApp()
   const { localBooks } = useBook()
@@ -53,19 +54,21 @@ export function BookDetailPanel() {
   const tab: RightPanelTab = canOutline ? rightPanelTab : 'details'
   if (!book && !canOutline) return null
 
-  /* Over the 3D views, not beside them. Docking narrows the canvas, and a
-     narrower canvas is a different projection — the whole arrangement slides
-     and re-crops the instant you select a book, which reads as the camera
-     jumping on its own. The flat grid reflows happily, so there it still
-     pushes the content over. */
-  const floating = view === 'library' && libraryView !== 'flat'
-  const place = floating
-    ? 'absolute right-0 top-0 bottom-0 z-30 shadow-2xl'
-    : 'relative flex-shrink-0'
+  /* Docked, never floating. It briefly floated over the 3D views so that
+     selecting a book couldn't resize the canvas — but now that the outline tab
+     keeps the panel on screen whether or not a book is picked, its width no
+     longer changes when you select one, so docking costs nothing and floating
+     covered the top bar's own controls.
+
+     Collapsing is the one thing that does change the width, and that's a
+     deliberate act: the edge slides, the stage takes the space, and the scene
+     adapts the way it does to any other resize. */
+  const place = 'absolute right-0 top-0 bottom-0'
 
   if (!rightPanelOpen) {
     return (
-      <div className={`w-11 h-full bg-bg-surface border-l border-border flex flex-col items-center gap-1 py-3 ${place}`}>
+      <PanelFrame open={false}>
+        <div className={`w-11 h-full bg-bg-surface border-l border-border flex flex-col items-center gap-1 py-3 ${place}`}>
         <RailButton
           icon={PanelRight}
           label="Expand the panel"
@@ -88,11 +91,13 @@ export function BookDetailPanel() {
             onClick={() => setRightPanelTab('outline')}
           />
         )}
-      </div>
+        </div>
+      </PanelFrame>
     )
   }
 
   return (
+    <PanelFrame open>
     <aside
       aria-label={tab === 'outline' ? 'Outline' : book?.title ?? 'Details'}
       className={`w-[360px] xl:w-[400px] h-full flex flex-col bg-bg-surface border-l border-border ${place}`}
@@ -135,6 +140,24 @@ export function BookDetailPanel() {
         </p>
       )}
     </aside>
+    </PanelFrame>
+  )
+}
+
+/**
+ * The sliding edge. Only this wrapper's width changes; the panel inside keeps
+ * its own, pinned to the right, so collapsing slides the boundary across
+ * instead of reflowing the panel's contents on the way.
+ */
+function PanelFrame({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={`relative flex-shrink-0 h-full overflow-hidden transition-[width] duration-200 ease-out ${
+        open ? 'w-[360px] xl:w-[400px]' : 'w-11'
+      }`}
+    >
+      {children}
+    </div>
   )
 }
 

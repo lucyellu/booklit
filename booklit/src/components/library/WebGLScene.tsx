@@ -31,7 +31,6 @@ import type { LocalBook } from '../../context/BookContext'
  * laptop above 50fps; the rest of the page is reachable by paging or filtering,
  * and the overflow is stated in the UI rather than silently dropped.
  */
-const MAX_MESHES = 160
 
 /** Concurrent cover downloads. Enough to fill in fast, few enough not to stall
     the rest of the app's image loading. */
@@ -65,13 +64,11 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
   const syncRef = useRef<((b: LocalBook[]) => void) | null>(null)
   const layoutRef = useRef<((l: typeof layout) => void) | null>(null)
   const selectionRef = useRef<((id: string | null) => void) | null>(null)
-  const focusRef = useRef<((id: string | null) => void) | null>(null)
+  const focusRef = useRef<((id: string | null) => boolean) | null>(null)
   const resetRef = useRef<(() => void) | null>(null)
   const booksRef = useRef(books)
   const gridRef = useRef({ cols: gridCols, rows: gridRows })
   const selectedIdRef = useRef(detailBookId)
-
-  const overflow = books.length - Math.min(books.length, MAX_MESHES)
 
   // Latest callbacks without re-mounting the scene. One click picks the book
   // and fills the detail panel, a click on empty space clears it; double-click
@@ -243,17 +240,18 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
 
     /** Snap the camera onto one book, or back out to the whole arrangement if
         nothing is selected. */
-    const focusOn = (id: string | null) => {
-      if (!built.length) return
+    const focusOn = (id: string | null): boolean => {
+      if (!built.length) return false
       // Forced, because backing out is a deliberate move: the arrangement is the
       // same size it was, so the framer would otherwise call the camera "close
       // enough" and leave it sitting on the book.
-      if (!id) { frameAll(); return }
+      if (!id) { frameAll(); return true }
       const entry = built.find(b => b.book.id === id)
-      if (!entry) return
+      if (!entry) return false
       running.push(...focusOnPoint(
         framer, entry.target ?? entry.mesh.position, BOOK_W, BOOK_H,
       ))
+      return true
     }
 
     /** Clears the selection and forces the camera back to frame the whole
@@ -303,7 +301,7 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
     /** Reconcile the scene against a new book list, keeping what survives. */
     const sync = (next: LocalBook[]) => {
       if (disposed) return
-      const wanted = next.slice(0, MAX_MESHES)
+      const wanted = next
       const byId = new Map(built.map(b => [b.book.id, b]))
       const kept = wanted.map(book => {
         const existing = byId.get(book.id)
@@ -441,7 +439,8 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
   // (LibraryView) and the detail panel's Focus button — both outside this
   // component — can reach it.
   useEffect(() => {
-    registerFocusHandler(id => focusRef.current?.(id === undefined ? selectedIdRef.current : id))
+    registerFocusHandler(id =>
+      focusRef.current?.(id === undefined ? selectedIdRef.current : id) ?? false)
     return () => registerFocusHandler(null)
   }, [registerFocusHandler])
 
@@ -480,7 +479,6 @@ export function WebGLScene({ books }: { books: LocalBook[] }) {
       )}
       <p className="absolute bottom-2 left-2 z-10 text-[10.5px] text-text-muted pointer-events-none">
         Drag to orbit · scroll to zoom · click a book for details · double-click or press F to focus · press R to reset
-        {overflow > 0 && ` · showing the first ${MAX_MESHES} of ${books.length}`}
       </p>
     </div>
   )

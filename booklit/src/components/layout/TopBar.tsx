@@ -12,8 +12,8 @@ import {
 const VIEW_MODES = [
   { id: 'flat' as const, label: 'Flat', hint: 'Plain scrolling grid' },
   { id: 'css3d' as const, label: '2D', hint: 'Flat cards in a 3D scene' },
-  { id: 'webgl' as const, label: '3D', hint: 'Generated book solids — first 160' },
-  { id: 'models' as const, label: '4D', hint: 'Real hardcover models — first 40' },
+  { id: 'webgl' as const, label: '3D', hint: 'Generated book solids — 160 a page by default' },
+  { id: 'models' as const, label: '4D', hint: 'Real hardcover models — 40 a page by default' },
 ]
 
 export function TopBar() {

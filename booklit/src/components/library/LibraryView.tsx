@@ -12,20 +12,21 @@ import {
 import type { SortKey } from '../../lib/filterBooks'
 import { authorHue, spineWidth, hasDistinctSpineArt } from '../../lib/bookMeta'
 import { findList } from '../../lib/curatedLists'
-import type { CardMode, LibraryViewMode } from '../../context/AppContext'
+import type { CardMode, LibraryViewMode, StageSize } from '../../context/AppContext'
 import {
   Loader2, X, ChevronLeft, ChevronRight, BookOpen, ShoppingCart,
   ArrowUpDown, ChevronDown, ArrowUpNarrowWide, ArrowDownWideNarrow,
 } from 'lucide-react'
 
 /**
- * How many books a page holds, per view.
+ * How many books a page holds by default, per view — what each one draws
+ * without labouring.
  *
- * The 3D scenes cap what they will build — 160 meshes, 40 models — so a flat
- * 300 per page meant the pager promised books the scene then silently dropped,
- * and the outliner had no page to send you to for them. Paging in the size the
- * view can actually draw makes "page 3 of 18" true and makes every book in the
- * library reachable.
+ * These used to be hard caps inside the scenes, which meant a flat 300 per page
+ * promised books the scene then silently dropped. They're page sizes now, and
+ * the reader can override them (including "all"), so the number is a default
+ * rather than a ceiling: 40 hardcover meshes is what a mid-range GPU holds a
+ * steady frame rate at, not a limit of the code.
  */
 const PAGE_SIZES: Record<LibraryViewMode, number> = {
   flat: 300,
@@ -34,12 +35,29 @@ const PAGE_SIZES: Record<LibraryViewMode, number> = {
   models: 40,
 }
 
+/** Past this many books on stage, the view is going to labour — worth saying so
+ *  rather than letting it look broken. Models cost far more than cards. */
+const HEAVY_ON_STAGE: Record<LibraryViewMode, number> = {
+  flat: 1000,
+  css3d: 400,
+  webgl: 400,
+  models: 80,
+}
+
+const STAGE_SIZES: StageSize[] = ['auto', 40, 100, 250, 500, 'all']
+
+function resolvePageSize(size: StageSize, view: LibraryViewMode, total: number): number {
+  if (size === 'auto') return PAGE_SIZES[view]
+  if (size === 'all') return Math.max(1, total)
+  return size
+}
+
 export function LibraryView() {
   const {
     libraryView, openReader, shelfFilter, searchQuery, readableOnly,
     availability, librarySource, collectionId, collections, listId,
     cardMode, openDetail, detailBookId, sortKey, sortDir, requestFocus, requestReset,
-    registerRevealHandler,
+    registerRevealHandler, stageSize, setSearchQuery,
   } = useApp()
   const {
     localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable,
@@ -69,11 +87,18 @@ export function LibraryView() {
   )
 
   const activeCollection = collections.find(c => c.id === collectionId) ?? null
-  const pageSize = PAGE_SIZES[libraryView]
+  // The book a reveal is still trying to reach, if any. See the reveal wiring
+  // below — it's declared up here because the paging effects have to defer to it.
+  const pendingRevealRef = useRef<string | null>(null)
+  const pageSize = resolvePageSize(stageSize, libraryView, filtered.length)
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
 
-  // Reset to the first page whenever the result set changes.
-  useEffect(() => { setPage(0) }, [shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, listId, sortKey, sortDir])
+  // Reset to the first page whenever the result set changes — unless a reveal
+  // is in flight, which has already worked out the page it needs and may be the
+  // very thing that changed the result set.
+  useEffect(() => {
+    if (!pendingRevealRef.current) setPage(0)
+  }, [shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, listId, sortKey, sortDir])
   useEffect(() => { if (page > totalPages - 1) setPage(0) }, [page, totalPages])
 
   const pageItems = useMemo(
@@ -85,30 +110,59 @@ export function LibraryView() {
      stage isn't showing. Only this component knows the filtered order the pages
      are cut from, so it owns the "get that book on stage and snap to it" step
      and the panel just asks for it. */
-  const pendingRevealRef = useRef<string | null>(null)
   useEffect(() => {
     registerRevealHandler(id => {
-      const idx = filtered.findIndex(b => b.id === id)
-      if (idx < 0) return
       openDetail(id)
-      const target = Math.floor(idx / pageSize)
-      // Focus by id rather than "the selection": the selection was set one line
-      // ago and hasn't reached the scene yet.
-      if (target === page) { requestFocus(id); return }
       pendingRevealRef.current = id
-      setPage(target)
+
+      /* The outliner searches separately from the library — that's the point of
+         it — so it can name a book the library's own search box is filtering
+         off the stage. Reveal is an explicit "take me to this one", so the
+         filter standing in the way is cleared, and the page is worked out from
+         the list that clearing it produces rather than the one on screen now. */
+      const hidden = !filtered.some(b => b.id === id)
+      let list = filtered
+      if (hidden) {
+        list = sortBooks(
+          applyFilters(
+            deduped,
+            {
+              shelfFilter, searchQuery: '', readableOnly, availability, librarySource,
+              collectionId, collections, listMatch: activeList?.match ?? null,
+            },
+            isReadable,
+          ),
+          sortKey,
+          sortDir,
+        )
+        setSearchQuery('')
+      }
+
+      const idx = list.findIndex(b => b.id === id)
+      if (idx < 0) { pendingRevealRef.current = null; return }   // not ours to find
+      setPage(Math.floor(idx / resolvePageSize(stageSize, libraryView, list.length)))
     })
     return () => registerRevealHandler(null)
-  }, [registerRevealHandler, filtered, page, pageSize, openDetail, requestFocus])
+  }, [registerRevealHandler, filtered, deduped, shelfFilter, readableOnly, availability,
+    librarySource, collectionId, collections, activeList, isReadable, sortKey, sortDir,
+    stageSize, libraryView, openDetail, setSearchQuery])
 
-  // The camera can't point at a book the scene hasn't built, so a reveal that
-  // had to change page finishes here, once the new page is on stage. The scene
-  // is a child, so its sync has already run by the time this does.
+  /* The camera can't point at a book the scene hasn't built, so the snap waits
+     here until the book is on stage — a reveal can cost a page turn, and in the
+     models view the scene may still be cloning meshes when the page lands. The
+     scene is a child, so its sync has already run by the time this does. */
   useEffect(() => {
     const id = pendingRevealRef.current
     if (!id || !pageItems.some(b => b.id === id)) return
-    pendingRevealRef.current = null
-    requestFocus(id)
+    if (requestFocus(id)) { pendingRevealRef.current = null; return }
+    let tries = 0
+    const timer = setInterval(() => {
+      if (++tries > 25 || requestFocus(id)) {
+        pendingRevealRef.current = null
+        clearInterval(timer)
+      }
+    }, 200)
+    return () => clearInterval(timer)
   }, [pageItems, requestFocus])
 
   const handleOpen = (lb: LocalBook) => {
@@ -213,6 +267,7 @@ export function LibraryView() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <StageSizeControl onStage={pageItems.length} />
           <SortControl />
 
           {totalPages > 1 && (
@@ -278,6 +333,53 @@ export function LibraryView() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * How many books to put on the stage at once.
+ *
+ * The 3D views default to what they draw comfortably — a hardcover model is a
+ * cloned mesh with its own cover texture, so forty of them is a different
+ * proposition from forty cards — but that's a default, not a cap. Ask for the
+ * whole shelf and you get the whole shelf; the count goes amber first so a
+ * five-second freeze is a choice rather than a surprise.
+ */
+function StageSizeControl({ onStage }: { onStage: number }) {
+  const { stageSize, setStageSize, libraryView } = useApp()
+  const heavy = onStage > HEAVY_ON_STAGE[libraryView]
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <label className="text-[10px] font-bold tracking-[0.14em] uppercase text-text-muted">
+        On stage
+      </label>
+      <select
+        value={String(stageSize)}
+        onChange={e => {
+          const v = e.target.value
+          setStageSize(v === 'auto' || v === 'all' ? v : Number(v) as StageSize)
+        }}
+        title={`How many books to put on the stage at once. ${
+          libraryView === 'models'
+            ? 'Hardcover models are the expensive view — every one is a cloned mesh with its own texture.'
+            : 'More books on stage means more to draw and more covers to fetch.'
+        }`}
+        className={`rounded-lg bg-bg border px-2 py-1 text-[11.5px] outline-none focus:ring-1 focus:ring-accent transition-colors ${
+          heavy ? 'border-accent-warm text-accent-warm' : 'border-border text-text-dim'
+        }`}
+      >
+        {STAGE_SIZES.map(s => (
+          <option key={String(s)} value={String(s)}>
+            {s === 'auto'
+              ? `Auto (${PAGE_SIZES[libraryView]})`
+              : s === 'all'
+                ? 'All — slow'
+                : s}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }

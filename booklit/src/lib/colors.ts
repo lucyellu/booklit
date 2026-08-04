@@ -35,9 +35,36 @@ export function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`
 }
 
+/**
+ * accent-warm used to be the accent hue rotated ±30° — cheap, but a live
+ * rotation off an arbitrary user pick lands in a muddy stretch of the wheel
+ * often enough to be the actual complaint (olive greens, brown-oranges).
+ * The app's own hand-authored themes never did that: Forest Day's accent is
+ * green (~#41761f) but its warm accent is sienna (~#a0522d, hue ~20°) — a
+ * fixed, curated warm tone, not a rotation of the green. Snapping to the
+ * nearer of a couple of vetted warm hues reproduces that intentionally,
+ * whatever hue the user picks as their base accent.
+ */
+const WARM_ANCHOR_HUES = [16, 34] // coral, amber — the sienna/terracotta family
+
+function hueDistance(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360
+  return d > 180 ? 360 - d : d
+}
+
+function warmAccentHue(baseHue: number): number {
+  return WARM_ANCHOR_HUES.reduce((best, candidate) =>
+    hueDistance(candidate, baseHue) < hueDistance(best, baseHue) ? candidate : best
+  )
+}
+
 export function generateThemeFromColor(baseHex: string, isDark: boolean): Record<string, string> {
   const [h, s] = hexToHsl(baseHex)
-  
+  const warmHue = warmAccentHue(h)
+  // Independent of the base's saturation, so a muted/gray pick still gets a
+  // warm accent with some life in it instead of going washed-out to match.
+  const warmSat = Math.max(s, 55)
+
   if (isDark) {
     return {
       '--color-bg': hslToHex(h, s * 0.3, 6),
@@ -60,7 +87,7 @@ export function generateThemeFromColor(baseHex: string, isDark: boolean): Record
       
       '--color-accent': hslToHex(h, s, 45),
       '--color-accent-vivid': hslToHex(h, Math.min(s * 1.2, 100), 55),
-      '--color-accent-warm': hslToHex((h + 30) % 360, s, 50),
+      '--color-accent-warm': hslToHex(warmHue, warmSat, 50),
       '--color-on-accent': hslToHex(h, s, 2),
       
       '--color-border': `hsla(${h}, ${s}%, 80%, 0.15)`,
@@ -90,7 +117,7 @@ export function generateThemeFromColor(baseHex: string, isDark: boolean): Record
       
       '--color-accent': hslToHex(h, s, 35),
       '--color-accent-vivid': hslToHex(h, Math.min(s * 1.2, 100), 45),
-      '--color-accent-warm': hslToHex((h - 30 + 360) % 360, s, 40),
+      '--color-accent-warm': hslToHex(warmHue, warmSat, 40),
       '--color-on-accent': '#ffffff',
       
       '--color-border': `hsla(${h}, ${s}%, 10%, 0.15)`,

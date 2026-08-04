@@ -192,4 +192,68 @@
     opacity: 0.05;
     mix-blend-mode: overlay;
   }
+
+  /* ------------------------------------------------------------
+     Glow tiles — Home's playlist / curated-list / shelf cards.
+     Softly blurred, slowly drifting colour blobs over a dark
+     ground, in place of the old flat tint + diagonal shade.
+     CSS only (no WebGL): there can be a dozen of these on screen
+     at once. See lib/glowPalette.ts for how the blob colours are
+     derived from a tile's base tint.
+     ------------------------------------------------------------ */
+  .glow-tile {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.14) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.25) inset,
+      0 14px 30px -14px rgba(0, 0, 0, 0.4);
+    transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.3s ease;
+  }
+
+  .group:hover .glow-tile {
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.2) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.3) inset,
+      0 20px 40px -16px rgba(0, 0, 0, 0.45);
+  }
+
+  .glow-tile-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(28px);
+    will-change: transform;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .glow-tile-blob-a { animation: glow-drift-a 17s ease-in-out infinite alternate; }
+    .glow-tile-blob-b { animation: glow-drift-b 21s ease-in-out infinite alternate; }
+    .glow-tile-blob-c { animation: glow-drift-c 25s ease-in-out infinite alternate; }
+  }
+
+  .glow-tile-grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 128px 128px;
+  }
+
+  [data-theme="evening"] .glow-tile-grain {
+    opacity: 0.08;
+  }
+}
+
+@keyframes glow-drift-a {
+  from { transform: translate(-6%, -8%) scale(1); }
+  to   { transform: translate(6%, 5%) scale(1.08); }
+}
+@keyframes glow-drift-b {
+  from { transform: translate(8%, 6%) scale(1.05); }
+  to   { transform: translate(-5%, -6%) scale(0.96); }
+}
+@keyframes glow-drift-c {
+  from { transform: translate(-4%, 10%) scale(0.98); }
+  to   { transform: translate(7%, -8%) scale(1.06); }
 }

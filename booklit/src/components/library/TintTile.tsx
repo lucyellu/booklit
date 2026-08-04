@@ -1,19 +1,19 @@
+import { glowPaletteFromTint } from '../../lib/glowPalette'
+
 /**
- * The Forest Day tile: a flat colour darkened toward the bottom right, with the
- * title set into the bottom-left corner.
- *
- * The mockup lays a photograph over the tint at `opacity-30 mix-blend-overlay`.
- * There are no images to point it at — every one in the mockup is a remote
- * Unsplash URL — so the tint carries the card on its own, which is also why the
- * gradient matters: white on `#3abcd4` flat is 2.1:1, and on the darkened corner
- * it clears AA.
+ * The glow tile: a dark ground with three softly blurred, slowly drifting
+ * colour blobs derived from a single tint hex, with the title set into the
+ * bottom-left corner. Replaces the old flat-tint-plus-diagonal-shade look —
+ * see lib/glowPalette.ts for how the blob colours are chosen (analogous
+ * hues, not a flat tint, so there's depth even from one input colour).
  *
  * Shared by the playlist cards and the curated-list cards, which were drifting
  * apart: the playlists had inherited a tiled stripe-and-dot motif from
  * bibli_009 that belongs to a different design.
  *
- * Expects a `group` on an ancestor — the title lifts on hover of the whole card,
- * not of the tile alone.
+ * Expects a `group` on an ancestor — the title lifts, and the tile itself
+ * lifts (via .glow-tile's `.group:hover` rule in index.css), on hover of the
+ * whole card, not of the tile alone.
  */
 export function TintTile({ tint, title, blurb, meta, className = '', titleClass = 'text-2xl' }: {
   tint: string
@@ -23,12 +23,27 @@ export function TintTile({ tint, title, blurb, meta, className = '', titleClass 
   className?: string
   titleClass?: string
 }) {
+  const { ground, hero, deep, bloom } = glowPaletteFromTint(tint)
+
   return (
     <div
-      className={`relative overflow-hidden rounded-xl shadow-sm transition-shadow group-hover:shadow-md ${className}`}
-      style={{ background: tint }}
+      className={`glow-tile relative overflow-hidden rounded-xl isolate ${className}`}
+      style={{ background: ground }}
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-black/60 mix-blend-multiply" />
+      <div
+        className="glow-tile-blob glow-tile-blob-a"
+        style={{ background: hero, width: '75%', height: '75%', top: '-15%', left: '-10%' }}
+      />
+      <div
+        className="glow-tile-blob glow-tile-blob-b"
+        style={{ background: deep, width: '65%', height: '65%', bottom: '-20%', right: '-10%' }}
+      />
+      <div
+        className="glow-tile-blob glow-tile-blob-c"
+        style={{ background: bloom, width: '55%', height: '55%', bottom: '-15%', left: '10%' }}
+      />
+      <div className="glow-tile-grain" />
+      <div className="absolute inset-0 bg-gradient-to-br from-black/15 to-black/65 mix-blend-multiply" />
       <div className="absolute inset-0 p-5 flex flex-col justify-end">
         <h3
           className={`text-white font-bold leading-tight origin-bottom-left transition-transform duration-300 group-hover:scale-105 ${titleClass}`}

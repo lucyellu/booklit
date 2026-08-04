@@ -6,7 +6,8 @@ import { useBook } from '../../context/BookContext'
 import type { Theme } from '../../context/ThemeContext'
 import { parseGoodreadsId } from '../../lib/profiles'
 import { toGoodreadsCsv, downloadCsv } from '../../lib/exportCsv'
-import { X, Sun, Moon, LogOut, LogIn, Download, Link2, HardDrive } from 'lucide-react'
+import { useRef } from 'react'
+import { X, Sun, Moon, LogOut, LogIn, Download, Link2, HardDrive, Upload } from 'lucide-react'
 
 const THEMES: { id: Theme; label: string; hint: string; icon: typeof Sun; swatch: string[] }[] = [
   {
@@ -56,12 +57,24 @@ function ActionRow({ icon: Icon, label, hint, onClick, danger }: {
 
 export function SettingsModal() {
   const { settingsOpen, setSettingsOpen } = useApp()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, customColor, setCustomColor, resetCustomColor } = useTheme()
   const { mode, user, signOut, setAuthOpen } = useAuth()
   const { owner, setUpOwner, guests } = useProfiles()
-  const { localBooks, syncProfile, importLocalLibrary } = useBook()
+  const { localBooks, syncProfile, importLocalLibrary, uploadFile } = useBook()
+  const fileRef = useRef<HTMLInputElement>(null)
 
   if (!settingsOpen) return null
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      await uploadFile(file)
+    } catch (err) {
+      console.error('Upload failed:', err)
+    }
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const connectGoodreads = async () => {
     const input = window.prompt(
@@ -151,6 +164,19 @@ export function SettingsModal() {
         {/* ---- Library sources ---- */}
         <SectionTitle>Your library</SectionTitle>
         <div className="flex flex-col gap-px mb-6">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".epub,.txt,.md,.csv"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <ActionRow
+            icon={Upload}
+            label="Import books"
+            hint="Add an epub, text, markdown or CSV file"
+            onClick={() => fileRef.current?.click()}
+          />
           <ActionRow
             icon={Link2}
             label={owner?.goodreadsUserId ? 'Change linked Goodreads' : 'Link your Goodreads'}
@@ -210,6 +236,29 @@ export function SettingsModal() {
               </div>
             </button>
           ))}
+        </div>
+
+        <div className="mt-6 flex items-center justify-between">
+          <SectionTitle>Custom Theme Color</SectionTitle>
+          {customColor && (
+            <button
+              onClick={resetCustomColor}
+              className="text-[11px] text-text-muted hover:text-text mb-3"
+            >
+              Reset to default
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col gap-px">
+          <div className="flex items-center justify-between px-4 py-3 bg-bg/50 rounded-2xl">
+            <span className="text-[13px] font-bold text-text">Base Theme Color</span>
+            <input 
+              type="color" 
+              value={customColor || (theme === 'day' ? '#41761f' : '#7ab84a')}
+              onChange={e => setCustomColor(e.target.value)}
+              className="w-6 h-6 p-0 border-0 bg-transparent cursor-pointer rounded" 
+            />
+          </div>
         </div>
       </div>
     </div>

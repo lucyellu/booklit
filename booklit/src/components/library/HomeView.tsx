@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import type { LocalBook } from '../../context/BookContext'
@@ -7,7 +7,7 @@ import { allLists, CARD_TINTS } from '../../lib/curatedLists'
 import { PLAYLISTS } from '../../lib/clips'
 import { PlaylistCard } from './PlaylistView'
 import { TintTile } from './TintTile'
-import { Play, ChevronRight } from 'lucide-react'
+import { Play, ChevronRight, ChevronLeft } from 'lucide-react'
 
 function greeting(hour: number): string {
   if (hour < 5) return 'Still up'
@@ -105,6 +105,15 @@ export function HomeView() {
   } = useApp()
   const { localBooks, isReadable, openBook } = useBook()
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const handleScroll = (dir: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const amount = scrollRef.current.clientWidth * 0.75
+      scrollRef.current.scrollBy({ left: dir === 'left' ? -amount : amount, behavior: 'smooth' })
+    }
+  }
+
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
 
   const handleOpen = (lb: LocalBook) => {
@@ -159,10 +168,28 @@ export function HomeView() {
      has loaded — the empty state keeps them rather than showing a bare page. */
   const playlistRow = (
     <section className="mb-12">
-      <h2 className="text-xs font-bold tracking-widest uppercase text-accent-warm mb-4">
-        Playlists
-      </h2>
-      <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xs font-bold tracking-widest uppercase text-accent-warm">
+          Playlists
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleScroll('left')}
+            className="p-1.5 rounded-full bg-bg-surface border border-border text-text-muted hover:text-accent hover:border-border-hover transition-colors shadow-sm"
+            title="Scroll left"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleScroll('right')}
+            className="p-1.5 rounded-full bg-bg-surface border border-border text-text-muted hover:text-accent hover:border-border-hover transition-colors shadow-sm"
+            title="Scroll right"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-4 -mx-1 px-1 scroll-smooth scrollbar-hide">
         {PLAYLISTS.map(p => (
           <PlaylistCard key={p.id} playlist={p} onOpen={() => setPlaylistId(p.id)} />
         ))}

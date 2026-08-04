@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import {
@@ -15,8 +15,6 @@ import {
 import { allLists } from '../../lib/curatedLists'
 import { PLAYLISTS } from '../../lib/clips'
 import { ProfileSwitcher } from './ProfileSwitcher'
-import { useProfiles } from '../../context/ProfileContext'
-import { parseGoodreadsId } from '../../lib/profiles'
 
 /** Top-level places, always shown. */
 const BROWSE: { id: ShelfFilter; label: string; icon: typeof Library }[] = [
@@ -240,9 +238,7 @@ export function Sidebar() {
     searchQuery, readableOnly,
     openIndex, indexSection,
   } = useApp()
-  const { localBooks, isReadable, uploadFile, syncProfile, importLocalLibrary } = useBook()
-  const { owner, setUpOwner } = useProfiles()
-  const fileRef = useRef<HTMLInputElement>(null)
+  const { localBooks, isReadable } = useBook()
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed)
   const toggleGroup = (id: string) => setCollapsed(prev => {
@@ -285,54 +281,6 @@ export function Sidebar() {
   )
 
   const visibleShelves = SHELVES.filter(s => shelves[s.id] > 0 || shelfFilter === s.id)
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try {
-      await uploadFile(file)
-    } catch (err) {
-      console.error('Upload failed:', err)
-    }
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
-  /* Connecting Goodreads now means "this shelf is mine", not "pour these books
-     into whatever's already here" — that second behaviour is exactly what
-     merged two people's libraries together. */
-  const handleGoodreads = async () => {
-    const input = window.prompt(
-      owner?.goodreadsUserId
-        ? `Your library currently reads from Goodreads user ${owner.goodreadsUserId}.\nPaste a different profile URL to change it.`
-        : 'Paste your Goodreads profile URL\n(e.g. https://www.goodreads.com/user/show/12345-name).\nYour profile must be public.',
-      owner?.goodreadsUserId ?? '',
-    )
-    if (!input) return
-    const grId = parseGoodreadsId(input)
-    if (!grId) {
-      window.alert('That doesn’t contain a Goodreads user id.')
-      return
-    }
-    setUpOwner(owner?.name || 'My Library', grId)
-    try {
-      const count = await syncProfile('owner', grId)
-      window.alert(count > 0
-        ? `Your library now reads ${count} books from Goodreads.`
-        : 'No books found — is the profile public?')
-    } catch (err) {
-      window.alert(`Goodreads import failed: ${(err as Error).message}`)
-    }
-  }
-
-  const handleScanLocal = async () => {
-    try {
-      const added = await importLocalLibrary(true)
-      window.alert(added > 0 ? `Loaded ${added} books from your local folder.` : 'No new local books found.')
-      setShelfFilter('local')
-    } catch (err) {
-      window.alert(`Local scan failed: ${(err as Error).message}`)
-    }
-  }
 
   const handleNewCollection = () => {
     const name = window.prompt('Name this collection')
@@ -603,16 +551,6 @@ export function Sidebar() {
 
       {/* Pinned actions */}
       <div className="flex-shrink-0 border-t border-on-chrome-muted/15 px-3 py-3 flex flex-col gap-px">
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".epub,.txt,.md,.csv"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-        <Row icon={Upload} label="Import Books" onClick={() => fileRef.current?.click()} />
-        <Row icon={BookCopy} label="Connect Goodreads" onClick={handleGoodreads} />
-        <Row icon={HardDrive} label="Rescan Local Folder" onClick={handleScanLocal} />
         <Row icon={Settings} label="Settings" onClick={() => setSettingsOpen(true)} />
       </div>
     </div>

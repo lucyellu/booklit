@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+
+export type ReadWordStyle = 'highlight' | 'bold' | 'underline' | 'italic' | 'off';
 
 export interface Chapter {
   title: string;
@@ -51,6 +53,7 @@ interface BookContextType {
   isPlaying: boolean;
   highlightedWordIndex: number;
   readWordIndices: number[];
+  readWordStyle: ReadWordStyle;
   playbackSpeed: number;
   volume: number;
   fontSize: number;
@@ -98,6 +101,7 @@ interface BookContextType {
   togglePlayback: () => void;
   stopPlayback: () => void;
   setPlaybackSpeed: (speed: number) => void;
+  setReadWordStyle: (style: ReadWordStyle) => void;
   setVolume: (volume: number) => void;
   setFontSize: (size: number) => void;
   setSelectedVoice: (voice: SpeechSynthesisVoice | null) => void;
@@ -148,6 +152,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   const [isPlaying, setIsPlaying] = useState(false);
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const [readWordIndices, setReadWordIndices] = useState<number[]>([]);
+  const [readWordStyle, setReadWordStyle] = useState<ReadWordStyle>('highlight');
   const [playbackSpeed, setPlaybackSpeed] = useState(1.2);
   const [volume, setVolume] = useState(0.8);
   const [fontSize, setFontSize] = useState(18);
@@ -199,6 +204,19 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     highlights: 0,
   }]);
   const [isLoadingLocalBooks, setIsLoadingLocalBooks] = useState(false);
+
+  /* Many voices (most Windows/Chrome SAPI voices in particular) never fire
+     per-word `onboundary` events at all, so highlightedWordIndex would sit at
+     -1 for the whole utterance and no read-word style would ever show. This
+     ref lets us fall back to a timer-simulated advance when we detect that's
+     happening, without leaking timers across replays/cancels. */
+  const fallbackTimerRef = useRef<{ timeoutId?: ReturnType<typeof setTimeout>; intervalId?: ReturnType<typeof setInterval> }>({});
+  const clearFallbackHighlightTimer = useCallback(() => {
+    if (fallbackTimerRef.current.timeoutId) clearTimeout(fallbackTimerRef.current.timeoutId);
+    if (fallbackTimerRef.current.intervalId) clearInterval(fallbackTimerRef.current.intervalId);
+    fallbackTimerRef.current = {};
+  }, []);
+  useEffect(() => clearFallbackHighlightTimer, [clearFallbackHighlightTimer]);
 
   // Load persisted library from localStorage on mount (merge with sample book)
   useEffect(() => {
@@ -675,12 +693,14 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   }, [currentChapterIndex, book.chapters, setCurrentChapter]);
 
   const stopPlayback = useCallback(() => {
+    clearFallbackHighlightTimer();
     speechSynthesis.cancel();
     setIsPlaying(false);
     setHighlightedWordIndex(-1);
-  }, []);
+  }, [clearFallbackHighlightTimer]);
 
   const speakText = useCallback((text: string) => {
+    clearFallbackHighlightTimer();
     speechSynthesis.cancel();
     setReadWordIndices([]);
     
@@ -744,10 +764,44 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
 
     console.log('Starting speech with words:', words, 'Speaking:', voiceLang, 'Text:', textToSpeak.substring(0, 50)); // Debug log
 
+    // Some voices (notably local Windows/SAPI voices in Chrome) never emit
+    // per-word onboundary events. If we don't see a real one shortly after
+    // speech starts, fall back to advancing the highlight on a timer paced
+    // to the utterance's own rate, so highlighting still works either way.
+    let boundaryFired = false;
+    let simulating = false;
+
+    const advanceSimulatedWord = () => {
+      if (currentWordIndex > 0) {
+        setReadWordIndices(prev =>
+          prev.includes(currentWordIndex - 1) ? prev : [...prev, currentWordIndex - 1]
+        );
+      }
+      if (currentWordIndex >= words.length) {
+        clearFallbackHighlightTimer();
+        return;
+      }
+      setHighlightedWordIndex(currentWordIndex);
+      currentWordIndex++;
+    };
+
+    utterance.onstart = () => {
+      fallbackTimerRef.current.timeoutId = setTimeout(() => {
+        if (boundaryFired) return;
+        simulating = true;
+        const msPerWord = Math.max(120, 60000 / (155 * (utterance.rate || 1)));
+        advanceSimulatedWord();
+        fallbackTimerRef.current.intervalId = setInterval(advanceSimulatedWord, msPerWord);
+      }, 350);
+    };
+
     utterance.onboundary = (event) => {
       if (event.name === 'word') {
+        if (simulating) return; // already timer-driven; ignore late/duplicate real events
+        boundaryFired = true;
+        clearFallbackHighlightTimer();
         console.log(`Word boundary at char ${event.charIndex}, word index: ${currentWordIndex}`); // Debug log
-        
+
         // Mark previous word as read
         if (currentWordIndex > 0) {
           setReadWordIndices(prev => {
@@ -757,7 +811,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
             return prev;
           });
         }
-        
+
         // Highlight current word
         setHighlightedWordIndex(currentWordIndex);
         currentWordIndex++;
@@ -766,7 +820,8 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
 
     utterance.onend = () => {
       console.log('Speech ended'); // Debug log
-      
+      clearFallbackHighlightTimer();
+
       // Mark the last word as read
       if (currentWordIndex > 0) {
         setReadWordIndices(prev => {
@@ -809,16 +864,18 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
 
     utterance.onerror = (event) => {
       console.error('Speech error:', event); // Debug log
+      clearFallbackHighlightTimer();
       setIsPlaying(false);
       setHighlightedWordIndex(-1);
     };
 
     setSpeechUtterance(utterance);
     speechSynthesis.speak(utterance);
-  }, [playbackSpeed, volume, selectedVoice, autoPlayNext, currentChapter, currentPage, currentChapterIndex, book.chapters.length, setCurrentChapter, translationLanguage, translatedText]);
+  }, [playbackSpeed, volume, selectedVoice, autoPlayNext, currentChapter, currentPage, currentChapterIndex, book.chapters.length, setCurrentChapter, translationLanguage, translatedText, clearFallbackHighlightTimer]);
 
   const togglePlayback = useCallback(() => {
     if (isPlaying) {
+      clearFallbackHighlightTimer();
       speechSynthesis.cancel();
       setIsPlaying(false);
       setHighlightedWordIndex(-1);
@@ -832,7 +889,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
         speakText(pageContent);
       }
     }
-  }, [isPlaying, currentChapter, currentPage, speakText, translationLanguage, translatedText]);
+  }, [isPlaying, currentChapter, currentPage, speakText, translationLanguage, translatedText, clearFallbackHighlightTimer]);
 
   // Bookmark functions
   const addBookmark = useCallback(() => {
@@ -914,6 +971,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     isPlaying,
     highlightedWordIndex,
     readWordIndices,
+    readWordStyle,
     playbackSpeed,
     volume,
     fontSize,
@@ -961,6 +1019,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     togglePlayback,
     stopPlayback,
     setPlaybackSpeed,
+    setReadWordStyle,
     setVolume,
     setFontSize,
     setSelectedVoice,

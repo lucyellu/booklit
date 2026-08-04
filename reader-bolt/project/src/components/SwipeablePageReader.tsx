@@ -21,6 +21,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
   const {
     highlightedWordIndex,
     readWordIndices,
+    readWordStyle,
     fontSize,
     wordSpacing,
     sentenceSpacing,
@@ -105,6 +106,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
                   isPlaying={isPlaying}
                   highlightedWordIndex={highlightedWordIndex}
                   readWordIndices={readWordIndices}
+                  readWordStyle={readWordStyle}
                   highlightColor={highlightColor}
                   fontSize={fontSize}
                   sentenceSpacing={sentenceSpacing}
@@ -135,6 +137,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
               isPlaying={isPlaying}
               highlightedWordIndex={highlightedWordIndex}
               readWordIndices={readWordIndices}
+              readWordStyle={readWordStyle}
               highlightColor={highlightColor}
               fontSize={fontSize}
               sentenceSpacing={sentenceSpacing}

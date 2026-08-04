@@ -19,6 +19,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
     goToPreviousPage,
     highlightedWordIndex,
     readWordIndices,
+    readWordStyle,
     isPlaying,
     fontSize,
     currentChapterIndex,
@@ -186,6 +187,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
                     isPlaying={isPlaying}
                     highlightedWordIndex={highlightedWordIndex}
                     readWordIndices={readWordIndices}
+                    readWordStyle={readWordStyle}
                     highlightColor={highlightColor}
                     fontSize={fontSize}
                     sentenceSpacing={sentenceSpacing}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useBook } from '../context/BookContext';
-import { Settings, Type, Mic, Columns, Space as Spacing, Maximize, Hash, Move, RotateCcw, BookOpen, Eye, EyeOff, Scroll } from 'lucide-react';
+import { Settings, Type, Mic, Columns, Space as Spacing, Maximize, Hash, Move, RotateCcw, BookOpen, Eye, EyeOff, Scroll, Highlighter } from 'lucide-react';
 import { ThemeType } from '../App';
+import { ReadWordStyle } from '../context/BookContext';
 
 interface ReadingSettingsProps {
   isDarkMode: boolean;
@@ -30,6 +31,8 @@ const ReadingSettings: React.FC<ReadingSettingsProps> = ({
     setReaderHeight,
     playbackSpeed,
     setPlaybackSpeed,
+    readWordStyle,
+    setReadWordStyle,
     showPageNumbers,
     setShowPageNumbers,
     paddingSize,
@@ -461,6 +464,44 @@ const ReadingSettings: React.FC<ReadingSettingsProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Read Word Style */}
+            <div className="mb-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <Highlighter className={`w-4 h-4 ${isDarkMode ? 'text-white/70' : 'text-gray-600'}`} />
+                <label className={`text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-gray-600'}`}>
+                  Read Word Style
+                </label>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: 'highlight', label: 'Highlight' },
+                  { value: 'bold', label: 'Bold' },
+                  { value: 'underline', label: 'Underline' },
+                  { value: 'italic', label: 'Italic' },
+                  { value: 'off', label: 'Off' },
+                ] as { value: ReadWordStyle; label: string }[]).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setReadWordStyle(value)}
+                    className={`py-2 px-2 rounded-lg text-xs font-medium transition-all duration-200 border ${
+                      readWordStyle === value
+                        ? isDarkMode
+                          ? 'bg-blue-500/30 text-blue-300 border-blue-400/50'
+                          : 'bg-blue-500/20 text-blue-600 border-blue-500/50'
+                        : isDarkMode
+                          ? 'bg-black/20 text-white/70 hover:bg-black/30 border-white/10'
+                          : 'bg-white/20 text-gray-600 hover:bg-white/30 border-white/20'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className={`text-xs mt-1 ${isDarkMode ? 'text-white/40' : 'text-gray-500'}`}>
+                How the word being read aloud is styled while playing
+              </p>
             </div>
 
             {/* Playback Speed */}

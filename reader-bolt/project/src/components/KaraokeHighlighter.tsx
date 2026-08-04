@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ReadWordStyle } from '../context/BookContext';
 
 interface KaraokeHighlighterProps {
   text: string;
   isPlaying: boolean;
   highlightedWordIndex: number;
   readWordIndices: number[];
+  readWordStyle: ReadWordStyle;
   highlightColor: string;
   fontSize: number;
   sentenceSpacing: number;
@@ -20,6 +22,7 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
   isPlaying,
   highlightedWordIndex,
   readWordIndices,
+  readWordStyle,
   highlightColor,
   fontSize,
   sentenceSpacing,
@@ -105,30 +108,58 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
 
     const isHighlighted = wordIndex === highlightedWordIndex;
     const isRead = readWordIndices.includes(wordIndex);
-    
-    let backgroundColor = 'transparent';
-    let opacity = 1;
-    let fontWeight = 'normal';
-    
-    if (isHighlighted) {
-      backgroundColor = `${highlightColor}80`; // 50% opacity
-      fontWeight = '500';
-    } else if (isRead) {
-      backgroundColor = `${highlightColor}20`; // 12.5% opacity
-      opacity = 0.7;
-    }
-    
-    return {
-      backgroundColor,
-      opacity,
-      fontWeight,
+
+    const base = {
       marginRight: wordSpacing > 0 ? `${wordSpacing}em` : undefined,
-      padding: isHighlighted ? '2px 4px' : '0',
-      borderRadius: isHighlighted ? '4px' : '0',
       transition: 'all 0.3s ease',
-      transform: isHighlighted ? 'scale(1.02)' : 'scale(1)',
-      boxShadow: isHighlighted ? `0 2px 8px ${highlightColor}40` : 'none'
     };
+
+    if (readWordStyle === 'off' || (!isHighlighted && !isRead)) {
+      return base;
+    }
+
+    // Read-but-not-current words get a faint dim regardless of style, so
+    // there's still a sense of progress once the highlight moves on.
+    const opacity = isRead && !isHighlighted ? 0.7 : 1;
+
+    switch (readWordStyle) {
+      case 'bold':
+        return { ...base, opacity, fontWeight: isHighlighted ? 700 : 'normal' };
+      case 'underline':
+        return {
+          ...base,
+          opacity,
+          textDecoration: isHighlighted ? 'underline' : 'none',
+          textDecorationColor: highlightColor,
+          textDecorationThickness: isHighlighted ? '2px' : undefined,
+          textUnderlineOffset: isHighlighted ? '3px' : undefined,
+        };
+      case 'italic':
+        return { ...base, opacity, fontStyle: isHighlighted ? 'italic' : 'normal' };
+      case 'highlight':
+      default: {
+        let backgroundColor = 'transparent';
+        let fontWeight = 'normal';
+
+        if (isHighlighted) {
+          backgroundColor = `${highlightColor}80`; // 50% opacity
+          fontWeight = '500';
+        } else if (isRead) {
+          backgroundColor = `${highlightColor}20`; // 12.5% opacity
+        }
+
+        return {
+          ...base,
+          backgroundColor,
+          opacity,
+          fontWeight,
+          padding: isHighlighted ? '2px 4px' : '0',
+          borderRadius: isHighlighted ? '4px' : '0',
+          transform: isHighlighted ? 'scale(1.02)' : 'scale(1)',
+          boxShadow: isHighlighted ? `0 2px 8px ${highlightColor}40` : 'none'
+        };
+      }
+    }
   };
 
   return (

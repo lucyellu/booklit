@@ -200,8 +200,21 @@ function parseBookFilename(filename) {
   let author = bracketAuthor, title = name
   const dash = name.indexOf(' - ')
   if (dash > 0) {
-    if (!author) author = name.slice(0, dash).trim()
-    title = name.slice(dash + 3).trim()
+    const before = name.slice(0, dash).trim()
+    const after = name.slice(dash + 3).trim()
+    // Usually "Author - Title", but a "Title - Lastname, First" file (no
+    // parenthetical author hint, e.g. "Last Chance to See - Adams, Douglas")
+    // reads the other way. A comma on one side and not the other is a much
+    // stronger author signal than which side of the dash it's on.
+    const afterLooksLikeAuthor =
+      !author && !before.includes(',') && /^[^,]+,[^,]+$/.test(after) && after.split(/\s+/).length <= 4
+    if (afterLooksLikeAuthor) {
+      author = after
+      title = before
+    } else {
+      if (!author) author = before
+      title = after
+    }
   }
   // strip a trailing "-Publisher (Year)" or "(Year)" tail from the title
   title = title

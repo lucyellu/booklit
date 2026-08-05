@@ -7,7 +7,7 @@ import { WebGLScene } from './WebGLScene'
 import { ModelScene } from './ModelScene'
 import type { LocalBook } from '../../context/BookContext'
 import {
-  dedupe, applyFilters, sortBooks, SORT_LABELS, SORT_DIR_LABELS,
+  dedupe, applyWorkPrefs, applyFilters, sortBooks, SORT_LABELS, SORT_DIR_LABELS,
 } from '../../lib/filterBooks'
 import type { SortKey } from '../../lib/filterBooks'
 import { authorHue, spineWidth, hasDistinctSpineArt } from '../../lib/bookMeta'
@@ -63,17 +63,23 @@ export function LibraryView() {
     localBooks, openBook, bookLoadingId, bookError, clearBookError, isReadable,
     syncingProfileId,
   } = useBook()
-  const { activeProfile } = useProfiles()
+  const { activeProfile, overrides } = useProfiles()
   const [page, setPage] = useState(0)
 
   const deduped = useMemo(() => dedupe(localBooks, isReadable), [localBooks, isReadable])
+  // Layer the user's manually-picked cover (per title, from the detail panel's
+  // Editions section) on top of dedupe()'s scoring-based default.
+  const withCovers = useMemo(
+    () => applyWorkPrefs(deduped, localBooks, overrides),
+    [deduped, localBooks, overrides],
+  )
 
   const activeList = useMemo(() => findList(listId, isReadable), [listId, isReadable])
 
   const filtered = useMemo(
     () => sortBooks(
       applyFilters(
-        deduped,
+        withCovers,
         {
           shelfFilter, searchQuery, readableOnly, availability, librarySource,
           collectionId, collections, listMatch: activeList?.match ?? null,
@@ -83,7 +89,7 @@ export function LibraryView() {
       sortKey,
       sortDir,
     ),
-    [deduped, shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections, activeList, isReadable, sortKey, sortDir],
+    [withCovers, shelfFilter, searchQuery, readableOnly, availability, librarySource, collectionId, collections, activeList, isReadable, sortKey, sortDir],
   )
 
   const activeCollection = collections.find(c => c.id === collectionId) ?? null
@@ -125,7 +131,7 @@ export function LibraryView() {
       if (hidden) {
         list = sortBooks(
           applyFilters(
-            deduped,
+            withCovers,
             {
               shelfFilter, searchQuery: '', readableOnly, availability, librarySource,
               collectionId, collections, listMatch: activeList?.match ?? null,
@@ -143,7 +149,7 @@ export function LibraryView() {
       setPage(Math.floor(idx / resolvePageSize(stageSize, libraryView, list.length)))
     })
     return () => registerRevealHandler(null)
-  }, [registerRevealHandler, filtered, deduped, shelfFilter, readableOnly, availability,
+  }, [registerRevealHandler, filtered, withCovers, shelfFilter, readableOnly, availability,
     librarySource, collectionId, collections, activeList, isReadable, sortKey, sortDir,
     stageSize, libraryView, openDetail, setSearchQuery])
 

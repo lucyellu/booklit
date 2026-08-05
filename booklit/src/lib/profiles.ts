@@ -61,6 +61,18 @@ export interface ShelfOverride {
    * A word offset survives repagination.
    */
   lastPosition?: { chapterIndex: number; wordOffset: number }
+  /**
+   * Manual choices for a title with multiple ingested records (e.g. a curated
+   * CSV entry and a local-folder scan of the same book). Lets a duplicate that
+   * `dedupeKey` merged into one card still show the cover/format the user
+   * actually wants, instead of always the scoring-based default.
+   */
+  workPrefs?: {
+    /** id of the edition whose cover should display for this title. */
+    coverEditionId?: string
+    /** id of the edition "Read" should open for this title. */
+    readEditionId?: string
+  }
   updatedAt: number
 }
 

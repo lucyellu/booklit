@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
@@ -9,9 +9,11 @@ import { OutlinePanel } from './OutlinePanel'
 import {
   authorHue, metaRows, shelfDisplay, shelfEmoji,
 } from '../../lib/bookMeta'
+import { dedupeKey } from '../../lib/filterBooks'
+import { bookKey } from '../../lib/profiles'
 import {
   X, BookOpen, ShoppingCart, Landmark, ExternalLink, Loader2, Plus, Check,
-  BookmarkPlus, Star, Focus as FocusIcon, Info, ListTree,
+  BookmarkPlus, Star, Focus as FocusIcon, Info, ListTree, Image as ImageIcon,
   PanelRight, PanelRightClose,
 } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
@@ -301,23 +303,151 @@ function ShelfControls({ book }: { book: LocalBook }) {
   )
 }
 
+/** Human label for where a record came from, shown next to its format. */
+function sourceLabel(b: LocalBook): string {
+  switch (b.source) {
+    case 'local': return 'Local Library'
+    case 'goodreads': return 'Goodreads'
+    case 'upload': return 'Uploaded'
+    case 'saved': return 'Saved'
+    default: return 'Library'
+  }
+}
+
+/**
+ * Covers + formats for a title that collapsed multiple ingested records into
+ * one card — e.g. a curated Library entry with no ebook and a Local Library
+ * epub with different art. Lets the user pick which cover shows and which
+ * file "Read" opens, instead of silently keeping whichever dedupe() scored
+ * highest.
+ */
+function EditionsSection({ book, editions, prefs }: {
+  book: LocalBook
+  editions: LocalBook[]
+  prefs: { coverEditionId?: string; readEditionId?: string } | undefined
+}) {
+  const { isReadable } = useBook()
+  const { setOverride } = useProfiles()
+
+  const covers = useMemo(() => {
+    const seen = new Set<string>()
+    return editions.filter(e => {
+      if (!e.coverUrl || seen.has(e.coverUrl)) return false
+      seen.add(e.coverUrl)
+      return true
+    })
+  }, [editions])
+
+  const effectiveCoverUrl = (prefs?.coverEditionId
+    && editions.find(e => e.id === prefs.coverEditionId)?.coverUrl) || book.coverUrl
+  const effectiveReadId = (prefs?.readEditionId && editions.some(e => e.id === prefs.readEditionId))
+    ? prefs.readEditionId
+    : editions.find(isReadable)?.id
+
+  const pick = (patch: { coverEditionId?: string; readEditionId?: string }) => {
+    setOverride(bookKey(book.title, book.author), { workPrefs: { ...prefs, ...patch } })
+  }
+
+  return (
+    <section className="mt-6">
+      <h3 className="text-[10px] font-bold uppercase tracking-widest text-accent-warm mb-2">
+        Editions · {editions.length}
+      </h3>
+
+      {covers.length > 1 && (
+        <div className="mb-3">
+          <p className="text-[11px] text-text-muted mb-1.5">Cover</p>
+          <div className="flex flex-wrap gap-2">
+            {covers.map(e => (
+              <button
+                key={e.id}
+                onClick={() => pick({ coverEditionId: e.id })}
+                title={`${sourceLabel(e)} cover`}
+                className={`w-10 h-14 rounded-md overflow-hidden border-2 transition-colors ${
+                  e.coverUrl === effectiveCoverUrl ? 'border-accent' : 'border-transparent hover:border-border-hover'
+                }`}
+              >
+                <img src={e.coverUrl} alt={sourceLabel(e)} className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="text-[11px] text-text-muted mb-1.5">Format</p>
+      <div className="flex flex-col gap-1.5">
+        {editions.map(e => {
+          const canRead = isReadable(e)
+          const active = e.id === effectiveReadId
+          return (
+            <button
+              key={e.id}
+              onClick={() => canRead && pick({ readEditionId: e.id })}
+              disabled={!canRead}
+              title={canRead ? 'Read this edition' : 'No ebook file for this one'}
+              className={`flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors text-left ${
+                active
+                  ? 'bg-accent text-on-accent border-transparent'
+                  : canRead
+                  ? 'border-border-hover text-text-dim hover:border-accent hover:text-text'
+                  : 'border-border text-text-muted/60 cursor-default'
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                {!e.coverUrl && <ImageIcon className="w-3 h-3 opacity-60" />}
+                {e.format ? e.format.toUpperCase() : 'No ebook'}
+              </span>
+              <span className={active ? 'text-on-accent/80' : 'text-text-muted'}>
+                {sourceLabel(e)}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function DetailBody({ book }: { book: LocalBook }) {
   const {
     closeDetail, openReader, collections, toggleBookInCollection, libraryView, requestFocus,
   } = useApp()
-  const { openBook, isReadable, bookLoadingId } = useBook()
+  const { localBooks, openBook, isReadable, bookLoadingId } = useBook()
+  const { overrides } = useProfiles()
   const { theme } = useTheme()
   const [coverFailed, setCoverFailed] = useState(false)
 
   const hue = authorHue(book.author, book.title)
-  const cover = coverFailed ? undefined : book.coverUrl
-  const readable = isReadable(book)
   const loading = bookLoadingId === book.id
+
+  // Every raw record that collapsed into this one card — the curated CSV entry
+  // with no ebook, the local-folder epub with a different cover, etc. Computed
+  // against the full pre-dedupe list, so nothing that got merged away is lost.
+  const editions = useMemo(
+    () => localBooks.filter(b => dedupeKey(b) === dedupeKey(book)),
+    [localBooks, book],
+  )
+  const prefs = overrides[bookKey(book.title, book.author)]?.workPrefs
+  // Readable if *any* edition is — the representative card (e.g. a curated
+  // entry with no ebook) can lose that scoring contest to a sibling that has
+  // one, and "Read free" shouldn't stay disabled just because it did.
+  const readable = editions.some(isReadable)
+
+  // `book` is looked up straight from context, unaffected by the grid's own
+  // cover-preference layering — so the chosen cover is reapplied here too,
+  // or the header band would show the scoring-based default the moment you
+  // open the panel, disagreeing with the card you just clicked.
+  const effectiveCoverUrl = (prefs?.coverEditionId
+    && editions.find(e => e.id === prefs.coverEditionId)?.coverUrl) || book.coverUrl
+  const cover = coverFailed ? undefined : effectiveCoverUrl
 
   // The panel stays on the book after the reader opens, so closing the reader
   // puts you back where you were rather than on a blank sidebar.
   const handleRead = () => {
-    openBook(book).then(ok => { if (ok) openReader() })
+    const readTarget = (prefs?.readEditionId && editions.find(e => e.id === prefs.readEditionId))
+      || editions.find(isReadable)
+      || book
+    openBook(readTarget).then(ok => { if (ok) openReader() })
   }
 
   return (
@@ -431,6 +561,13 @@ function DetailBody({ book }: { book: LocalBook }) {
           {/* Shelf controls. On your own library these edit it; on someone
               else's the only sensible action is to take a copy. */}
           <ShelfControls book={book} />
+
+          {/* Editions. Only shown when this card is actually standing in for
+              more than one ingested record — a single-edition book looks
+              exactly like it did before this existed. */}
+          {editions.length > 1 && (
+            <EditionsSection book={book} editions={editions} prefs={prefs} />
+          )}
 
           {/* Meta grid */}
           <MetaGrid book={book} />

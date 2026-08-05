@@ -1,6 +1,7 @@
 import type { LocalBook } from '../context/BookContext'
 import type { AvailabilityFilter, Collection, ShelfFilter } from '../context/AppContext'
 import type { BookSource } from '../context/BookContext'
+import { bookKey, type ShelfOverride } from './profiles'
 
 /**
  * One filter pipeline, shared by the grid and the sidebar counts so the two can
@@ -33,6 +34,24 @@ export function dedupe(books: LocalBook[], isReadable: (b: LocalBook) => boolean
     if (!ex || score(b) > score(ex)) map.set(k, b)
   }
   return [...map.values()]
+}
+
+/**
+ * Layer the user's manually-picked cover on top of dedupe()'s scoring-based
+ * default. Runs after dedupe() (not inside it) because it needs the full,
+ * pre-dedupe list to find the sibling edition the user actually chose.
+ */
+export function applyWorkPrefs(
+  deduped: LocalBook[],
+  allBooks: LocalBook[],
+  overrides: Record<string, ShelfOverride>,
+): LocalBook[] {
+  return deduped.map(b => {
+    const coverId = overrides[bookKey(b.title, b.author)]?.workPrefs?.coverEditionId
+    if (!coverId) return b
+    const chosen = allBooks.find(x => x.id === coverId && dedupeKey(x) === dedupeKey(b))
+    return chosen?.coverUrl ? { ...b, coverUrl: chosen.coverUrl } : b
+  })
 }
 
 export function matchesShelf(b: LocalBook, filter: ShelfFilter): boolean {

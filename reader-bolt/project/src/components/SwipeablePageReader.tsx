@@ -34,6 +34,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
     translatedText,
     showSideBySide,
     textHighlights,
+    currentChapter,
     currentChapterIndex,
     currentPage,
     addTextHighlight,
@@ -51,6 +52,13 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
 
   const [selectionPopup, setSelectionPopup] = useState<{ x: number; y: number; text: string; startWordIndex: number } | null>(null);
   const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
+
+  // Images that fail to load (hotlink-protected CDNs, dead links, etc.) are
+  // dropped from the render entirely rather than left as a broken-image icon
+  // or fallback alt text — a URL silently failing to load is not something
+  // worth showing the reader.
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const visibleImages = (currentChapter?.images ?? []).filter(img => !failedImages.has(img.url));
 
   // KaraokeHighlighter tags every word span with data-word-index. Reading that
   // straight off the DOM node the selection actually starts on is exact —
@@ -145,6 +153,33 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
           <h2 className="text-xl md:text-2xl font-bold mb-6" style={{ color: accentColor || 'var(--rd-title)' }}>
             {chapterTitle}
           </h2>
+
+          {/* Images from a URL-loaded article. Shown once near the title rather
+              than inline — the word-indexed TTS/highlighting below can't safely
+              interleave non-text content into the page strings. */}
+          {currentPage === 1 && visibleImages.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto mb-6 pb-1 -mx-1 px-1">
+              {visibleImages.map((img, i) => (
+                <a
+                  key={img.url + i}
+                  href={img.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 rounded-xl overflow-hidden border block"
+                  style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                  title={img.alt || 'Open image'}
+                >
+                  <img
+                    src={img.url}
+                    alt={img.alt}
+                    className="h-32 md:h-40 w-auto object-cover"
+                    loading="lazy"
+                    onError={() => setFailedImages(prev => new Set(prev).add(img.url))}
+                  />
+                </a>
+              ))}
+            </div>
+          )}
 
           <div className={twoColumn ? 'md:columns-2 md:gap-10' : ''}>
           {showSideBySide && translationLanguage !== 'none' && translatedText ? (

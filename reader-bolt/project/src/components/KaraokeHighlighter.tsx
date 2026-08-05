@@ -157,6 +157,44 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
     }
   };
 
+  // Group segments into paragraphs at blank-line breaks (source articles use
+  // "\n\n" between paragraphs) without touching word indices — TTS and
+  // highlighting still walk one flat word sequence per page regardless of
+  // how the markup is grouped for display.
+  const paragraphs: Array<typeof segments> = [[]];
+  segments.forEach(segment => {
+    if (!segment.isWord && /\n\s*\n/.test(segment.text)) {
+      paragraphs.push([]);
+    } else {
+      paragraphs[paragraphs.length - 1].push(segment);
+    }
+  });
+
+  const renderSegment = (segment: (typeof segments)[number], key: string) => {
+    if (segment.isWord && segment.wordIndex !== undefined) {
+      const wordIndex = segment.wordIndex;
+      return (
+        <span
+          key={key}
+          data-word-index={wordIndex}
+          className={`word inline-block ${onWordClick ? 'cursor-pointer' : ''}`}
+          style={getWordStyle(wordIndex)}
+          title={onWordClick ? 'Double-click to start reading from here' : undefined}
+          onDoubleClick={onWordClick ? () => {
+            // A drag that produced a selection is handled by the
+            // container's mouseup (highlight popup) instead.
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed && selection.toString().trim()) return;
+            onWordClick(wordIndex);
+          } : undefined}
+        >
+          {segment.text}
+        </span>
+      );
+    }
+    return <span key={key}>{segment.text}</span>;
+  };
+
   return (
     <div
       ref={containerRef}
@@ -173,31 +211,11 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
         WebkitUserSelect: 'text'
       }}
     >
-      {segments.map((segment, index) => {
-        if (segment.isWord && segment.wordIndex !== undefined) {
-          const wordIndex = segment.wordIndex;
-          return (
-            <span
-              key={index}
-              data-word-index={wordIndex}
-              className={`word inline-block ${onWordClick ? 'cursor-pointer' : ''}`}
-              style={getWordStyle(wordIndex)}
-              title={onWordClick ? 'Double-click to start reading from here' : undefined}
-              onDoubleClick={onWordClick ? () => {
-                // A drag that produced a selection is handled by the
-                // container's mouseup (highlight popup) instead.
-                const selection = window.getSelection();
-                if (selection && !selection.isCollapsed && selection.toString().trim()) return;
-                onWordClick(wordIndex);
-              } : undefined}
-            >
-              {segment.text}
-            </span>
-          );
-        } else {
-          return <span key={index}>{segment.text}</span>;
-        }
-      })}
+      {paragraphs.map((paragraph, pi) => (
+        <p key={pi} className={pi < paragraphs.length - 1 ? 'mb-4' : ''}>
+          {paragraph.map((segment, si) => renderSegment(segment, `${pi}-${si}`))}
+        </p>
+      ))}
     </div>
   );
 };

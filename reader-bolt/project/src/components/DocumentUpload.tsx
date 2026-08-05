@@ -242,29 +242,75 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ isDarkMode }) => {
       title = doc.querySelector('h1')?.textContent?.trim() || doc.title || '';
 
       const article = doc.querySelector('article') || doc.querySelector('main') || doc.body;
-      bodyText = (article?.textContent || '').replace(/\s+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim();
+      // Join block-level elements with blank lines so paragraph structure
+      // survives — .textContent on the whole article flattens everything,
+      // including <p> boundaries, into one run with no separators at all.
+      const blocks = Array.from(article?.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote') || []);
+      bodyText = blocks.length
+        ? blocks.map(el => (el.textContent || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n\n')
+        : (article?.textContent || '').replace(/\s+/g, ' ').trim();
     }
 
     if (!title) title = hostname;
 
-    // Strip markdown image/link syntax that r.jina.ai's output may include
+    // Pull images out before stripping markdown, so they can be shown near
+    // the title instead of just vanishing. Order matters: a "click to
+    // enlarge" linked image (`[![alt](img)](link)`) has to be matched before
+    // the plain-image pattern, or its outer `](link)` survives as a bare
+    // "(https://...)" left sitting in the text — which is what was getting
+    // read aloud at the start/end of articles.
+    const images: { url: string; alt: string }[] = [];
     bodyText = bodyText
-      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      // "Click to enlarge" linked image: [![alt](img)](link). Whitespace-
+      // tolerant between the bracket/paren boundaries — some sources wrap
+      // this construct across a line break, which broke a stricter match.
+      .replace(/\[\s*!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)\s*\]\(\s*[^)]*\)/g, (_m, alt, url) => {
+        images.push({ url, alt: alt.trim() });
+        return '';
+      })
+      .replace(/!\[([^\]]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g, (_m, alt, url) => {
+        images.push({ url, alt: alt.trim() });
+        return '';
+      })
       .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
       .replace(/[#*_`>]+/g, '')
-      .replace(/\s+/g, ' ')
+      // Safety net for anything the patterns above didn't fully catch: a
+      // bare URL still wrapped in its now-orphaned parens, or a bare URL on
+      // its own.
+      .replace(/\(\s*https?:\/\/[^()\s]+\s*\)/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/\[\s*\]/g, '')
+      .replace(/\(\s*\)/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+/g, ' ')
       .trim();
+
+    // Collapse each paragraph's internal soft-wraps to spaces but keep the
+    // blank line *between* paragraphs, so the reader shows real paragraph
+    // breaks instead of one flattened wall of text.
+    bodyText = bodyText
+      .split(/\n{2,}/)
+      .map(p => p.replace(/\n/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n\n');
 
     if (bodyText.length < 100) {
       throw new Error('No readable article content found at that URL.');
     }
 
-    const pages = splitIntoPages(bodyText, 900);
+    const seen = new Set<string>();
+    const dedupedImages = images.filter(img => {
+      if (!img.url || seen.has(img.url)) return false;
+      seen.add(img.url);
+      return true;
+    }).slice(0, 20);
+
+    const pages = splitArticleIntoPages(bodyText, 900);
 
     return {
       title,
       author: hostname,
-      chapters: [{ title, content: pages }]
+      chapters: [{ title, content: pages, images: dedupedImages }]
     };
   };
 
@@ -331,8 +377,39 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ isDarkMode }) => {
     if (currentPage.trim()) {
       pages.push(currentPage.trim());
     }
-    
+
     return pages.filter(page => page.length > 0);
+  };
+
+  // Paragraph-aware pagination for URL-loaded articles. splitIntoPages joins
+  // every sentence with a single space, which is fine for prose that's
+  // already been reflowed (EPUB/PDF/TXT) but flattens a blog post's
+  // paragraph breaks into one wall of text. This keeps the blank line
+  // between paragraphs intact so KaraokeHighlighter can render them as
+  // separate <p> blocks.
+  const splitArticleIntoPages = (text: string, charactersPerPage: number = 900): string[] => {
+    const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+    const units: { text: string; sep: string }[] = [];
+    paragraphs.forEach((para, pi) => {
+      const sentences = para.split(/(?<=[.!?])\s+/).filter(Boolean);
+      sentences.forEach((s, si) => {
+        const isLastInPara = si === sentences.length - 1;
+        units.push({ text: s, sep: isLastInPara ? (pi < paragraphs.length - 1 ? '\n\n' : '') : ' ' });
+      });
+    });
+
+    const pages: string[] = [];
+    let current = '';
+    for (const u of units) {
+      if (current.length + u.text.length > charactersPerPage && current.length > 0) {
+        pages.push(current.trim());
+        current = u.text + u.sep;
+      } else {
+        current += u.text + u.sep;
+      }
+    }
+    if (current.trim()) pages.push(current.trim());
+    return pages.filter(p => p.length > 0);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

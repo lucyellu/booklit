@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useBook } from '../context/BookContext';
 
 interface ProgressScrubberProps {
@@ -6,19 +6,19 @@ interface ProgressScrubberProps {
 }
 
 const ProgressScrubber: React.FC<ProgressScrubberProps> = ({ isDarkMode }) => {
-  const { 
-    currentPage, 
-    totalPages, 
-    book, 
-    currentChapterIndex, 
+  const {
+    currentPage,
+    totalPages,
+    book,
+    currentChapterIndex,
     setCurrentPage,
-    setCurrentChapter 
+    setCurrentChapter
   } = useBook();
 
   // Calculate overall progress through the entire book
   let totalPagesInBook = 0;
   let currentAbsolutePage = 0;
-  
+
   book.chapters.forEach((chapter, index) => {
     totalPagesInBook += chapter.content.length;
     if (index < currentChapterIndex) {
@@ -27,12 +27,31 @@ const ProgressScrubber: React.FC<ProgressScrubberProps> = ({ isDarkMode }) => {
   });
   currentAbsolutePage += currentPage;
 
-  const progress = (currentAbsolutePage / totalPagesInBook) * 100;
+  // currentAbsolutePage is 1-indexed (page 1 of the book == 1, not 0), so
+  // dividing straight by totalPagesInBook put a floor under page 1 — it
+  // computed to 1/N, never 0%, so the slider could never rest at the true
+  // left edge on the very first page (and looked "stuck" there). Normalizing
+  // against N-1 spots the book's N pages across the full 0-100 range: page 1
+  // is exactly 0%, the last page is exactly 100%.
+  const lastPageIndex = Math.max(totalPagesInBook - 1, 1);
+  const pageProgress = totalPagesInBook <= 1 ? 100 : ((currentAbsolutePage - 1) / lastPageIndex) * 100;
+
+  // The book only has whole pages, so pageProgress jumps in discrete steps.
+  // Binding the slider's value straight to that meant every pixel of drag
+  // snapped back to the nearest page's fixed percentage, fighting the mouse.
+  // dragProgress holds the raw, continuous value the user is actively
+  // dragging to; it's cleared (falling back to the real, quantized
+  // pageProgress) once they let go.
+  const [dragProgress, setDragProgress] = useState<number | null>(null);
+  const progress = dragProgress ?? pageProgress;
 
   const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newProgress = parseFloat(e.target.value);
-    const targetAbsolutePage = Math.ceil((newProgress / 100) * totalPagesInBook);
-    
+    setDragProgress(newProgress);
+    // Inverse of the pageProgress formula above: 0% -> page 1, 100% -> the
+    // last page.
+    const targetAbsolutePage = Math.round((newProgress / 100) * lastPageIndex) + 1;
+
     // Find which chapter and page this corresponds to
     let accumulatedPages = 0;
     for (let chapterIndex = 0; chapterIndex < book.chapters.length; chapterIndex++) {
@@ -46,6 +65,8 @@ const ProgressScrubber: React.FC<ProgressScrubberProps> = ({ isDarkMode }) => {
       accumulatedPages += chapter.content.length;
     }
   };
+
+  const commitScrub = () => setDragProgress(null);
 
   return (
     <div className="w-full">
@@ -66,6 +87,9 @@ const ProgressScrubber: React.FC<ProgressScrubberProps> = ({ isDarkMode }) => {
           step="0.1"
           value={progress}
           onChange={handleScrub}
+          onMouseUp={commitScrub}
+          onTouchEnd={commitScrub}
+          onKeyUp={commitScrub}
           className={`w-full h-3 rounded-full appearance-none cursor-pointer transition-all duration-200 ${
             isDarkMode 
               ? 'bg-white/10 hover:bg-white/20' 
@@ -91,7 +115,11 @@ const ProgressScrubber: React.FC<ProgressScrubberProps> = ({ isDarkMode }) => {
             for (let i = 0; i < index; i++) {
               pagesBeforeChapter += book.chapters[i].content.length;
             }
-            const chapterStart = (pagesBeforeChapter / totalPagesInBook) * 100;
+            // Chapter's first page is absolute page (pagesBeforeChapter + 1);
+            // run it through the same (page - 1) / lastPageIndex mapping as
+            // pageProgress so the tick lines up with where the thumb
+            // actually lands when scrubbed to that chapter.
+            const chapterStart = totalPagesInBook <= 1 ? 0 : (pagesBeforeChapter / lastPageIndex) * 100;
             
             return (
               <div

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useBook } from '../context/BookContext';
 import { ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
 import { ReadingMode } from '../App';
@@ -55,6 +55,12 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
   
   const textRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Images that fail to load (hotlink-protected CDNs, dead links, etc.) are
+  // dropped from the render entirely rather than left as a broken-image icon
+  // or fallback alt text — a URL silently failing to load is not something
+  // worth showing the reader.
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -126,6 +132,37 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
   currentAbsolutePage += currentPage;
 
   if (!currentChapter) return null;
+
+  // Images from a URL-loaded article. Shown once near the chapter title
+  // rather than inline — the word-indexed TTS/highlighting can't safely
+  // interleave non-text content into the page strings.
+  const renderChapterImages = () => {
+    const visibleImages = (currentChapter.images ?? []).filter(img => !failedImages.has(img.url));
+    if (!visibleImages.length) return null;
+    return (
+      <div className="flex gap-3 overflow-x-auto mb-4 pb-1 -mx-1 px-1">
+        {visibleImages.map((img, i) => (
+          <a
+            key={img.url + i}
+            href={img.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-xl overflow-hidden border block"
+            style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+            title={img.alt || 'Open image'}
+          >
+            <img
+              src={img.url}
+              alt={img.alt}
+              className="h-32 md:h-40 w-auto object-cover"
+              loading="lazy"
+              onError={() => setFailedImages(prev => new Set(prev).add(img.url))}
+            />
+          </a>
+        ))}
+      </div>
+    );
+  };
 
   // Use translated text if available, otherwise use original
   const currentPageContent = translationLanguage !== 'none' && translatedText && !showSideBySide
@@ -231,6 +268,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
               <h2 className={`text-xl md:text-2xl font-bold mb-4`} style={{ color: accentColor || 'var(--rd-title)' }}>
                 {currentChapter.title}
               </h2>
+              {renderChapterImages()}
               <div className={columnClass}>
               {currentChapter.content.map((pageContent, index) => (
                 <p
@@ -267,9 +305,12 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
               >
                 <div className="p-4 md:p-6">
                   {index === 0 && (
-                    <h2 className="text-xl md:text-2xl font-bold mb-4" style={{ color: accentColor || 'var(--rd-title)' }}>
-                      {currentChapter.title}
-                    </h2>
+                    <>
+                      <h2 className="text-xl md:text-2xl font-bold mb-4" style={{ color: accentColor || 'var(--rd-title)' }}>
+                        {currentChapter.title}
+                      </h2>
+                      {renderChapterImages()}
+                    </>
                   )}
                   <div
                     className={`leading-relaxed text-justify ${isDarkMode ? 'text-white/95' : 'text-gray-900'}`}

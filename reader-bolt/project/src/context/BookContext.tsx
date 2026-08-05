@@ -5,6 +5,10 @@ export type ReadWordStyle = 'highlight' | 'bold' | 'underline' | 'italic' | 'off
 export interface Chapter {
   title: string;
   content: string[];
+  /** Images pulled out of a URL-loaded article, shown near the title instead
+   *  of inline (the reader's word-indexed TTS/highlighting can't safely
+   *  interleave non-text content into the page strings). */
+  images?: { url: string; alt: string }[];
 }
 
 export interface Book {
@@ -165,7 +169,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   const [fontSize, setFontSize] = useState(18);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [speechUtterance, setSpeechUtterance] = useState<SpeechSynthesisUtterance | null>(null);
-  const [columnCount, setColumnCount] = useState(1);
+  const [columnCount, setColumnCount] = useState(2);
   const [wordSpacing, setWordSpacing] = useState(0);
   const [sentenceSpacing, setSentenceSpacing] = useState(1.2);
   const [readerWidth, setReaderWidth] = useState(92);

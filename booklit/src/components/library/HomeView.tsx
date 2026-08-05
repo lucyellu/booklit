@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
 import type { LocalBook } from '../../context/BookContext'
@@ -7,7 +7,7 @@ import { allLists, CARD_TINTS } from '../../lib/curatedLists'
 import { PLAYLISTS } from '../../lib/clips'
 import { PlaylistCard } from './PlaylistView'
 import { TintTile } from './TintTile'
-import { Play, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Play, ChevronRight, ChevronLeft, Link2 } from 'lucide-react'
 
 function greeting(hour: number): string {
   if (hour < 5) return 'Still up'
@@ -95,6 +95,42 @@ function CoverStrip({ books, onOpen, onSelect, selectedId }: {
         </button>
       ))}
     </div>
+  )
+}
+
+/** Pill button that prompts for a URL, loads it as a one-chapter book, and
+ *  jumps straight into the reader — the same "read this aloud" path as
+ *  opening a shelf book, just skipping the shelf. */
+function ReadUrlButton() {
+  const { openReader } = useApp()
+  const { loadUrl } = useBook()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleClick = async () => {
+    const input = window.prompt('Paste an article or blog post URL to read aloud.')
+    const url = input?.trim()
+    if (!url) return
+    setIsLoading(true)
+    try {
+      const ok = await loadUrl(url)
+      if (ok) openReader()
+      else window.alert("Couldn't load that page. Check the URL and try again.")
+    } catch (err) {
+      window.alert(`Couldn't load that page: ${(err as Error).message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isLoading}
+      className="flex-shrink-0 inline-flex items-center gap-2 rounded-full bg-accent text-on-accent px-5 py-2 text-[13px] font-bold shadow-sm hover:brightness-110 transition disabled:opacity-60"
+    >
+      <Link2 className="w-4 h-4" />
+      {isLoading ? 'Loading…' : 'Read a URL'}
+    </button>
   )
 }
 
@@ -200,13 +236,16 @@ export function HomeView() {
   if (deduped.length === 0) {
     return (
       <div className="max-w-5xl mx-auto pb-12">
-        <header className="mb-10">
-          <h1 className="font-display text-4xl font-bold tracking-tight text-text mb-2">
-            {greeting(new Date().getHours())}
-          </h1>
-          <p className="text-text-dim text-lg">
-            Connecting to your library… or import a Goodreads CSV / upload EPUBs to get started.
-          </p>
+        <header className="mb-10 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-4xl font-bold tracking-tight text-text mb-2">
+              {greeting(new Date().getHours())}
+            </h1>
+            <p className="text-text-dim text-lg">
+              Connecting to your library… or import a Goodreads CSV / upload EPUBs to get started.
+            </p>
+          </div>
+          <ReadUrlButton />
         </header>
         {playlistRow}
       </div>
@@ -215,11 +254,14 @@ export function HomeView() {
 
   return (
     <div className="max-w-5xl mx-auto pb-12">
-      <header className="mb-10">
-        <h1 className="font-display text-4xl font-bold tracking-tight text-text mb-2">
-          {greeting(new Date().getHours())}
-        </h1>
-        <p className="text-text-dim text-lg">What do you want to read?</p>
+      <header className="mb-10 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-4xl font-bold tracking-tight text-text mb-2">
+            {greeting(new Date().getHours())}
+          </h1>
+          <p className="text-text-dim text-lg">What do you want to read?</p>
+        </div>
+        <ReadUrlButton />
       </header>
 
       {playlistRow}

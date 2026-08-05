@@ -130,6 +130,8 @@ interface BookContextType {
   setBook: (book: Book) => void
   /** Open a library book — fetches & parses its EPUB on demand if not already loaded. */
   openBook: (lb: LocalBook) => Promise<boolean>
+  /** Fetch a web page, extract its readable article text, and load it as a one-chapter book. */
+  loadUrl: (url: string) => Promise<boolean>
   clearBookError: () => void
   /** True if this book can actually be opened in-app (local file, loaded, or bundled EPUB). */
   isReadable: (lb: LocalBook) => boolean
@@ -846,6 +848,72 @@ export function BookProvider({ children }: { children: ReactNode }) {
     }
   }, [activateBook])
 
+  // Fetch a web page and load its readable text as a one-chapter book. Tries
+  // r.jina.ai's reader mode first (strips nav/ads far better than we could
+  // by hand); falls back to fetching raw HTML through a CORS proxy and
+  // extracting <article>/<main> text ourselves if that's unreachable.
+  const loadUrl = useCallback(async (rawUrl: string): Promise<boolean> => {
+    setBookError(null)
+    const normalizedUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
+    let hostname = 'Web Article'
+    try {
+      hostname = new URL(normalizedUrl).hostname.replace(/^www\./, '')
+    } catch {
+      setBookError("That doesn't look like a valid URL.")
+      return false
+    }
+
+    let title = ''
+    let bodyText = ''
+
+    try {
+      const resp = await fetch(`https://r.jina.ai/${normalizedUrl}`)
+      if (!resp.ok) throw new Error(`Reader service returned ${resp.status}`)
+      const raw = await resp.text()
+      const titleMatch = raw.match(/^Title:\s*(.+)$/m)
+      if (titleMatch) title = titleMatch[1].trim()
+      const contentMatch = raw.match(/Markdown Content:\s*([\s\S]*)/)
+      bodyText = (contentMatch ? contentMatch[1] : raw).trim()
+    } catch {
+      try {
+        const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(normalizedUrl)}`
+        const resp = await fetch(proxied)
+        if (!resp.ok) throw new Error('Could not load that page.')
+        const html = await resp.text()
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
+        doc.querySelectorAll('script, style, nav, header, footer, aside, noscript, iframe, svg')
+          .forEach(el => el.remove())
+        title = doc.querySelector('h1')?.textContent?.trim() || doc.title || ''
+        const article = doc.querySelector('article') || doc.querySelector('main') || doc.body
+        bodyText = (article?.textContent || '').replace(/\s+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim()
+      } catch (err) {
+        setBookError(`Couldn't load that page: ${(err as Error).message}`)
+        return false
+      }
+    }
+
+    if (!title) title = hostname
+    bodyText = bodyText
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[#*_`>]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    if (bodyText.length < 100) {
+      setBookError('No readable article content found at that URL.')
+      return false
+    }
+
+    setBook({
+      title,
+      author: hostname,
+      chapters: [{ title, content: splitIntoPages(bodyText) }],
+    })
+    return true
+  }, [setBook])
+
   const clearBookError = useCallback(() => setBookError(null), [])
 
   const isReadable = useCallback((lb: LocalBook): boolean => {
@@ -1142,7 +1210,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       sentenceSpacing, wordSpacing, fontFamily, highlightColor, autoPlayNext,
       bookmarks, textHighlights, localBooks,
       bookLoadingId, bookError,
-      setBook, openBook, clearBookError, isReadable, setCurrentChapter, setCurrentPage,
+      setBook, openBook, loadUrl, clearBookError, isReadable, setCurrentChapter, setCurrentPage,
       goToNextPage, goToPreviousPage, goToNextChapter, goToPreviousChapter,
       togglePlayback, stopPlayback,
       setPlaybackSpeed, setVolume, setFontSize, setSelectedVoice,

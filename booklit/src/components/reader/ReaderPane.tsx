@@ -11,7 +11,7 @@ import { X } from 'lucide-react'
 // public/reader/ and is loaded with ?embed=1 so it hides its own library/auth UI.
 export function ReaderPane() {
   const { view, closeReader } = useApp()
-  const { book, updateReadingProgress } = useBook()
+  const { book, activeBookKey, updateReadingProgress } = useBook()
   const { overrides } = useProfiles()
   const { theme } = useTheme()
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -22,7 +22,7 @@ export function ReaderPane() {
       // iframe re-resolves this word offset to a page after its own
       // pagination, so it's exact even if font size/viewport differ from
       // last time.
-      const lastPosition = overrides[bookKey(book.title, book.author)]?.lastPosition
+      const lastPosition = overrides[activeBookKey ?? bookKey(book.title, book.author)]?.lastPosition
       iframeRef.current?.contentWindow?.postMessage({
         type: 'booklit:load-book',
         book,

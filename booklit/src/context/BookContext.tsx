@@ -130,6 +130,16 @@ interface BookContextType {
   bookLoadingId: string | null
   /** human-readable error from the last failed openBook(), or null. */
   bookError: string | null
+  /**
+   * The override key (see `bookKey`) that reading progress for the open book
+   * is filed under. This is the *shelf* entry's title/author, not the parsed
+   * book's — an EPUB's internal `<dc:title>`/`<dc:creator>` metadata often
+   * differs from the shelf metadata it was catalogued under (subtitles,
+   * "Lastname, Firstname" vs "Firstname Lastname", etc.), and progress
+   * written under the wrong key never reconciles back onto the shelf entry,
+   * so the book silently never appears in History.
+   */
+  activeBookKey: string | null
 
   setBook: (book: Book) => void
   /** Open a library book — fetches & parses its EPUB on demand if not already loaded. */
@@ -607,6 +617,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
      * out if it's no longer current, so a superseded utterance is a no-op. */
   const utteranceGenRef = useRef(0)
   const [book, setBookState] = useState<Book | null>(null)
+  const [activeBookKey, setActiveBookKey] = useState<string | null>(null)
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -793,8 +804,12 @@ export function BookProvider({ children }: { children: ReactNode }) {
   // the page stays 1 here since this app doesn't paginate the way the
   // embedded reader does; ReaderPane forwards the precise word offset to the
   // iframe separately, which lands on the exact page after its own reflow.
-  const activateBook = useCallback((newBook: Book) => {
-    const savedPosition = overrides[bookKey(newBook.title, newBook.author)]?.lastPosition
+  const activateBook = useCallback((newBook: Book, shelfKey?: string) => {
+    // Prefer the shelf entry's own key over one derived from the parsed
+    // book's metadata — see `activeBookKey` on the context type for why.
+    const key = shelfKey ?? bookKey(newBook.title, newBook.author)
+    const savedPosition = overrides[key]?.lastPosition
+    setActiveBookKey(key)
     setBookState(newBook)
     setCurrentChapterIndex(savedPosition && savedPosition.chapterIndex < newBook.chapters.length ? savedPosition.chapterIndex : 0)
     setCurrentPage(1)
@@ -832,7 +847,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const openBook = useCallback(async (lb: LocalBook): Promise<boolean> => {
     setBookError(null)
 
-    if (lb.bookData) { activateBook(lb.bookData); return true }
+    if (lb.bookData) { activateBook(lb.bookData, bookKey(lb.title, lb.author)); return true }
 
     // Local-library files (epub / pdf / txt / md) streamed from the backend.
     if (lb.srcUrl) {
@@ -856,7 +871,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
           if (lb.author && data.author === 'Unknown Author') data.author = lb.author
         }
         setParsed(prev => ({ ...prev, [lb.id]: data }))
-        activateBook(data)
+        activateBook(data, bookKey(lb.title, lb.author))
         return true
       } catch (err) {
         console.error('openBook (local) failed:', err)
@@ -889,7 +904,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       // Preserve the shelf metadata's title/author when the EPUB lacks them.
       if (lb.author && data.author === 'Unknown Author') data.author = lb.author
       setParsed(prev => ({ ...prev, [lb.id]: data }))
-      activateBook(data)
+      activateBook(data, bookKey(lb.title, lb.author))
       return true
     } catch (err) {
       console.error('openBook failed:', err)
@@ -1321,12 +1336,12 @@ export function BookProvider({ children }: { children: ReactNode }) {
     const progress = totalWords > 0
       ? Math.min(100, Math.round(((wordsBefore + wordOffset) / totalWords) * 100))
       : 0
-    setOverride(bookKey(book.title, book.author), {
+    setOverride(activeBookKey ?? bookKey(book.title, book.author), {
       progress,
       lastRead: new Date().toISOString(),
       lastPosition: { chapterIndex, wordOffset },
     })
-  }, [book, setOverride])
+  }, [book, activeBookKey, setOverride])
 
   useEffect(() => {
     setHighlightedWordIndex(-1)
@@ -1350,7 +1365,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
 
   return (
     <BookContext.Provider value={{
-      book, currentChapterIndex, currentChapter, currentPage, totalPages,
+      book, activeBookKey, currentChapterIndex, currentChapter, currentPage, totalPages,
       isPlaying, highlightedWordIndex, readWordIndices,
       playbackSpeed, volume, fontSize, selectedVoice,
       sentenceSpacing, wordSpacing, fontFamily, highlightColor, autoPlayNext,

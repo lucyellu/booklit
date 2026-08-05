@@ -14,7 +14,8 @@ interface KaraokeHighlighterProps {
   fontFamily: string;
   isDarkMode: boolean;
   onWordBoundary?: (wordIndex: number) => void;
-  pageHighlights?: Array<{ selectedText: string; color: string }>;
+  onWordClick?: (wordIndex: number) => void;
+  pageHighlights?: Array<{ startWordIndex: number; wordCount: number; color: string }>;
 }
 
 const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
@@ -30,6 +31,7 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
   fontFamily,
   isDarkMode,
   onWordBoundary,
+  onWordClick,
   pageHighlights
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,22 +72,15 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
     }
   }, [highlightedWordIndex]);
 
-  // Build a set of word indices that fall within highlighted text ranges
+  // Build a set of word indices that fall within highlighted ranges. Each
+  // highlight already knows its own start/length in word units (captured at
+  // selection time), so this only marks that one occurrence — not every
+  // place the same word or phrase happens to appear on the page.
   const highlightedWords = new Map<number, string>(); // wordIndex -> color
   if (pageHighlights && pageHighlights.length > 0) {
     pageHighlights.forEach(h => {
-      // Find where this text appears in the full text
-      let searchIdx = text.indexOf(h.selectedText);
-      while (searchIdx !== -1) {
-        // Count words up to searchIdx to find start word index
-        const before = text.slice(0, searchIdx);
-        const inHighlight = h.selectedText;
-        const startWordIdx = (before.match(/\S+/g) || []).length;
-        const highlightWordCount = (inHighlight.match(/\S+/g) || []).length;
-        for (let i = startWordIdx; i < startWordIdx + highlightWordCount; i++) {
-          highlightedWords.set(i, h.color);
-        }
-        searchIdx = text.indexOf(h.selectedText, searchIdx + 1);
+      for (let i = h.startWordIndex; i < h.startWordIndex + h.wordCount; i++) {
+        highlightedWords.set(i, h.color);
       }
     });
   }
@@ -180,12 +175,21 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
     >
       {segments.map((segment, index) => {
         if (segment.isWord && segment.wordIndex !== undefined) {
+          const wordIndex = segment.wordIndex;
           return (
             <span
               key={index}
-              data-word-index={segment.wordIndex}
-              className="word inline-block"
-              style={getWordStyle(segment.wordIndex)}
+              data-word-index={wordIndex}
+              className={`word inline-block ${onWordClick ? 'cursor-pointer' : ''}`}
+              style={getWordStyle(wordIndex)}
+              onClick={onWordClick ? () => {
+                // A plain click has no selection; a drag that produced one
+                // is handled by the container's mouseup (highlight popup),
+                // so don't also jump playback there.
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed && selection.toString().trim()) return;
+                onWordClick(wordIndex);
+              } : undefined}
             >
               {segment.text}
             </span>

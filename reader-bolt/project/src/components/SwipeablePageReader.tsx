@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useBook } from '../context/BookContext';
 import KaraokeHighlighter from './KaraokeHighlighter';
-import { Bookmark } from 'lucide-react';
+import { Bookmark, Play } from 'lucide-react';
 
 interface SwipeablePageReaderProps {
   isDarkMode: boolean;
@@ -37,7 +37,8 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
     currentChapterIndex,
     currentPage,
     addTextHighlight,
-    columnCount
+    columnCount,
+    playFromWordIndex
   } = useBook();
 
   /* Layout → Double. The class for this was being computed in BookReader and
@@ -47,8 +48,31 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
      and the chapter title stays outside the flow so it spans both. */
   const twoColumn = columnCount === 2 && !(showSideBySide && translationLanguage !== 'none');
 
-  const [selectionPopup, setSelectionPopup] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [selectionPopup, setSelectionPopup] = useState<{ x: number; y: number; text: string; startWordIndex: number } | null>(null);
   const HIGHLIGHT_COLORS = ['#FFD700', '#90EE90', '#87CEEB', '#FFB6C1', '#DDA0DD'];
+
+  // KaraokeHighlighter tags every word span with data-word-index. Reading that
+  // straight off the DOM node the selection actually starts on is exact —
+  // unlike matching the selected text back into the page string, which grabs
+  // whichever occurrence happens to come first when the same word or phrase
+  // appears more than once.
+  const wordIndexAtNode = (node: Node | null): number | null => {
+    let el: Element | null = node instanceof Element ? node : node?.parentElement ?? null;
+    let ancestor: Element | null = el;
+    while (ancestor && !ancestor.hasAttribute('data-word-index')) {
+      ancestor = ancestor.parentElement;
+    }
+    if (ancestor) return parseInt(ancestor.getAttribute('data-word-index')!, 10);
+
+    // Selection started between words (whitespace/punctuation segment has no
+    // index of its own) — take the next word span instead.
+    let sib: Element | null = el?.nextElementSibling ?? null;
+    while (sib) {
+      if (sib.hasAttribute('data-word-index')) return parseInt(sib.getAttribute('data-word-index')!, 10);
+      sib = sib.nextElementSibling;
+    }
+    return null;
+  };
 
   const handleMouseUp = () => {
     const selection = window.getSelection();
@@ -59,19 +83,35 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
     const text = selection.toString().trim();
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
-    setSelectionPopup({ x: rect.left + rect.width / 2, y: rect.top - 8, text });
+    const startWordIndex = wordIndexAtNode(range.startContainer) ?? 0;
+    setSelectionPopup({ x: rect.left + rect.width / 2, y: rect.top - 8, text, startWordIndex });
   };
 
   const handleHighlight = (color: string) => {
     if (!selectionPopup) return;
-    addTextHighlight({ chapterIndex: currentChapterIndex, pageIndex: currentPage - 1, selectedText: selectionPopup.text, color });
+    const wordCount = (selectionPopup.text.match(/\S+/g) || []).length;
+    addTextHighlight({
+      chapterIndex: currentChapterIndex,
+      pageIndex: currentPage - 1,
+      selectedText: selectionPopup.text,
+      startWordIndex: selectionPopup.startWordIndex,
+      wordCount,
+      color,
+    });
+    window.getSelection()?.removeAllRanges();
+    setSelectionPopup(null);
+  };
+
+  const handlePlayFromSelection = () => {
+    if (!selectionPopup) return;
+    playFromWordIndex(selectionPopup.startWordIndex);
     window.getSelection()?.removeAllRanges();
     setSelectionPopup(null);
   };
 
   const pageHighlights = textHighlights
     .filter(h => h.chapterIndex === currentChapterIndex && h.pageIndex === currentPage - 1)
-    .map(h => ({ selectedText: h.selectedText, color: h.color }));
+    .map(h => ({ startWordIndex: h.startWordIndex, wordCount: h.wordCount, color: h.color }));
 
   return (
     <div className="h-full w-full relative" onMouseUp={handleMouseUp}>
@@ -114,6 +154,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
                   fontFamily={fontFamily}
                   isDarkMode={isDarkMode}
                   pageHighlights={pageHighlights}
+                  onWordClick={playFromWordIndex}
                 />
               </div>
               <div>
@@ -145,6 +186,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
               fontFamily={fontFamily}
               isDarkMode={isDarkMode}
               pageHighlights={pageHighlights}
+              onWordClick={playFromWordIndex}
             />
           )}
           </div>
@@ -158,6 +200,15 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
           style={{ left: selectionPopup.x, top: selectionPopup.y, transform: 'translate(-50%, -100%)' }}
           onMouseDown={e => e.preventDefault()}
         >
+          <button
+            onClick={handlePlayFromSelection}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-white/90 hover:text-white hover:bg-white/10 transition-colors"
+            title="Read from here"
+          >
+            <Play className="w-3 h-3" />
+            Play from here
+          </button>
+          <span className="w-px h-4 bg-white/20 mx-0.5" />
           <span className="text-white/70 text-xs px-1">Highlight:</span>
           {HIGHLIGHT_COLORS.map(color => (
             <button key={color} onClick={() => handleHighlight(color)}

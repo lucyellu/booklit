@@ -48,7 +48,7 @@ for %%P in (
 )
 
 if defined CHROME (
-    start "" %CHROME% --app="http://localhost:%PORT%"
+    start "" %CHROME% "http://localhost:%PORT%"
 ) else (
     start "" "http://localhost:%PORT%"
 )

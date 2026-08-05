@@ -26,6 +26,11 @@ export interface TextHighlight {
   chapterIndex: number;
   pageIndex: number;
   selectedText: string;
+  // Position of the selection within the page, in word units — used instead
+  // of re-searching for selectedText so a repeated word/phrase only highlights
+  // the one occurrence that was actually selected.
+  startWordIndex: number;
+  wordCount: number;
   color: string;
   timestamp: string;
 }
@@ -99,6 +104,7 @@ interface BookContextType {
   goToNextChapter: () => void;
   goToPreviousChapter: () => void;
   togglePlayback: () => void;
+  playFromWordIndex: (wordIndex: number) => void;
   stopPlayback: () => void;
   setPlaybackSpeed: (speed: number) => void;
   setReadWordStyle: (style: ReadWordStyle) => void;
@@ -699,15 +705,15 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     setHighlightedWordIndex(-1);
   }, [clearFallbackHighlightTimer]);
 
-  const speakText = useCallback((text: string) => {
+  const speakText = useCallback((text: string, startWordIndex: number = 0) => {
     clearFallbackHighlightTimer();
     speechSynthesis.cancel();
     setReadWordIndices([]);
-    
+
     // Determine what text to speak based on translation mode
     let textToSpeak = text;
     let voiceLang = 'en';
-    
+
     if (translationLanguage !== 'none' && translatedText) {
       if (showSideBySide) {
         // In side-by-side mode, speak the translated text
@@ -719,7 +725,21 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
         voiceLang = 'en';
       }
     }
-    
+
+    // Jumping into the middle of the page only makes sense when we're
+    // actually speaking the original text — a translated overlay has its own
+    // word boundaries that don't line up with startWordIndex. Slice both the
+    // utterance and the word counter to the same starting point so the
+    // karaoke highlight lands on the right word instead of drifting.
+    let initialWordIndex = 0;
+    if (startWordIndex > 0 && textToSpeak === text) {
+      const startMatch = [...text.matchAll(/\S+/g)][startWordIndex];
+      if (startMatch) {
+        textToSpeak = text.slice(startMatch.index ?? 0);
+        initialWordIndex = startWordIndex;
+      }
+    }
+
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
     utterance.rate = playbackSpeed;
     utterance.volume = volume;
@@ -759,7 +779,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
 
     // Extract words from text (matching our rendering logic)
     const words = text.match(/\S+/g) || []; // Always use original text for word tracking
-    let currentWordIndex = 0;
+    let currentWordIndex = initialWordIndex;
     let charPosition = 0;
 
     console.log('Starting speech with words:', words, 'Speaking:', voiceLang, 'Text:', textToSpeak.substring(0, 50)); // Debug log
@@ -772,7 +792,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     let simulating = false;
 
     const advanceSimulatedWord = () => {
-      if (currentWordIndex > 0) {
+      if (currentWordIndex > initialWordIndex) {
         setReadWordIndices(prev =>
           prev.includes(currentWordIndex - 1) ? prev : [...prev, currentWordIndex - 1]
         );
@@ -803,7 +823,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
         console.log(`Word boundary at char ${event.charIndex}, word index: ${currentWordIndex}`); // Debug log
 
         // Mark previous word as read
-        if (currentWordIndex > 0) {
+        if (currentWordIndex > initialWordIndex) {
           setReadWordIndices(prev => {
             if (!prev.includes(currentWordIndex - 1)) {
               return [...prev, currentWordIndex - 1];
@@ -823,7 +843,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
       clearFallbackHighlightTimer();
 
       // Mark the last word as read
-      if (currentWordIndex > 0) {
+      if (currentWordIndex > initialWordIndex) {
         setReadWordIndices(prev => {
           const lastWordIndex = Math.min(currentWordIndex - 1, words.length - 1);
           if (!prev.includes(lastWordIndex)) {
@@ -890,6 +910,19 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
       }
     }
   }, [isPlaying, currentChapter, currentPage, speakText, translationLanguage, translatedText, clearFallbackHighlightTimer]);
+
+  // Jump playback to a specific word on the current page — used when the
+  // reader clicks a word or drags a selection to pick where reading starts,
+  // instead of always starting from the top of the page.
+  const playFromWordIndex = useCallback((wordIndex: number) => {
+    if (!currentChapter || currentPage > currentChapter.content.length) return;
+    const pageContent = translationLanguage !== 'none' && translatedText
+      ? translatedText
+      : currentChapter.content[currentPage - 1];
+    if (!pageContent) return;
+    setIsPlaying(true);
+    speakText(pageContent, wordIndex);
+  }, [currentChapter, currentPage, speakText, translationLanguage, translatedText]);
 
   // Bookmark functions
   const addBookmark = useCallback(() => {
@@ -1017,6 +1050,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     goToNextChapter,
     goToPreviousChapter,
     togglePlayback,
+    playFromWordIndex,
     stopPlayback,
     setPlaybackSpeed,
     setReadWordStyle,

@@ -50,6 +50,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
     textHighlights,
     addTextHighlight,
     continuousScroll,
+    playFromWordIndex,
   } = useBook();
   
   const textRef = useRef<HTMLDivElement>(null);
@@ -194,6 +195,7 @@ const BookReader: React.FC<BookReaderProps> = ({ isDarkMode, readingMode }) => {
                     wordSpacing={wordSpacing}
                     fontFamily={fontFamily}
                     isDarkMode={isDarkMode}
+                    onWordClick={playFromWordIndex}
                   />
                 </div>
               </div>

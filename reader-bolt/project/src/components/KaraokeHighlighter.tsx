@@ -182,10 +182,10 @@ const KaraokeHighlighter: React.FC<KaraokeHighlighterProps> = ({
               data-word-index={wordIndex}
               className={`word inline-block ${onWordClick ? 'cursor-pointer' : ''}`}
               style={getWordStyle(wordIndex)}
-              onClick={onWordClick ? () => {
-                // A plain click has no selection; a drag that produced one
-                // is handled by the container's mouseup (highlight popup),
-                // so don't also jump playback there.
+              title={onWordClick ? 'Double-click to start reading from here' : undefined}
+              onDoubleClick={onWordClick ? () => {
+                // A drag that produced a selection is handled by the
+                // container's mouseup (highlight popup) instead.
                 const selection = window.getSelection();
                 if (selection && !selection.isCollapsed && selection.toString().trim()) return;
                 onWordClick(wordIndex);

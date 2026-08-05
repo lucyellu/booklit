@@ -175,6 +175,8 @@ interface BookContextType {
   setBookShelf: (lb: LocalBook, shelf: string) => void
   setBookRating: (lb: LocalBook, rating: number) => void
   removeFromMyLibrary: (lb: LocalBook) => void
+  /** Record where reading left off in the currently open book. */
+  updateReadingProgress: (chapterIndex: number, wordOffset: number) => void
   /** True when the open profile is yours, so edits apply. Guests are read-only. */
   canEdit: boolean
 }
@@ -561,6 +563,15 @@ function parseCSVToBooks(text: string, profileId = 'owner'): LocalBook[] {
 }
 
 export function BookProvider({ children }: { children: ReactNode }) {
+  /* speakText() leads with speechSynthesis.cancel(), which fires the
+     *previous* utterance's own onerror/onend asynchronously — including
+     * whenever we cancel a still-speaking utterance to start a new one
+     * (page turn while playing, auto-advance, settings-change restart).
+     * That stale callback then lands after the new utterance already set
+     * isPlaying(true), snapping it back to false even though audio is still
+     * going. Bump this on every speakText() call and have each handler bail
+     * out if it's no longer current, so a superseded utterance is a no-op. */
+  const utteranceGenRef = useRef(0)
   const [book, setBookState] = useState<Book | null>(null)
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
@@ -733,6 +744,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
         ...(ov?.shelf ? { shelf: ov.shelf } : null),
         ...(ov?.rating !== undefined ? { rating: ov.rating } : null),
         ...(ov?.notes ? { notes: ov.notes } : null),
+        ...(ov?.progress !== undefined ? { progress: ov.progress } : null),
+        ...(ov?.lastRead ? { lastRead: ov.lastRead } : null),
       })
     }
     return out
@@ -742,16 +755,21 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const totalPages = currentChapter?.content.length ?? 0
 
   // Make a parsed book the active reading target (no library mutation).
+  // Resumes on the chapter reading last left off on, if we have one saved —
+  // the page stays 1 here since this app doesn't paginate the way the
+  // embedded reader does; ReaderPane forwards the precise word offset to the
+  // iframe separately, which lands on the exact page after its own reflow.
   const activateBook = useCallback((newBook: Book) => {
+    const savedPosition = overrides[bookKey(newBook.title, newBook.author)]?.lastPosition
     setBookState(newBook)
-    setCurrentChapterIndex(0)
+    setCurrentChapterIndex(savedPosition && savedPosition.chapterIndex < newBook.chapters.length ? savedPosition.chapterIndex : 0)
     setCurrentPage(1)
     setIsPlaying(false)
     speechSynthesis.cancel()
     setHighlightedWordIndex(-1)
     setReadWordIndices([])
     setBookmarks([])
-  }, [])
+  }, [overrides])
 
   const setBook = useCallback((newBook: Book) => {
     activateBook(newBook)
@@ -967,15 +985,31 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, [currentChapterIndex, setCurrentChapter])
 
   const stopPlayback = useCallback(() => {
+    utteranceGenRef.current++ // invalidate the cancelled utterance's own onerror/onend
     speechSynthesis.cancel()
     setIsPlaying(false)
     setHighlightedWordIndex(-1)
   }, [])
 
-  const speakText = useCallback((text: string) => {
+  const speakText = useCallback((text: string, startWordIndex: number = 0) => {
+    const gen = ++utteranceGenRef.current
     speechSynthesis.cancel()
     setReadWordIndices([])
-    const utterance = new SpeechSynthesisUtterance(text)
+
+    // Resuming after Pause starts mid-page rather than always from word 0 —
+    // slice the utterance itself to the resume point, same as a fresh
+    // SpeechSynthesisUtterance has no way to "seek" once created.
+    let textToSpeak = text
+    let initialWordIndex = 0
+    if (startWordIndex > 0) {
+      const startMatch = [...text.matchAll(/\S+/g)][startWordIndex]
+      if (startMatch) {
+        textToSpeak = text.slice(startMatch.index ?? 0)
+        initialWordIndex = startWordIndex
+      }
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak)
     utterance.rate = playbackSpeed
     utterance.volume = volume
     if (selectedVoice) {
@@ -986,10 +1020,11 @@ export function BookProvider({ children }: { children: ReactNode }) {
       if (preferred) utterance.voice = preferred
     }
 
-    let currentWordIndex = 0
+    let currentWordIndex = initialWordIndex
     utterance.onboundary = (event) => {
+      if (gen !== utteranceGenRef.current) return
       if (event.name === 'word') {
-        if (currentWordIndex > 0) {
+        if (currentWordIndex > initialWordIndex) {
           setReadWordIndices(prev =>
             prev.includes(currentWordIndex - 1) ? prev : [...prev, currentWordIndex - 1]
           )
@@ -1000,6 +1035,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
     }
 
     utterance.onend = () => {
+      if (gen !== utteranceGenRef.current) return
       setHighlightedWordIndex(-1)
       setIsPlaying(false)
       if (autoPlayNext) {
@@ -1016,6 +1052,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
     }
 
     utterance.onerror = () => {
+      if (gen !== utteranceGenRef.current) return
       setIsPlaying(false)
       setHighlightedWordIndex(-1)
     }
@@ -1025,14 +1062,20 @@ export function BookProvider({ children }: { children: ReactNode }) {
 
   const togglePlayback = useCallback(() => {
     if (isPlaying) {
+      // Bump the generation before cancelling — cancel() fires the
+      // now-stopping utterance's own onerror asynchronously, which would
+      // otherwise reset highlightedWordIndex right after we deliberately
+      // leave it in place below as the resume point.
+      utteranceGenRef.current++
       speechSynthesis.cancel()
       setIsPlaying(false)
-      setHighlightedWordIndex(-1)
+      // Leave highlightedWordIndex as the resume point for next Play,
+      // instead of resetting to -1 (that's what Stop is for).
     } else if (currentChapter && currentPage <= currentChapter.content.length) {
       setIsPlaying(true)
-      speakText(currentChapter.content[currentPage - 1])
+      speakText(currentChapter.content[currentPage - 1], highlightedWordIndex >= 0 ? highlightedWordIndex : 0)
     }
-  }, [isPlaying, currentChapter, currentPage, speakText])
+  }, [isPlaying, currentChapter, currentPage, speakText, highlightedWordIndex])
 
   const addBookmark = useCallback(() => {
     if (!currentChapter || currentPage > currentChapter.content.length) return
@@ -1182,6 +1225,27 @@ export function BookProvider({ children }: { children: ReactNode }) {
     setOverride(bookKey(lb.title, lb.author), { removed: true })
   }, [setOverride])
 
+  /**
+   * Record where reading left off, for whichever book is currently open.
+   * `wordOffset` counts into the chapter's full text (see ShelfOverride) —
+   * pagination-independent, so it stays meaningful regardless of how either
+   * side of the reader happens to have split that chapter into pages.
+   */
+  const updateReadingProgress = useCallback((chapterIndex: number, wordOffset: number) => {
+    if (!book) return
+    const wordsIn = (ch: Chapter) => (ch.content.join(' ').match(/\S+/g) || []).length
+    const totalWords = book.chapters.reduce((sum, ch) => sum + wordsIn(ch), 0)
+    const wordsBefore = book.chapters.slice(0, chapterIndex).reduce((sum, ch) => sum + wordsIn(ch), 0)
+    const progress = totalWords > 0
+      ? Math.min(100, Math.round(((wordsBefore + wordOffset) / totalWords) * 100))
+      : 0
+    setOverride(bookKey(book.title, book.author), {
+      progress,
+      lastRead: new Date().toISOString(),
+      lastPosition: { chapterIndex, wordOffset },
+    })
+  }, [book, setOverride])
+
   useEffect(() => {
     setHighlightedWordIndex(-1)
     setReadWordIndices([])
@@ -1219,6 +1283,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       addTextHighlight, removeTextHighlight, uploadFile, importCSV, importGoodreads, importLocalLibrary,
       syncProfile, syncingProfileId,
       saveToMyLibrary, setBookShelf, setBookRating, removeFromMyLibrary,
+      updateReadingProgress,
       canEdit: isOwnerProfile,
     }}>
       {children}

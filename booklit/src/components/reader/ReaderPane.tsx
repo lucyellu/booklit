@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useApp } from '../../context/AppContext'
 import { useBook } from '../../context/BookContext'
+import { useProfiles } from '../../context/ProfileContext'
 import { useTheme } from '../../context/ThemeContext'
+import { bookKey } from '../../lib/profiles'
 import { X } from 'lucide-react'
 
 // Booklit hosts the Bibliophile Reader (reader-bolt) as an embedded iframe and
@@ -9,13 +11,24 @@ import { X } from 'lucide-react'
 // public/reader/ and is loaded with ?embed=1 so it hides its own library/auth UI.
 export function ReaderPane() {
   const { view, closeReader } = useApp()
-  const { book } = useBook()
+  const { book, updateReadingProgress } = useBook()
+  const { overrides } = useProfiles()
   const { theme } = useTheme()
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const postBook = () => {
     if (book) {
-      iframeRef.current?.contentWindow?.postMessage({ type: 'booklit:load-book', book }, '*')
+      // Resume where reading left off, if we have a saved position — the
+      // iframe re-resolves this word offset to a page after its own
+      // pagination, so it's exact even if font size/viewport differ from
+      // last time.
+      const lastPosition = overrides[bookKey(book.title, book.author)]?.lastPosition
+      iframeRef.current?.contentWindow?.postMessage({
+        type: 'booklit:load-book',
+        book,
+        startChapterIndex: lastPosition?.chapterIndex,
+        startWordOffset: lastPosition?.wordOffset,
+      }, '*')
     }
   }
 
@@ -25,16 +38,24 @@ export function ReaderPane() {
 
   // When the embedded reader announces it's ready, send the current book and
   // the active theme. The theme has to be pushed on ready as well as on change,
-  // or the reader keeps whatever prefers-color-scheme gave it at load.
+  // or the reader keeps whatever prefers-color-scheme gave it at load. The
+  // reader also reports back its position as the user reads, so we can
+  // persist it and resume there next time.
   useEffect(() => {
     if (view !== 'reader') return
     const onMsg = (e: MessageEvent) => {
       if (e.data?.type === 'booklit:ready') { postBook(); postTheme() }
+      if (e.data?.type === 'booklit:progress') {
+        const { chapterIndex, wordOffset } = e.data
+        if (typeof chapterIndex === 'number' && typeof wordOffset === 'number') {
+          updateReadingProgress(chapterIndex, wordOffset)
+        }
+      }
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, book, postTheme])
+  }, [view, book, postTheme, updateReadingProgress])
 
   // Follow the host theme live while the reader is open.
   useEffect(() => {

@@ -93,7 +93,7 @@ interface BookContextType {
   removeTextHighlight: (id: string) => void;
   setContinuousScroll: (v: boolean) => void;
 
-  setBook: (book: Book) => void;
+  setBook: (book: Book, startPosition?: { chapterIndex: number; wordOffset: number }) => void;
   addUploadedBook: (book: Book) => void;
   loadLocalBooks: () => Promise<void>;
   loadLocalBookContent: (fileHandle: FileSystemFileHandle) => Promise<void>;
@@ -105,6 +105,7 @@ interface BookContextType {
   goToPreviousChapter: () => void;
   togglePlayback: () => void;
   playFromWordIndex: (wordIndex: number) => void;
+  setReadingCursor: (wordIndex: number) => void;
   stopPlayback: () => void;
   setPlaybackSpeed: (speed: number) => void;
   setReadWordStyle: (style: ReadWordStyle) => void;
@@ -216,6 +217,22 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
      -1 for the whole utterance and no read-word style would ever show. This
      ref lets us fall back to a timer-simulated advance when we detect that's
      happening, without leaking timers across replays/cancels. */
+  /* speakText() leads with speechSynthesis.cancel(), which fires the
+     *previous* utterance's own onerror/onend asynchronously — including
+     * whenever we cancel a still-speaking utterance to start a new one
+     * (page turn while playing, click-to-read-from-word, auto-advance,
+     * settings-change restart). That stale callback then lands *after* the
+     * new utterance already set isPlaying(true), snapping it back to false
+     * even though audio is still going. Each speakText() call bumps this
+     * generation counter and every handler checks it's still current before
+     * touching state, so a superseded utterance's callbacks are no-ops. */
+  const utteranceGenRef = useRef(0);
+  /* setBook()'s resume logic figures out which word within the target page
+     to land on, but the "reset highlighting on page change" effect below
+     runs right after any setCurrentPage/setCurrentChapterIndex call and
+     would otherwise wipe that back to -1. This hands the value across that
+     boundary — the effect consumes and clears it. */
+  const pendingResumeWordIndexRef = useRef<number | null>(null);
   const fallbackTimerRef = useRef<{ timeoutId?: ReturnType<typeof setTimeout>; intervalId?: ReturnType<typeof setInterval> }>({});
   const clearFallbackHighlightTimer = useCallback(() => {
     if (fallbackTimerRef.current.timeoutId) clearTimeout(fallbackTimerRef.current.timeoutId);
@@ -396,7 +413,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     return () => window.removeEventListener('resize', handleResize);
   }, [repaginateCurrentChapter]);
 
-  const setBook = useCallback((newBook: Book) => {
+  const setBook = useCallback((newBook: Book, startPosition?: { chapterIndex: number; wordOffset: number }) => {
     /* Pages arrive at whatever size whoever produced them chose — the Booklit
        host splits chapters at 900 characters, about half of what a sheet holds
        here, which is why an imported book only filled the top half of the page.
@@ -410,11 +427,40 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
       }),
     };
     setBookState(reflowed);
-    setCurrentChapterIndex(0);
-    setCurrentPage(1);
+
+    /* Resume where reading left off. wordOffset counts into the chapter's
+       full text rather than a page index, since pages get re-cut by the
+       reflow above whenever font size/viewport/columns differ from last
+       time — re-walking THIS pagination's pages to find which one now
+       covers that offset lands on the right page regardless, and the
+       remainder after subtracting the words on every page before it is
+       exactly which word on THAT page to resume from. */
+    let startChapterIndex = 0;
+    let startPage = 1;
+    let startWordIndexInPage = 0;
+    if (startPosition && startPosition.chapterIndex < reflowed.chapters.length) {
+      startChapterIndex = startPosition.chapterIndex;
+      const pages = reflowed.chapters[startChapterIndex].content;
+      let wordsSeen = 0;
+      for (let i = 0; i < pages.length; i++) {
+        const pageWords = (pages[i].match(/\S+/g) || []).length;
+        if (wordsSeen + pageWords > startPosition.wordOffset || i === pages.length - 1) {
+          startPage = i + 1;
+          startWordIndexInPage = pageWords > 0
+            ? Math.max(0, Math.min(pageWords - 1, startPosition.wordOffset - wordsSeen))
+            : 0;
+          break;
+        }
+        wordsSeen += pageWords;
+      }
+    }
+
+    pendingResumeWordIndexRef.current = startPosition ? startWordIndexInPage : null;
+    setCurrentChapterIndex(startChapterIndex);
+    setCurrentPage(startPage);
     setIsPlaying(false);
     speechSynthesis.cancel();
-    setHighlightedWordIndex(-1);
+    setHighlightedWordIndex(startPosition ? startWordIndexInPage : -1);
     setReadWordIndices([]);
     setBookmarks([]);
   }, [repaginateText]);
@@ -699,6 +745,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   }, [currentChapterIndex, book.chapters, setCurrentChapter]);
 
   const stopPlayback = useCallback(() => {
+    utteranceGenRef.current++; // invalidate the cancelled utterance's own onerror/onend
     clearFallbackHighlightTimer();
     speechSynthesis.cancel();
     setIsPlaying(false);
@@ -706,6 +753,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
   }, [clearFallbackHighlightTimer]);
 
   const speakText = useCallback((text: string, startWordIndex: number = 0) => {
+    const gen = ++utteranceGenRef.current;
     clearFallbackHighlightTimer();
     speechSynthesis.cancel();
     setReadWordIndices([]);
@@ -792,6 +840,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     let simulating = false;
 
     const advanceSimulatedWord = () => {
+      if (gen !== utteranceGenRef.current) return;
       if (currentWordIndex > initialWordIndex) {
         setReadWordIndices(prev =>
           prev.includes(currentWordIndex - 1) ? prev : [...prev, currentWordIndex - 1]
@@ -806,7 +855,9 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     };
 
     utterance.onstart = () => {
+      if (gen !== utteranceGenRef.current) return;
       fallbackTimerRef.current.timeoutId = setTimeout(() => {
+        if (gen !== utteranceGenRef.current) return;
         if (boundaryFired) return;
         simulating = true;
         const msPerWord = Math.max(120, 60000 / (155 * (utterance.rate || 1)));
@@ -816,6 +867,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     };
 
     utterance.onboundary = (event) => {
+      if (gen !== utteranceGenRef.current) return;
       if (event.name === 'word') {
         if (simulating) return; // already timer-driven; ignore late/duplicate real events
         boundaryFired = true;
@@ -839,6 +891,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     };
 
     utterance.onend = () => {
+      if (gen !== utteranceGenRef.current) return;
       console.log('Speech ended'); // Debug log
       clearFallbackHighlightTimer();
 
@@ -883,6 +936,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     };
 
     utterance.onerror = (event) => {
+      if (gen !== utteranceGenRef.current) return;
       console.error('Speech error:', event); // Debug log
       clearFallbackHighlightTimer();
       setIsPlaying(false);
@@ -895,25 +949,34 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
 
   const togglePlayback = useCallback(() => {
     if (isPlaying) {
+      // Bump the generation *before* cancelling — cancel() fires the
+      // now-stopping utterance's own onerror asynchronously (browsers treat
+      // an intentional cancel as an "interrupted" error), and that handler
+      // would otherwise reset highlightedWordIndex to -1 right after we
+      // deliberately leave it in place below, undoing the resume point.
+      utteranceGenRef.current++;
       clearFallbackHighlightTimer();
       speechSynthesis.cancel();
       setIsPlaying(false);
-      setHighlightedWordIndex(-1);
+      // Leave highlightedWordIndex where it is (don't reset to -1) — that's
+      // the resume point for the next Play press, below. It still gets
+      // cleared on an actual page/chapter change or Stop, both of which mean
+      // "start over", unlike Pause.
     } else {
       if (currentChapter && currentPage <= currentChapter.content.length) {
-        const pageContent = translationLanguage !== 'none' && translatedText 
-          ? translatedText 
+        const pageContent = translationLanguage !== 'none' && translatedText
+          ? translatedText
           : currentChapter.content[currentPage - 1];
         console.log('Starting playback for page content:', pageContent); // Debug log
         setIsPlaying(true);
-        speakText(pageContent);
+        speakText(pageContent, highlightedWordIndex >= 0 ? highlightedWordIndex : 0);
       }
     }
-  }, [isPlaying, currentChapter, currentPage, speakText, translationLanguage, translatedText, clearFallbackHighlightTimer]);
+  }, [isPlaying, currentChapter, currentPage, speakText, translationLanguage, translatedText, clearFallbackHighlightTimer, highlightedWordIndex]);
 
-  // Jump playback to a specific word on the current page — used when the
-  // reader clicks a word or drags a selection to pick where reading starts,
-  // instead of always starting from the top of the page.
+  // Jump playback to a specific word on the current page — used by the
+  // drag-select popup's explicit "Play from here" action, where the click is
+  // itself the decision to start.
   const playFromWordIndex = useCallback((wordIndex: number) => {
     if (!currentChapter || currentPage > currentChapter.content.length) return;
     const pageContent = translationLanguage !== 'none' && translatedText
@@ -923,6 +986,18 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     setIsPlaying(true);
     speakText(pageContent, wordIndex);
   }, [currentChapter, currentPage, speakText, translationLanguage, translatedText]);
+
+  // Mark where the next Play press should start, without starting it —
+  // used when the reader double-clicks a word to pick a spot. Stops any
+  // playback already in progress rather than leaving it reading from the
+  // old position while the highlight jumps elsewhere.
+  const setReadingCursor = useCallback((wordIndex: number) => {
+    utteranceGenRef.current++; // invalidate any in-flight utterance's callbacks
+    clearFallbackHighlightTimer();
+    speechSynthesis.cancel();
+    setIsPlaying(false);
+    setHighlightedWordIndex(wordIndex);
+  }, [clearFallbackHighlightTimer]);
 
   // Bookmark functions
   const addBookmark = useCallback(() => {
@@ -959,16 +1034,47 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
       speechSynthesis.cancel();
       if (currentChapter && currentPage <= currentChapter.content.length) {
         const pageContent = currentChapter.content[currentPage - 1];
-        speakText(pageContent);
+        speakText(pageContent, highlightedWordIndex >= 0 ? highlightedWordIndex : 0);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playbackSpeed, volume, selectedVoice]);
 
-  // Reset highlighting when page changes
+  // Reset highlighting when page changes — unless setBook() just handed us a
+  // resume position for this exact page change, in which case land there
+  // instead of at the top.
   useEffect(() => {
-    setHighlightedWordIndex(-1);
+    const pending = pendingResumeWordIndexRef.current;
+    pendingResumeWordIndexRef.current = null;
+    setHighlightedWordIndex(pending ?? -1);
     setReadWordIndices([]);
   }, [currentPage, currentChapterIndex]);
+
+  // Tell the host (Booklit) where we are, so it can persist it and resume
+  // here next time. Fires on page/chapter changes (manual turns, TTS
+  // auto-advance) *and* as highlightedWordIndex moves through the current
+  // page during playback — a short, single-page article never changes
+  // currentPage at all, so without the word-level component here, reading
+  // one start-to-finish would never register as "progress" and it would
+  // never show up in history. No-op when not embedded in an iframe.
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.parent === window) return;
+    if (!currentChapter) return;
+    const wordsBeforePage = currentChapter.content
+      .slice(0, currentPage - 1)
+      .reduce((sum, page) => sum + (page.match(/\S+/g) || []).length, 0);
+    // Natural completion resets highlightedWordIndex to -1 (so the karaoke
+    // highlight doesn't linger), which would otherwise make "finished the
+    // whole page" report back as "start of page" — readWordIndices still
+    // holds the true high-water mark until the next speakText() clears it.
+    const furthest = Math.max(highlightedWordIndex, readWordIndices.length ? Math.max(...readWordIndices) : -1);
+    const wordOffset = wordsBeforePage + Math.max(0, furthest);
+    window.parent.postMessage({
+      type: 'booklit:progress',
+      chapterIndex: currentChapterIndex,
+      wordOffset,
+    }, '*');
+  }, [currentPage, currentChapterIndex, currentChapter, highlightedWordIndex, readWordIndices]);
 
   // Load voices when available - prioritize UK Male English
   useEffect(() => {
@@ -1051,6 +1157,7 @@ export const BookProvider: React.FC<BookProviderProps> = ({ children, initialBoo
     goToPreviousChapter,
     togglePlayback,
     playFromWordIndex,
+    setReadingCursor,
     stopPlayback,
     setPlaybackSpeed,
     setReadWordStyle,

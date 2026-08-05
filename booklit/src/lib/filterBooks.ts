@@ -178,7 +178,11 @@ export function applyFilters(
   }
 
   if (!collectionId && !listMatch && shelfFilter === 'recent') {
+    // History, not "recently added" — only books actually opened at least
+    // once. progress is only ever set by updateReadingProgress once reading
+    // has happened, so this excludes anything still sitting untouched.
     list = [...list]
+      .filter(b => b.progress > 0)
       .sort((a, b) => (b.lastRead || '').localeCompare(a.lastRead || ''))
       .slice(0, 80)
   }

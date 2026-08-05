@@ -38,7 +38,8 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
     currentPage,
     addTextHighlight,
     columnCount,
-    playFromWordIndex
+    playFromWordIndex,
+    setReadingCursor
   } = useBook();
 
   /* Layout → Double. The class for this was being computed in BookReader and
@@ -109,6 +110,15 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
     setSelectionPopup(null);
   };
 
+  // Double-clicking a word natively selects it, which would otherwise also
+  // trip handleMouseUp's drag-select popup right after — clear both so
+  // picking a spot doesn't leave the highlight-color menu open on top of it.
+  const handleWordDoubleClick = (wordIndex: number) => {
+    window.getSelection()?.removeAllRanges();
+    setSelectionPopup(null);
+    setReadingCursor(wordIndex);
+  };
+
   const pageHighlights = textHighlights
     .filter(h => h.chapterIndex === currentChapterIndex && h.pageIndex === currentPage - 1)
     .map(h => ({ startWordIndex: h.startWordIndex, wordCount: h.wordCount, color: h.color }));
@@ -154,7 +164,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
                   fontFamily={fontFamily}
                   isDarkMode={isDarkMode}
                   pageHighlights={pageHighlights}
-                  onWordClick={playFromWordIndex}
+                  onWordClick={handleWordDoubleClick}
                 />
               </div>
               <div>
@@ -186,7 +196,7 @@ const SwipeablePageReader: React.FC<SwipeablePageReaderProps> = ({
               fontFamily={fontFamily}
               isDarkMode={isDarkMode}
               pageHighlights={pageHighlights}
-              onWordClick={playFromWordIndex}
+              onWordClick={handleWordDoubleClick}
             />
           )}
           </div>

@@ -50,6 +50,17 @@ export interface ShelfOverride {
     /** Profile id it was saved from, for provenance in the detail panel. */
     from?: string
   }
+  /** 0-100, derived from lastPosition. Drives the "Continue Reading" row. */
+  progress?: number
+  /** ISO timestamp of last reading activity (not when the book was added). */
+  lastRead?: string
+  /**
+   * Where reading left off. `wordOffset` counts into the chapter's full
+   * text rather than a page index — pages get re-cut whenever font size,
+   * viewport, or column count changes, so a saved page number would drift.
+   * A word offset survives repagination.
+   */
+  lastPosition?: { chapterIndex: number; wordOffset: number }
   updatedAt: number
 }
 

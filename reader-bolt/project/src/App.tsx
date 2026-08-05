@@ -70,7 +70,10 @@ function AppContent() {
     const onMsg = (e: MessageEvent) => {
       const d = e.data;
       if (d && d.type === 'booklit:load-book' && d.book && Array.isArray(d.book.chapters)) {
-        setBook(d.book);
+        const startPosition = typeof d.startChapterIndex === 'number' && typeof d.startWordOffset === 'number'
+          ? { chapterIndex: d.startChapterIndex, wordOffset: d.startWordOffset }
+          : undefined;
+        setBook(d.book, startPosition);
         setCurrentView('reader');
       }
       // Follow the host's Forest Day / Forest Evening choice.

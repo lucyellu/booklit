@@ -9,6 +9,7 @@ import UserProfile from './components/UserProfile';
 import { BookProvider, useBook } from './context/BookContext';
 import { sampleBook } from './data/sampleBook';
 import { Eye, EyeOff, Library, LogIn } from 'lucide-react';
+import { readerThemeVars, READER_THEME_KEYS } from './lib/readerTheme';
 
 /*
  * One theme, the host's.
@@ -27,15 +28,22 @@ export type ReadingMode = 'vertical-scroll' | 'page-flip';
 
 const AMBIENT = { accent1: 'from-accent-400/15', accent2: 'from-accent-600/15' };
 
+// Read once, outside the component: these seed React state to match what
+// index.html's inline script already painted synchronously (theme + rd-*
+// vars), so mounting doesn't itself cause a flash back to the Forest
+// defaults before the first effect runs.
+const initialParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+
 function AppContent() {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => initialParams?.get('theme') === 'evening');
+  const [accentColor, setAccentColor] = useState<string | null>(() => initialParams?.get('accent') || null);
   const [uiVisible, setUiVisible] = useState(true);
   const [currentView, setCurrentView] = useState<'reader' | 'library'>('reader');
   const [readingMode, setReadingMode] = useState<ReadingMode>('page-flip');
   const { backgroundImage, setBook } = useBook();
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const isEmbed = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('embed');
+  const isEmbed = !!initialParams?.has('embed');
 
   /* Dark mode has to move `data-theme` with it, not just the boolean.
      `isDarkMode` picks which end of each ramp a component reaches for, but the
@@ -49,8 +57,30 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    // Embedded mode is driven entirely by the host — its initial theme comes
+    // in via the URL (read into state above) and stays in sync over
+    // postMessage. Applying the iframe's own OS preference here as well
+    // would race that and could flash to the wrong theme before the host's
+    // message arrives.
+    if (isEmbed) return;
     applyDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyDark]);
+
+  /* Follows the host's Settings > Custom Theme Color, hue-rotating the whole
+     Forest ramp (see lib/readerTheme.ts) so the reader's accent/gray/paper
+     tones match whatever colour the user picked on the home screen instead
+     of staying pinned to Forest green. No custom colour clears the override
+     and the Forest defaults in index.css apply again. */
+  useEffect(() => {
+    const root = document.documentElement;
+    const vars = readerThemeVars(accentColor, isDarkMode);
+    if (Object.keys(vars).length === 0) {
+      READER_THEME_KEYS.forEach(k => root.style.removeProperty(k));
+    } else {
+      Object.entries(vars).forEach(([k, v]) => root.style.setProperty(k, v));
+    }
+  }, [accentColor, isDarkMode]);
 
   // Listen for authentication state changes
   useEffect(() => {
@@ -76,9 +106,11 @@ function AppContent() {
         setBook(d.book, startPosition);
         setCurrentView('reader');
       }
-      // Follow the host's Forest Day / Forest Evening choice.
+      // Follow the host's Forest Day / Forest Evening choice, and whatever
+      // custom accent colour it's applying on top (see the effect above).
       if (d && d.type === 'booklit:theme' && (d.theme === 'day' || d.theme === 'evening')) {
         applyDark(d.theme === 'evening');
+        setAccentColor(typeof d.accentColor === 'string' ? d.accentColor : null);
       }
     };
     window.addEventListener('message', onMsg);

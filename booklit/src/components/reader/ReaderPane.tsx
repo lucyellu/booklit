@@ -13,8 +13,28 @@ export function ReaderPane() {
   const { view, closeReader } = useApp()
   const { book, activeBookKey, updateReadingProgress } = useBook()
   const { overrides } = useProfiles()
-  const { theme } = useTheme()
+  const { theme, customColor } = useTheme()
   const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // The iframe's first paint happens before it can ask us for the theme over
+  // postMessage — without this it always shows default Forest green for a
+  // beat, then snaps to the real colour once the ready/theme round-trip
+  // completes. Baking theme + accentColor into the src query string lets the
+  // reader apply them synchronously on load (see its index.html), before
+  // anything paints. Captured once per open (not kept in sync with theme/
+  // customColor while mounted) so changing the colour with the reader
+  // already open updates it live via postMessage below instead of reloading
+  // the iframe — see the effect below.
+  const mountSrcRef = useRef<string | null>(null)
+  if (view === 'reader') {
+    if (mountSrcRef.current === null) {
+      const params = new URLSearchParams({ embed: '1', theme })
+      if (customColor) params.set('accent', customColor)
+      mountSrcRef.current = `/reader/index.html?${params.toString()}`
+    }
+  } else {
+    mountSrcRef.current = null
+  }
 
   const postBook = () => {
     if (book) {
@@ -33,14 +53,20 @@ export function ReaderPane() {
   }
 
   const postTheme = useCallback(() => {
-    iframeRef.current?.contentWindow?.postMessage({ type: 'booklit:theme', theme }, '*')
-  }, [theme])
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: 'booklit:theme', theme, accentColor: customColor },
+      '*',
+    )
+  }, [theme, customColor])
 
   // When the embedded reader announces it's ready, send the current book and
   // the active theme. The theme has to be pushed on ready as well as on change,
   // or the reader keeps whatever prefers-color-scheme gave it at load. The
   // reader also reports back its position as the user reads, so we can
-  // persist it and resume there next time.
+  // persist it and resume there next time. accentColor rides along so a
+  // custom theme colour picked in Settings hue-rotates the reader's Forest
+  // ramp to match instead of leaving it pinned to green — see the embedded
+  // reader's lib/readerTheme.ts.
   useEffect(() => {
     if (view !== 'reader') return
     const onMsg = (e: MessageEvent) => {
@@ -82,7 +108,7 @@ export function ReaderPane() {
     <div className="fixed inset-0 z-50 bg-bg">
       <iframe
         ref={iframeRef}
-        src="/reader/index.html?embed=1"
+        src={mountSrcRef.current ?? '/reader/index.html?embed=1'}
         title="Booklit Reader"
         className="w-full h-full border-0"
         onLoad={() => { postBook(); postTheme() }}

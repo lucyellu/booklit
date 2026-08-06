@@ -136,6 +136,87 @@
         background: rgba(255, 255, 255, 0.02);
       }
     </style>
+    <script>
+      // Applies the host's theme + custom accent colour synchronously, before
+      // first paint, so the reader never flashes default Forest green before
+      // the real colour arrives. A classic (non-module) script is the only
+      // thing that runs early enough to beat first paint — a module script is
+      // deferred, and a React effect only runs after the initial render has
+      // already painted. This duplicates the rotation math in
+      // src/lib/readerTheme.ts; keep the two in sync if that file changes.
+      (function () {
+        try {
+          var params = new URLSearchParams(location.search);
+          var theme = params.get('theme');
+          if (theme === 'day' || theme === 'evening') {
+            document.documentElement.dataset.theme = theme;
+          }
+          var accent = params.get('accent');
+          if (!accent) return;
+
+          function hexToHsl(hex) {
+            hex = hex.replace(/^#/, '');
+            if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
+            var r = parseInt(hex.slice(0, 2), 16) / 255;
+            var g = parseInt(hex.slice(2, 4), 16) / 255;
+            var b = parseInt(hex.slice(4, 6), 16) / 255;
+            var max = Math.max(r, g, b), min = Math.min(r, g, b);
+            var h = 0, s = 0, l = (max + min) / 2;
+            if (max !== min) {
+              var d = max - min;
+              s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+              if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+              else if (max === g) h = (b - r) / d + 2;
+              else h = (r - g) / d + 4;
+              h /= 6;
+            }
+            return [h * 360, s * 100, l * 100];
+          }
+          function hslToRgb(h, s, l) {
+            s /= 100; l /= 100;
+            var a = s * Math.min(l, 1 - l);
+            function f(n) {
+              var k = (n + h / 30) % 12;
+              return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+            }
+            return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+          }
+          function hslToHex(h, s, l) {
+            return '#' + hslToRgb(h, s, l).map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+          }
+          function triplet(h, s, l) { return hslToRgb(h, s, l).join(' '); }
+          function rotate(hex, delta) {
+            var hsl = hexToHsl(hex);
+            return [(hsl[0] + delta + 360) % 360, hsl[1], hsl[2]];
+          }
+
+          var FOREST_HUE = hexToHsl('#41761f')[0];
+          var deltaHue = hexToHsl(accent)[0] - FOREST_HUE;
+          if (!deltaHue) return;
+
+          var STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+          var DAY = {
+            white: 'f0ebe0', black: '1a2e0a', bg: 'e8ede4', title: 'a0522d',
+            gray: ['f7f6f0', 'e8ede4', 'd5ddcc', 'b8c5ac', '94a888', '748a67', '55694a', '415236', '2f3d27', '1e2a19', '121b0e'],
+            accent: ['eef6e8', 'd9ecc9', 'b8dc9e', '93c96f', '7ab84a', '3d6e1c', '345e19', '2a4d14', '234011', '1c330e', '14260d'],
+          };
+          var EVENING = { white: 'd8e8c8', black: '0a1606', bg: '14260d', title: 'd08a50', gray: DAY.gray, accent: DAY.accent };
+          var base = theme === 'evening' ? EVENING : DAY;
+          var rootStyle = document.documentElement.style;
+
+          var w = rotate(base.white, deltaHue); rootStyle.setProperty('--rd-white', triplet(w[0], w[1], w[2]));
+          var bl = rotate(base.black, deltaHue); rootStyle.setProperty('--rd-black', triplet(bl[0], bl[1], bl[2]));
+          var bg = rotate(base.bg, deltaHue); rootStyle.setProperty('--rd-bg', hslToHex(bg[0], bg[1], bg[2]));
+          var t = rotate(base.title, deltaHue); rootStyle.setProperty('--rd-title', hslToHex(t[0], t[1], t[2]));
+          STOPS.forEach(function (stop, i) {
+            var gr = rotate(base.gray[i], deltaHue);
+            rootStyle.setProperty('--rd-gray-' + stop, triplet(gr[0], gr[1], gr[2]));
+            var ac = rotate(base.accent[i], deltaHue);
+            rootStyle.setProperty('--rd-accent-' + stop, triplet(ac[0], ac[1], ac[2]));
+          });
+        } catch (e) { /* malformed params — fall back to default Forest CSS */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

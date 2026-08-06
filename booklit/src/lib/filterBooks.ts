@@ -20,20 +20,35 @@ export function dedupeKey(b: LocalBook): string {
   return a ? `${t}|${a}` : t
 }
 
-// Keep one entry per key, preferring readable / cover / richer format.
+// Keep one entry per key, preferring readable / cover / richer format. If the
+// winner has no cover but a sibling edition does (e.g. a Local Library epub
+// with no embedded art alongside a curated CSV entry for the same book), the
+// winner inherits it — an automatic version of the manual picker in
+// EditionsSection, so most duplicates never need it.
 export function dedupe(books: LocalBook[], isReadable: (b: LocalBook) => boolean): LocalBook[] {
   const score = (b: LocalBook) =>
     (isReadable(b) ? 4 : 0) +
     (b.coverUrl ? 2 : 0) +
     (b.bookData ? 1 : 0) +
     (b.format === 'epub' ? 1 : b.format === 'pdf' ? 0.5 : 0)
-  const map = new Map<string, LocalBook>()
+  const groups = new Map<string, LocalBook[]>()
   for (const b of books) {
     const k = dedupeKey(b)
-    const ex = map.get(k)
-    if (!ex || score(b) > score(ex)) map.set(k, b)
+    const arr = groups.get(k)
+    if (arr) arr.push(b)
+    else groups.set(k, [b])
   }
-  return [...map.values()]
+  const out: LocalBook[] = []
+  for (const group of groups.values()) {
+    let winner = group[0]
+    for (const b of group) if (score(b) > score(winner)) winner = b
+    if (!winner.coverUrl) {
+      const withCover = group.find(b => b.coverUrl)
+      if (withCover) winner = { ...winner, coverUrl: withCover.coverUrl }
+    }
+    out.push(winner)
+  }
+  return out
 }
 
 /**

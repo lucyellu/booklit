@@ -181,6 +181,15 @@ interface BookContextType {
   syncingProfileId: string | null
   /** Load the local books folder (L:\Media\Text\Books) via the backend. Returns # added. */
   importLocalLibrary: (refresh?: boolean) => Promise<number>
+  /**
+   * Explicit, user-triggered sweep: rescans the local folder, then resolves
+   * missing covers across the *whole* library (local files plus curated /
+   * Goodreads / saved books with no cover URL and no ISBN) via an online
+   * title/author search. This is the only thing that ever starts a new
+   * online cover search — nothing does it automatically just from viewing
+   * the library, since that's what made the app stutter under a real one.
+   */
+  updateLibraryCovers: () => Promise<{ localFound: number; otherFound: number; scanned: number }>
 
   /* ---- Shelf editing. Goodreads has no write API, so these are Booklit's own
      and are layered over the imported snapshot rather than pushed upstream. ---- */
@@ -449,7 +458,10 @@ function mapLocalFolderBooks(rows: unknown): LocalBook[] {
     title: String(b.title),
     author: String(b.author || ''),
     format: String(b.format),
-    coverUrl: b.format === 'epub' ? `/api/cover?id=${b.id}` : undefined,
+    // Always route through /api/cover: it extracts an embedded cover for
+    // EPUBs, and for every format falls back to an online title/author
+    // search when there's nothing embedded to extract.
+    coverUrl: `/api/cover?id=${b.id}`,
     srcUrl: `/files/${String(b.relpath || '').split('/').map(encodeURIComponent).join('/')}`,
     shelf: 'local',
     source: 'local' as const,
@@ -662,6 +674,17 @@ export function BookProvider({ children }: { children: ReactNode }) {
      book lists so re-syncing a shelf doesn't throw away what's been parsed. */
   const [parsed, setParsed] = useState<Record<string, Book>>({})
   const [syncingProfileId, setSyncingProfileId] = useState<string | null>(null)
+  /* bookKey(title, author) → cover URL, filled in only by an explicit
+     updateLibraryCovers() scan (never automatically) and persisted so the
+     result of a scan survives a reload. */
+  const [resolvedCovers, setResolvedCovers] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('booklit-resolved-covers') || '{}')
+    } catch { return {} }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('booklit-resolved-covers', JSON.stringify(resolvedCovers)) } catch { /* quota */ }
+  }, [resolvedCovers])
 
   // The EPUB manifest is shelf-independent — it just says which titles have a
   // readable file bundled — so it loads once, for everybody.
@@ -767,10 +790,19 @@ export function BookProvider({ children }: { children: ReactNode }) {
    * nature — local files, uploads, and anything saved off someone else's shelf.
    * A guest profile is just their shelf, read-only.
    */
+  // Only ever fills in a cover an explicit updateLibraryCovers() scan found —
+  // local books already carry their own /api/cover URL, so this only ever
+  // affects curated/Goodreads/saved entries that had none.
+  const withResolvedCover = useCallback((b: LocalBook): LocalBook => {
+    if (b.coverUrl) return b
+    const found = resolvedCovers[bookKey(b.title, b.author)]
+    return found ? { ...b, coverUrl: found } : b
+  }, [resolvedCovers])
+
   const localBooks = useMemo<LocalBook[]>(() => {
     const shelf = booksByProfile[cacheKey] ?? []
     if (!isOwnerProfile) {
-      return shelf.map(b => (parsed[b.id] ? { ...b, bookData: parsed[b.id] } : b))
+      return shelf.map(b => withResolvedCover(parsed[b.id] ? { ...b, bookData: parsed[b.id] } : b))
     }
 
     const saved = savedBooksFrom(overrides, activeProfileId)
@@ -783,7 +815,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       const k = bookKey(b.title, b.author)
       if (b.source === 'saved' && seen.has(k)) continue
       seen.add(k)
-      out.push({
+      out.push(withResolvedCover({
         ...b,
         ...(parsed[b.id] ? { bookData: parsed[b.id] } : null),
         ...(ov?.shelf ? { shelf: ov.shelf } : null),
@@ -791,10 +823,10 @@ export function BookProvider({ children }: { children: ReactNode }) {
         ...(ov?.notes ? { notes: ov.notes } : null),
         ...(ov?.progress !== undefined ? { progress: ov.progress } : null),
         ...(ov?.lastRead ? { lastRead: ov.lastRead } : null),
-      })
+      }))
     }
     return out
-  }, [booksByProfile, cacheKey, activeProfileId, isOwnerProfile, ownerExtras, overrides, parsed])
+  }, [booksByProfile, cacheKey, activeProfileId, isOwnerProfile, ownerExtras, overrides, parsed, withResolvedCover])
 
   const currentChapter = book?.chapters[currentChapterIndex] ?? null
   const totalPages = currentChapter?.content.length ?? 0
@@ -1294,6 +1326,56 @@ export function BookProvider({ children }: { children: ReactNode }) {
     return books.length
   }, [])
 
+  /**
+   * The only place an online cover search ever runs. Rescans the local
+   * folder (the backend resolves covers for everything in it — embedded
+   * EPUB art first, then an online search for whatever's still missing) and
+   * separately asks it to resolve covers for every other book in the current
+   * library that has neither a cover URL nor an ISBN, since those live only
+   * in the browser (curated CSV / Goodreads imports) and the backend has no
+   * way to enumerate them on its own.
+   */
+  const updateLibraryCovers = useCallback(async () => {
+    const seen = new Set<string>()
+    const otherBooks: { key: string; title: string; author: string }[] = []
+    for (const b of localBooks) {
+      if (b.coverUrl || b.isbn || b.source === 'local') continue
+      const key = bookKey(b.title, b.author)
+      if (seen.has(key)) continue
+      seen.add(key)
+      otherBooks.push({ key, title: b.title, author: b.author || '' })
+    }
+
+    const resp = await fetch('/api/scan-covers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ books: otherBooks }),
+    })
+    if (!resp.ok) throw new Error(`Backend error (${resp.status}). Is the Booklit server running?`)
+    const data = await resp.json()
+    if (data.error) throw new Error(data.error)
+
+    if (data.results) {
+      setResolvedCovers(prev => {
+        const next = { ...prev }
+        for (const [key, url] of Object.entries(data.results as Record<string, string | null>)) {
+          if (url) next[key] = url
+        }
+        return next
+      })
+    }
+    // Local files may have been added/removed since the last scan, and the
+    // backend just re-scanned its own catalog to resolve their covers — pull
+    // that fresh listing into the UI too rather than leaving it stale.
+    await importLocalLibrary(true)
+
+    return {
+      localFound: data.localFound ?? 0,
+      otherFound: data.otherFound ?? 0,
+      scanned: (data.localScanned ?? 0) + (data.otherScanned ?? 0),
+    }
+  }, [localBooks, importLocalLibrary])
+
   /** Pull a book off whatever shelf you're browsing into your own library. */
   const saveToMyLibrary = useCallback((lb: LocalBook) => {
     setOverride(bookKey(lb.title, lb.author), {
@@ -1378,6 +1460,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       setSentenceSpacing, setWordSpacing, setFontFamily, setHighlightColor, setAutoPlayNext,
       addBookmark, removeBookmark, goToBookmark,
       addTextHighlight, removeTextHighlight, uploadFile, importCSV, importGoodreads, importLocalLibrary,
+      updateLibraryCovers,
       syncProfile, syncingProfileId,
       saveToMyLibrary, setBookShelf, setBookRating, removeFromMyLibrary,
       updateReadingProgress,

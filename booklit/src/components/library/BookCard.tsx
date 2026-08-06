@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { LocalBook } from '../../context/BookContext'
 
 interface BookCardProps {
@@ -6,6 +7,12 @@ interface BookCardProps {
 }
 
 export function BookCard({ book, onClick }: BookCardProps) {
+  // Local-library covers now route through a server-side search fallback, so
+  // a failed load is an expected "nothing found anywhere" outcome, not just a
+  // dead epub extraction — worth the nicer placeholder rather than a blank box.
+  const [coverFailed, setCoverFailed] = useState(false)
+  const showCover = book.coverUrl && !coverFailed
+
   return (
     <div
       className="book-card"
@@ -13,15 +20,13 @@ export function BookCard({ book, onClick }: BookCardProps) {
       style={{ width: 140, height: 200, cursor: 'pointer' }}
     >
       <div className="w-full h-full rounded-xl overflow-hidden bg-bg-sunken shadow-sm relative group">
-        {book.coverUrl ? (
+        {showCover ? (
           <img
             src={book.coverUrl}
             alt={book.title}
             className="w-full h-full object-cover"
             loading="lazy"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none'
-            }}
+            onError={() => setCoverFailed(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-bg-sunken">

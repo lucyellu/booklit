@@ -6,8 +6,8 @@ import { useBook } from '../../context/BookContext'
 import type { Theme } from '../../context/ThemeContext'
 import { parseGoodreadsId } from '../../lib/profiles'
 import { toGoodreadsCsv, downloadCsv } from '../../lib/exportCsv'
-import { useRef } from 'react'
-import { X, Sun, Moon, LogOut, LogIn, Download, Link2, HardDrive, Upload } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { X, Sun, Moon, LogOut, LogIn, Download, Link2, HardDrive, Upload, Loader2 } from 'lucide-react'
 
 const THEMES: { id: Theme; label: string; hint: string; icon: typeof Sun; swatch: string[] }[] = [
   {
@@ -34,19 +34,23 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ActionRow({ icon: Icon, label, hint, onClick, danger }: {
+function ActionRow({ icon: Icon, label, hint, onClick, danger, disabled }: {
   icon: typeof LogOut
   label: string
   hint?: string
   onClick: () => void
   danger?: boolean
+  disabled?: boolean
 }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left hover:bg-bg transition-colors"
+      disabled={disabled}
+      className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left hover:bg-bg transition-colors disabled:opacity-50 disabled:pointer-events-none"
     >
-      <Icon className={`w-4 h-4 flex-shrink-0 ${danger ? 'text-accent-warm' : 'text-text-muted'}`} />
+      {disabled
+        ? <Loader2 className="w-4 h-4 flex-shrink-0 text-text-muted animate-spin" />
+        : <Icon className={`w-4 h-4 flex-shrink-0 ${danger ? 'text-accent-warm' : 'text-text-muted'}`} />}
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-bold text-text">{label}</span>
         {hint && <span className="block text-[11px] text-text-muted mt-0.5 truncate">{hint}</span>}
@@ -60,8 +64,9 @@ export function SettingsModal() {
   const { theme, setTheme, customColor, setCustomColor, resetCustomColor } = useTheme()
   const { mode, user, signOut, setAuthOpen } = useAuth()
   const { owner, setUpOwner, guests } = useProfiles()
-  const { localBooks, syncProfile, importLocalLibrary, uploadFile } = useBook()
+  const { localBooks, syncProfile, updateLibraryCovers, uploadFile } = useBook()
   const fileRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
 
   if (!settingsOpen) return null
 
@@ -99,12 +104,24 @@ export function SettingsModal() {
     downloadCsv(`${name}-shelf.csv`, toGoodreadsCsv(localBooks))
   }
 
-  const rescanLocal = async () => {
+  // The only trigger for an online cover search anywhere in the app — it
+  // never happens automatically, since a library of hundreds of books each
+  // searching in the background on every page view is what made the app
+  // stutter. Rescans the local folder too, in the same pass, since "did I
+  // add new files" and "did I fill in their covers" are the same errand.
+  const updateLibrary = async () => {
+    setScanning(true)
     try {
-      const n = await importLocalLibrary(true)
-      window.alert(n > 0 ? `Found ${n} books in your local folder.` : 'No new local books found.')
+      const { localFound, otherFound, scanned } = await updateLibraryCovers()
+      window.alert(
+        scanned > 0
+          ? `Scanned ${scanned} books and found ${localFound + otherFound} new covers.`
+          : 'Nothing to scan yet.',
+      )
     } catch (err) {
-      window.alert(`Local scan failed: ${(err as Error).message}`)
+      window.alert(`Library update failed: ${(err as Error).message}`)
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -187,9 +204,12 @@ export function SettingsModal() {
           />
           <ActionRow
             icon={HardDrive}
-            label="Rescan local folder"
-            hint="Re-read the books folder on this machine"
-            onClick={rescanLocal}
+            label="Update library"
+            hint={scanning
+              ? 'Scanning your local folder and filling in missing covers…'
+              : 'Rescan local files and fill in missing covers across your library'}
+            onClick={updateLibrary}
+            disabled={scanning}
           />
           <ActionRow
             icon={Download}

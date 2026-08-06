@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
+import { execFile } from 'node:child_process'
 import JSZip from 'jszip'
 
 const PORT = process.env.GOODREADS_PORT ? Number(process.env.GOODREADS_PORT) : 8765
@@ -47,6 +48,214 @@ const MIME = {
 }
 let localCatalog = null   // cached [{id,title,author,format,relpath,size}]
 const coverCache = new Map()  // id → { buffer, mime }  (extracted EPUB covers)
+
+// ---- online cover search, for books with no embedded/catalog cover at all ----
+//
+// Local-folder books have only a filename-guessed title/author — no ISBN, so
+// the ISBN→OpenLibrary URL trick used elsewhere can't apply to them. This
+// searches by title/author instead: OpenLibrary's search index first, then
+// Gutendex (Project Gutenberg) for older public-domain titles OpenLibrary's
+// cover index tends to miss. Results (including "not found") are cached to
+// disk so a personal library of hundreds of books only ever gets searched once.
+const COVER_SEARCH_CACHE_FILE = path.join(DATA_DIR, 'cover-search-cache.json')
+let coverSearchCache = null                  // key → coverUrl | null
+const coverSearchInFlight = new Map()        // key → in-progress Promise<string|null>
+
+// OpenLibrary's title search is closer to exact-match than fuzzy, and local
+// filenames often carry noise `parseBookFilename` doesn't fully strip — a
+// subtitle tacked on after " - ", or a "(Publisher, Year)" tail where the
+// year isn't the *whole* parenthetical (parseBookFilename only strips a bare
+// "(Year)"). Only the original and the fully-cleaned title are searched
+// (not every intermediate step) — a full library scan means every extra
+// variant is thousands of extra requests to a free public API.
+function titleSearchVariants(title) {
+  let cur = title
+  for (let i = 0; i < 4; i++) {
+    const noParen = cur.replace(/\s*\([^)]*\d{4}[^)]*\)\s*$/, '').trim()
+    const dash = noParen.lastIndexOf(' - ')
+    const noDash = dash > 0 ? noParen.slice(0, dash).trim() : noParen
+    // "Title by Author Name" — common for scanned public-domain filenames
+    // that parseBookFilename's author-detection heuristics don't catch.
+    const next = noDash.replace(/\s+by\s+[A-Z][a-zA-Z.'-]*(?:\s+[A-Z][a-zA-Z.'-]*){0,3}\s*$/, '').trim()
+      || noDash
+    if (next === cur) break
+    cur = next
+  }
+  return cur === title ? [title] : [title, cur]
+}
+
+function coverSearchKey(title, author) {
+  const t = (title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const a = (author || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return a ? `${t}|${a}` : t
+}
+
+async function loadCoverSearchCache() {
+  if (coverSearchCache) return coverSearchCache
+  coverSearchCache = new Map()
+  try {
+    const raw = JSON.parse(await fs.readFile(COVER_SEARCH_CACHE_FILE, 'utf8'))
+    for (const [k, v] of Object.entries(raw)) coverSearchCache.set(k, v)
+  } catch { /* no cache on disk yet */ }
+  return coverSearchCache
+}
+
+async function persistCoverSearchCache() {
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true })
+    await fs.writeFile(COVER_SEARCH_CACHE_FILE, JSON.stringify(Object.fromEntries(coverSearchCache)), 'utf8')
+  } catch (e) {
+    console.error('Could not persist cover search cache:', e.message)
+  }
+}
+
+// A slow or hanging external call must never hold a request open for long:
+// browsers cap concurrent connections per origin (~6 on HTTP/1.1), so a
+// handful of uncached books each waiting tens of seconds on openlibrary.org
+// is enough to starve every other request the app makes — which is exactly
+// what made the whole UI stutter the first time this hit a real library.
+async function fetchWithTimeout(url, opts, ms = 2500) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Caps how many external lookups run at once during an "Update library"
+// scan, so a library of thousands of books doesn't fire off thousands of
+// simultaneous outbound sockets. Only the explicit scan ever drives this —
+// nothing triggers a search as a side effect of just viewing the library.
+// Kept modest: a first pass at 10 sustained for a few minutes over ~1200
+// books got this machine's IP rate-limited by OpenLibrary badly enough that
+// even unrelated, unthrottled requests to it started timing out outright.
+const OUTBOUND_CONCURRENCY = 3
+let outboundActive = 0
+const outboundQueue = []
+// If a source starts answering 429, every in-flight and queued call backs
+// off together rather than continuing to hammer it — a scan should slow
+// down and keep going, not get the IP blocked.
+const backoffUntil = { openlibrary: 0, gutendex: 0 }
+
+function withOutboundSlot(fn) {
+  return new Promise((resolve) => {
+    const run = () => {
+      outboundActive++
+      fn().then(resolve).finally(() => {
+        outboundActive--
+        outboundQueue.shift()?.()
+      })
+    }
+    if (outboundActive < OUTBOUND_CONCURRENCY) run()
+    else outboundQueue.push(run)
+  })
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Returns a cover URL, `null` for a confirmed no-match, or `undefined` for
+// "couldn't tell" (timeout, network error, rate limit) — that three-way
+// split matters because only a confirmed no-match is safe to cache. Caching
+// an error as a permanent miss is exactly what happened during the first
+// full-library scan: OpenLibrary rate-limited this connection partway
+// through, and every lookup after that point got cached as "no cover"
+// even though it was never actually checked.
+async function queryOpenLibrary(title, author) {
+  const params = new URLSearchParams({ title, fields: 'cover_i', limit: '1' })
+  if (author) params.set('author', author)
+  return withOutboundSlot(async () => {
+    const wait = backoffUntil.openlibrary - Date.now()
+    if (wait > 0) await sleep(wait)
+    try {
+      const r = await fetchWithTimeout(`https://openlibrary.org/search.json?${params}`, { headers: { 'User-Agent': UA } })
+      if (r.status === 429) { backoffUntil.openlibrary = Date.now() + 30000; return undefined }
+      if (!r.ok) return undefined
+      const data = await r.json()
+      const coverId = data?.docs?.[0]?.cover_i
+      return coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null
+    } catch { return undefined }
+  })
+}
+
+async function queryGutendex(title, author) {
+  const q = [title, author].filter(Boolean).join(' ')
+  return withOutboundSlot(async () => {
+    const wait = backoffUntil.gutendex - Date.now()
+    if (wait > 0) await sleep(wait)
+    try {
+      const r = await fetchWithTimeout(`https://gutendex.com/books?search=${encodeURIComponent(q)}`, { headers: { 'User-Agent': UA } })
+      if (r.status === 429) { backoffUntil.gutendex = Date.now() + 30000; return undefined }
+      if (!r.ok) return undefined
+      const data = await r.json()
+      return data?.results?.[0]?.formats?.['image/jpeg'] || null
+    } catch { return undefined }
+  })
+}
+
+// Every variant/author combination fires together rather than one after
+// another — a sequential chain of awaits is what let a single uncached book
+// take tens of seconds to resolve. Returns the found URL (if any) and
+// whether every attempt got a definitive answer — `ok: false` means at
+// least one query errored or was rate-limited, so the "no match" here isn't
+// trustworthy enough to cache.
+async function firstMatch(promises) {
+  const settled = await Promise.all(promises)
+  const url = settled.find(v => typeof v === 'string' && v) ?? null
+  const ok = settled.every(v => v !== undefined)
+  return { url, ok }
+}
+
+// Runs the actual multi-source search and caches the result — but only when
+// every query involved gave a definitive answer. Only ever called from the
+// explicit "Update library" scan (see /api/scan-covers) — a passing request
+// rendering a book card must never trigger this itself. A request handler
+// awaiting a chain of external HTTP calls is exactly what starved every
+// other request behind it the first time this searched automatically on
+// every open (browsers cap concurrent connections per origin, and dozens of
+// uncached books each holding one open for tens of seconds froze the app).
+function searchCover(title, author, key) {
+  let inFlight = coverSearchInFlight.get(key)
+  if (inFlight) return inFlight
+  inFlight = (async () => {
+    const cache = await loadCoverSearchCache()
+    const variants = titleSearchVariants(title)
+    // OpenLibrary's `author` param filters rather than ranks, and
+    // local-folder filenames often mis-parse the author — a wrong one then
+    // returns zero hits even though the title alone would have matched, so
+    // every variant is tried both with and without it.
+    let { url, ok } = await firstMatch(
+      variants.flatMap(t => author ? [queryOpenLibrary(t, author), queryOpenLibrary(t, '')] : [queryOpenLibrary(t, '')]),
+    )
+    if (!url) {
+      const gx = await firstMatch(variants.map(t => queryGutendex(t, author)))
+      url = gx.url
+      ok = ok && gx.ok
+    }
+    // A confirmed find is always worth caching; a "not found" is only
+    // trustworthy — and thus only cached — if nothing along the way errored.
+    // An uncached miss just gets retried on the next scan instead of being
+    // stuck as a permanent false negative.
+    if (url || ok) cache.set(key, url)
+    return url
+  })()
+  coverSearchInFlight.set(key, inFlight)
+  inFlight.finally(() => coverSearchInFlight.delete(key))
+  return inFlight
+}
+
+// Cache-only — never reaches out to the network. Used by /api/cover so an
+// ordinary page view can pick up a cover a previous scan already found,
+// without ever starting a new search itself.
+async function getCachedCover(title, author) {
+  const key = coverSearchKey(title, author)
+  if (!key) return null
+  const cache = await loadCoverSearchCache()
+  return cache.has(key) ? cache.get(key) : null
+}
 
 const CSV_FIELDS = [
   'title', 'author', 'year', 'isbn', 'rating', 'my_rating',
@@ -325,6 +534,18 @@ async function extractEpubCover(absPath) {
   return { buffer, mime: detectImageMime(buffer) }
 }
 
+// This server is otherwise GET-only, so there's no body parser yet.
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = ''
+    req.on('data', chunk => { raw += chunk })
+    req.on('end', () => {
+      try { resolve(raw ? JSON.parse(raw) : null) } catch (e) { reject(e) }
+    })
+    req.on('error', reject)
+  })
+}
+
 // Resolve a request path to a safe absolute path inside `root`.
 function resolveUnder(root, relpath) {
   let decoded
@@ -398,6 +619,30 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
+  // --- reveal a local book's file in Windows Explorer ---
+  if (u.pathname === '/api/reveal') {
+    const id = u.searchParams.get('id') || ''
+    try {
+      if (!localCatalog) localCatalog = await scanLocalBooks()
+      const book = localCatalog.find(b => b.id === id)
+      if (!book) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'not found' }))
+        return
+      }
+      const abs = path.resolve(BOOKS_DIR, book.relpath)
+      // explorer.exe reports a non-zero exit code even on success, so the
+      // callback is only there to stop an unhandled rejection — not checked.
+      execFile('explorer.exe', [`/select,${abs}`], () => {})
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: e.message }))
+    }
+    return
+  }
+
   // --- local books catalog (cached; ?refresh=1 to rescan) ---
   if (u.pathname === '/api/local-books') {
     try {
@@ -411,30 +656,101 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  // --- extracted EPUB cover image (memory-cached) ---
+  // --- extracted EPUB cover image (memory-cached), or a cached result from a
+  //     previous "Update library" scan. Never starts a new search itself —
+  //     see searchCover()'s comment for why. ---
   if (u.pathname === '/api/cover') {
     const id = u.searchParams.get('id') || ''
+    const refresh = !!u.searchParams.get('refresh')
     try {
       if (!localCatalog) localCatalog = await scanLocalBooks()
       const book = localCatalog.find(b => b.id === id)
-      if (!book || book.format !== 'epub') { res.writeHead(404); res.end('no cover'); return }
+      if (!book) { res.writeHead(404); res.end('no cover'); return }
 
-      let entry = coverCache.get(id)
-      if (!entry) {
-        const abs = path.resolve(BOOKS_DIR, book.relpath)
-        entry = await extractEpubCover(abs)
-        if (!entry) { res.writeHead(404); res.end('no cover'); return }
-        if (coverCache.size > 800) coverCache.delete(coverCache.keys().next().value)
-        coverCache.set(id, entry)
+      if (book.format === 'epub') {
+        let entry = refresh ? null : coverCache.get(id)
+        if (!entry) {
+          const abs = path.resolve(BOOKS_DIR, book.relpath)
+          entry = await extractEpubCover(abs).catch(() => null)
+          if (entry) {
+            if (coverCache.size > 800) coverCache.delete(coverCache.keys().next().value)
+            coverCache.set(id, entry)
+          }
+        }
+        if (entry) {
+          res.writeHead(200, {
+            'Content-Type': entry.mime,
+            'Content-Length': entry.buffer.length,
+            'Cache-Control': 'public, max-age=604800',
+          })
+          res.end(entry.buffer)
+          return
+        }
       }
-      res.writeHead(200, {
-        'Content-Type': entry.mime,
-        'Content-Length': entry.buffer.length,
-        'Cache-Control': 'public, max-age=604800',
-      })
-      res.end(entry.buffer)
+
+      const found = await getCachedCover(book.title, book.author)
+      if (found) {
+        res.writeHead(302, { Location: found, 'Cache-Control': 'public, max-age=604800' })
+        res.end()
+      } else {
+        res.writeHead(404); res.end('no cover')
+      }
     } catch (e) {
       res.writeHead(404); res.end('cover error: ' + (e.message || ''))
+    }
+    return
+  }
+
+  // --- explicit "Update library" scan: rescans the local folder, then
+  //     resolves covers for every local book plus whatever other (curated /
+  //     Goodreads / saved) books the client says are still missing one. The
+  //     only place a new online search is ever started — see searchCover(). ---
+  if (u.pathname === '/api/scan-covers' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req)
+      const otherBooks = Array.isArray(body?.books) ? body.books : []
+
+      localCatalog = await scanLocalBooks()
+      let localFound = 0
+      await Promise.all(localCatalog.map(async book => {
+        if (book.format === 'epub' && !coverCache.has(book.id)) {
+          const abs = path.resolve(BOOKS_DIR, book.relpath)
+          const entry = await extractEpubCover(abs).catch(() => null)
+          if (entry) {
+            if (coverCache.size > 800) coverCache.delete(coverCache.keys().next().value)
+            coverCache.set(book.id, entry)
+            localFound++
+            return
+          }
+        }
+        const key = coverSearchKey(book.title, book.author)
+        if (!key) return
+        const cache = await loadCoverSearchCache()
+        if (cache.has(key)) return
+        if (await searchCover(book.title, book.author, key)) localFound++
+      }))
+
+      const results = {}
+      let otherFound = 0
+      await Promise.all(otherBooks.map(async b => {
+        const key = coverSearchKey(b.title, b.author)
+        if (!key || !b.key) return
+        const cache = await loadCoverSearchCache()
+        const coverUrl = cache.has(key) ? cache.get(key) : await searchCover(b.title, b.author, key)
+        if (coverUrl) otherFound++
+        results[b.key] = coverUrl
+      }))
+
+      await persistCoverSearchCache()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({
+        localScanned: localCatalog.length, localFound,
+        otherScanned: otherBooks.length, otherFound,
+        results,
+      }))
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: e.message || 'scan failed' }))
     }
     return
   }
@@ -499,6 +815,11 @@ const server = http.createServer(async (req, res) => {
 
 // Never let a single malformed request bring the whole backend down.
 process.on('uncaughtException', err => console.error('uncaught:', err?.message || err))
+
+// A full-library cover scan can run for minutes on a large collection —
+// well past Node's 5-minute default request timeout.
+server.requestTimeout = 15 * 60 * 1000
+server.headersTimeout = 15 * 60 * 1000 + 1000
 
 server.listen(PORT, () => {
   console.log(`Booklit backend listening on http://localhost:${PORT}`)

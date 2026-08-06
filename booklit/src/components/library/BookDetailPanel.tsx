@@ -14,7 +14,7 @@ import { bookKey } from '../../lib/profiles'
 import {
   X, BookOpen, ShoppingCart, Landmark, ExternalLink, Loader2, Plus, Check,
   BookmarkPlus, Star, Focus as FocusIcon, Info, ListTree, Image as ImageIcon,
-  PanelRight, PanelRightClose,
+  PanelRight, PanelRightClose, FolderOpen,
 } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
 
@@ -416,6 +416,7 @@ function DetailBody({ book }: { book: LocalBook }) {
   const { overrides } = useProfiles()
   const { theme } = useTheme()
   const [coverFailed, setCoverFailed] = useState(false)
+  const [revealing, setRevealing] = useState(false)
 
   const hue = authorHue(book.author, book.title)
   const loading = bookLoadingId === book.id
@@ -448,6 +449,15 @@ function DetailBody({ book }: { book: LocalBook }) {
       || editions.find(isReadable)
       || book
     openBook(readTarget).then(ok => { if (ok) openReader() })
+  }
+
+  // Local-library books only — there's no folder to reveal for a catalog/
+  // Goodreads/saved entry, which lives nowhere on this machine's disk.
+  const handleReveal = () => {
+    setRevealing(true)
+    fetch(`/api/reveal?id=${encodeURIComponent(book.id)}`)
+      .catch(() => { /* backend down — nothing more we can do from here */ })
+      .finally(() => setRevealing(false))
   }
 
   return (
@@ -538,6 +548,19 @@ function DetailBody({ book }: { book: LocalBook }) {
               >
                 <FocusIcon className="w-4 h-4" />
                 Focus
+              </button>
+            )}
+            {book.source === 'local' && (
+              <button
+                onClick={handleReveal}
+                disabled={revealing}
+                title="Show this file in its folder"
+                className="flex items-center gap-2 px-4 py-2 rounded-full border border-border-hover text-text-dim text-sm font-semibold hover:border-accent hover:text-text transition-colors disabled:opacity-40"
+              >
+                {revealing
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <FolderOpen className="w-4 h-4" />}
+                Open in Folder
               </button>
             )}
             {book.buyLink && (

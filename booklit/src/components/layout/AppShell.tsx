@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { PlayerBar } from './PlayerBar'
 import { SettingsModal } from './SettingsModal'
+import { ResizeHandle } from './ResizeHandle'
 import { LibraryView } from '../library/LibraryView'
 import { HomeView } from '../library/HomeView'
 import { PlaylistView } from '../library/PlaylistView'
@@ -10,7 +12,10 @@ import { SectionIndexView } from '../library/SectionIndexView'
 import { BookDetailPanel } from '../library/BookDetailPanel'
 
 export function AppShell() {
-  const { sidebarOpen, view } = useApp()
+  const { sidebarOpen, view, sidebarWidth, setSidebarWidth } = useApp()
+  // Suppressed while dragging so the width transition (built for the open/
+  // close toggle) doesn't fight the live drag with a 300ms chase.
+  const [resizingSidebar, setResizingSidebar] = useState(false)
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-bg">
@@ -20,11 +25,22 @@ export function AppShell() {
         <div className="flex flex-1 min-h-0">
           {/* Sidebar */}
           <div
-            className="transition-all duration-300 ease-out flex-shrink-0 overflow-hidden"
-            style={{ width: sidebarOpen ? 240 : 0 }}
+            className={`flex-shrink-0 overflow-hidden ${
+              resizingSidebar ? '' : 'transition-all duration-300 ease-out'
+            }`}
+            style={{ width: sidebarOpen ? sidebarWidth : 0 }}
           >
             <Sidebar />
           </div>
+
+          {sidebarOpen && (
+            <ResizeHandle
+              className="relative w-[5px] flex-shrink-0"
+              onDragStart={() => setResizingSidebar(true)}
+              onDragEnd={() => setResizingSidebar(false)}
+              onResize={delta => setSidebarWidth(w => w + delta)}
+            />
+          )}
 
           {/* Content area */}
           <div className="flex-1 flex flex-col min-w-0">

@@ -225,6 +225,7 @@ export function Sidebar() {
   const {
     view, setView,
     layout, setLayout,
+    sidebarWidth,
     libraryView, gridCols, gridRows, setGridCols, setGridRows,
     shelfFilter, setShelfFilter,
     availability, toggleAvailability,
@@ -288,7 +289,7 @@ export function Sidebar() {
   }
 
   return (
-    <div className="chrome h-full w-[240px] flex flex-col">
+    <div className="chrome h-full flex flex-col" style={{ width: sidebarWidth }}>
       {/* Masthead */}
       <div className="px-6 pt-6 pb-2 flex-shrink-0">
         <h1 className="font-display text-2xl font-bold tracking-tight text-on-chrome leading-none">

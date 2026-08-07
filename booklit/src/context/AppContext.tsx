@@ -36,12 +36,35 @@ export interface Collection {
 }
 
 const COLLECTIONS_KEY = 'booklit-collections'
+const SIDEBAR_WIDTH_KEY = 'booklit-sidebar-width'
+const RIGHT_PANEL_WIDTH_KEY = 'booklit-right-panel-width'
+const SIDEBAR_MIN_WIDTH = 200
+const SIDEBAR_MAX_WIDTH = 420
+const RIGHT_PANEL_MIN_WIDTH = 300
+const RIGHT_PANEL_MAX_WIDTH = 640
+
+function clampWidth(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.round(n)))
+}
+
+function loadWidth(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const raw = localStorage.getItem(key)
+    const n = raw ? Number(raw) : NaN
+    return Number.isFinite(n) ? clampWidth(n, min, max) : fallback
+  } catch {
+    return fallback
+  }
+}
 
 interface AppState {
   view: ViewMode
   libraryView: LibraryViewMode
   layout: LayoutMode
   sidebarOpen: boolean
+  /** Sidebar and right-panel widths, in px — dragged from their shared edge. */
+  sidebarWidth: number
+  rightPanelWidth: number
   uiVisible: boolean
   shelfFilter: ShelfFilter
   searchQuery: string
@@ -97,6 +120,10 @@ interface AppContextValue extends AppState {
   setLayout: (l: LayoutMode) => void
   setGridCols: (n: number) => void
   setGridRows: (n: number) => void
+  /** Both accept a plain width or a `prev => next` updater, so a drag handle
+   *  can apply a delta without racing its own last write. */
+  setSidebarWidth: (w: number | ((prev: number) => number)) => void
+  setRightPanelWidth: (w: number | ((prev: number) => number)) => void
   toggleSidebar: () => void
   toggleUI: () => void
   openReader: () => void
@@ -161,11 +188,13 @@ function loadCollections(): Collection[] {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>({
+  const [state, setState] = useState<AppState>(() => ({
     view: 'home',
     libraryView: 'flat',
     layout: 'grid',
     sidebarOpen: true,
+    sidebarWidth: loadWidth(SIDEBAR_WIDTH_KEY, 240, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
+    rightPanelWidth: loadWidth(RIGHT_PANEL_WIDTH_KEY, 360, RIGHT_PANEL_MIN_WIDTH, RIGHT_PANEL_MAX_WIDTH),
     uiVisible: true,
     shelfFilter: 'all',
     searchQuery: '',
@@ -189,7 +218,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     stageSize: 'auto',
     gridCols: 0,
     gridRows: 0,
-  })
+  }))
   const [collections, setCollections] = useState<Collection[]>(loadCollections)
   // Plain refs, not state — only one scene is ever mounted at a time and a
   // camera jump shouldn't trigger a re-render of anything outside the scene.
@@ -222,6 +251,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { /* quota */ }
   }, [collections])
 
+  useEffect(() => {
+    try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(state.sidebarWidth)) } catch { /* quota */ }
+  }, [state.sidebarWidth])
+  useEffect(() => {
+    try { localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, String(state.rightPanelWidth)) } catch { /* quota */ }
+  }, [state.rightPanelWidth])
+
   const setView = useCallback((view: ViewMode) =>
     setState(s => ({ ...s, view })), [])
   const setLibraryView = useCallback((libraryView: LibraryViewMode) =>
@@ -236,6 +272,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, gridRows: Math.max(0, Math.min(24, Math.round(n) || 0)) })), [])
   const toggleSidebar = useCallback(() =>
     setState(s => ({ ...s, sidebarOpen: !s.sidebarOpen })), [])
+  const setSidebarWidth = useCallback((w: number | ((prev: number) => number)) =>
+    setState(s => ({
+      ...s,
+      sidebarWidth: clampWidth(
+        typeof w === 'function' ? w(s.sidebarWidth) : w, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH,
+      ),
+    })), [])
+  const setRightPanelWidth = useCallback((w: number | ((prev: number) => number)) =>
+    setState(s => ({
+      ...s,
+      rightPanelWidth: clampWidth(
+        typeof w === 'function' ? w(s.rightPanelWidth) : w, RIGHT_PANEL_MIN_WIDTH, RIGHT_PANEL_MAX_WIDTH,
+      ),
+    })), [])
   const toggleUI = useCallback(() =>
     setState(s => ({ ...s, uiVisible: !s.uiVisible })), [])
   // The detail panel is docked in the shell, which the reader covers, so the
@@ -363,6 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...state,
       collections,
       setView, setLibraryView, setLayout, setGridCols, setGridRows,
+      setSidebarWidth, setRightPanelWidth,
       toggleSidebar, toggleUI, openReader, closeReader,
       setShelfFilter, setSearchQuery, setSettingsOpen, setReadableOnly,
       toggleAvailability, setLibrarySource, setCollectionId, setListId, setPlaylistId, openIndex,

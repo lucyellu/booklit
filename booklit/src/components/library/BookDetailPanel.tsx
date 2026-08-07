@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext'
 import type { LocalBook, } from '../../context/BookContext'
 import type { RightPanelTab } from '../../context/AppContext'
 import { OutlinePanel } from './OutlinePanel'
+import { ResizeHandle } from '../layout/ResizeHandle'
 import {
   authorHue, metaRows, shelfDisplay, shelfEmoji,
 } from '../../lib/bookMeta'
@@ -35,8 +36,11 @@ export function BookDetailPanel() {
   const {
     detailBookId, closeDetail, view,
     rightPanelOpen, rightPanelTab, toggleRightPanel, setRightPanelTab,
+    rightPanelWidth, setRightPanelWidth,
   } = useApp()
   const { localBooks } = useBook()
+  // Suppressed while dragging, same reason as the sidebar's own flag.
+  const [resizing, setResizing] = useState(false)
 
   useEffect(() => {
     if (!detailBookId) return
@@ -69,7 +73,7 @@ export function BookDetailPanel() {
 
   if (!rightPanelOpen) {
     return (
-      <PanelFrame open={false}>
+      <PanelFrame open={false} width={rightPanelWidth}>
         <div className={`w-11 h-full bg-bg-surface border-l border-border flex flex-col items-center gap-1 py-3 ${place}`}>
         <RailButton
           icon={PanelRight}
@@ -99,10 +103,17 @@ export function BookDetailPanel() {
   }
 
   return (
-    <PanelFrame open>
+    <PanelFrame open width={rightPanelWidth} resizing={resizing}>
+    <ResizeHandle
+      className="absolute left-0 top-0 bottom-0 w-[6px] z-20"
+      onDragStart={() => setResizing(true)}
+      onDragEnd={() => setResizing(false)}
+      onResize={delta => setRightPanelWidth(w => w - delta)}
+    />
     <aside
       aria-label={tab === 'outline' ? 'Outline' : book?.title ?? 'Details'}
-      className={`w-[360px] xl:w-[400px] h-full flex flex-col bg-bg-surface border-l border-border ${place}`}
+      className={`h-full flex flex-col bg-bg-surface border-l border-border ${place}`}
+      style={{ width: rightPanelWidth }}
     >
       <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border flex-shrink-0">
         <Tab
@@ -151,12 +162,18 @@ export function BookDetailPanel() {
  * its own, pinned to the right, so collapsing slides the boundary across
  * instead of reflowing the panel's contents on the way.
  */
-function PanelFrame({ open, children }: { open: boolean; children: ReactNode }) {
+function PanelFrame({ open, width, resizing, children }: {
+  open: boolean
+  width: number
+  resizing?: boolean
+  children: ReactNode
+}) {
   return (
     <div
-      className={`relative flex-shrink-0 h-full overflow-hidden transition-[width] duration-200 ease-out ${
-        open ? 'w-[360px] xl:w-[400px]' : 'w-11'
+      className={`relative flex-shrink-0 h-full overflow-hidden ${
+        resizing ? '' : 'transition-[width] duration-200 ease-out'
       }`}
+      style={{ width: open ? width : 44 }}
     >
       {children}
     </div>

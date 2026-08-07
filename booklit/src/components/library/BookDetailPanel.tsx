@@ -15,8 +15,9 @@ import { bookKey } from '../../lib/profiles'
 import {
   X, BookOpen, ShoppingCart, Landmark, ExternalLink, Loader2, Plus, Check,
   BookmarkPlus, Star, Focus as FocusIcon, Info, ListTree, Image as ImageIcon,
-  PanelRight, PanelRightClose, FolderOpen,
+  PanelRight, PanelRightClose, FolderOpen, Rotate3D,
 } from 'lucide-react'
+import { InspectScene } from './InspectScene'
 import { useProfiles } from '../../context/ProfileContext'
 
 /**
@@ -434,6 +435,7 @@ function DetailBody({ book }: { book: LocalBook }) {
   const { theme } = useTheme()
   const [coverFailed, setCoverFailed] = useState(false)
   const [revealing, setRevealing] = useState(false)
+  const [inspecting, setInspecting] = useState(false)
 
   const hue = authorHue(book.author, book.title)
   const loading = bookLoadingId === book.id
@@ -554,6 +556,17 @@ function DetailBody({ book }: { book: LocalBook }) {
                 : <BookOpen className="w-4 h-4" />}
               {readable ? 'Read free' : 'No ebook'}
             </button>
+            {/* Unlike Focus below, this doesn't care which view you came from:
+                the inspector builds its own book and its own scene, so it works
+                just as well from the flat grid. */}
+            <button
+              onClick={() => setInspecting(true)}
+              title="Open this book in 3D — orbit it, and turn the pages"
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-border-hover text-text-dim text-sm font-semibold hover:border-accent hover:text-text transition-colors"
+            >
+              <Rotate3D className="w-4 h-4" />
+              Inspect
+            </button>
             {/* Only the three 3D scenes have a camera to snap — Flat has none. */}
             {libraryView !== 'flat' && (
               <button
@@ -650,6 +663,18 @@ function DetailBody({ book }: { book: LocalBook }) {
             </section>
           )}
         </div>
+
+        {/* Mounted only while it's up: the inspector holds a WebGL context and
+            a page's worth of geometry, and there's no reason to keep either
+            alive behind a panel you've moved on from. */}
+        {inspecting && (
+          <InspectScene
+            book={book}
+            // The same URL the band and thumbnail are showing, not book.coverUrl.
+            coverUrl={cover}
+            onClose={() => setInspecting(false)}
+          />
+        )}
       </div>
   )
 }
